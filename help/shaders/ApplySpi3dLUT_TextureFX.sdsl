@@ -1,0 +1,16 @@
+[Category("Filter")]
+[Summary("")]
+shader ApplySpi3dLUT_TextureFX : FilterBase
+{
+    stage Texture3D<float4> LookupTex;
+    
+    float4 Filter(float4 tex0col)
+    {
+        float3 uvw = tex0col.rgb;
+
+        // Apply the ACES LUT
+        float4 c = LookupTex.SampleLevel(LinearSampler, uvw, 0);
+
+        return c;
+    }
+};

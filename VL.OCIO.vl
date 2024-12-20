@@ -1,0 +1,342 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Document xmlns:p="property" xmlns:r="reflection" Id="JCdvnz0fDU5Mxor6pX0iJN" LanguageVersion="2024.6.6" Version="0.128">
+  <NugetDependency Id="UFvDwSwGjfjPjL9lcojbul" Location="VL.CoreLib" Version="2024.6.6" />
+  <Patch Id="ImltkCghK9bM35jdMzAaMc">
+    <Canvas Id="AWif7Adg4V8LiqizDWQzfv" DefaultCategory="OCIO" CanvasType="FullCategory">
+      <!--
+
+    ************************ OCIOConfig ************************
+
+-->
+      <Node Name="OCIOConfig" Bounds="327,212" Id="F2OFW90bysQNYcgKDSWKwP">
+        <p:NodeReference>
+          <Choice Kind="ContainerDefinition" />
+        </p:NodeReference>
+        <Patch Id="Kum2khdLba8Oh9QtpKJteB">
+          <Canvas Id="KkHIpkndEg3McaRBxJb5Qj" CanvasType="Group">
+            <ControlPoint Id="FwVdUuBzVHNO79NSmR92aD" Bounds="390,262" />
+            <Node Bounds="420,420,116,133" Id="U5SZMyqEcIvM6sx7qKtsMW">
+              <p:NodeReference LastCategoryFullName="Primitive" LastDependency="Builtin">
+                <Choice Kind="StatefulRegion" Name="Region (Stateful)" Fixed="true" />
+                <CategoryReference Kind="Category" Name="Primitive" />
+                <Choice Kind="ProcessStatefulRegion" Name="Cache" />
+              </p:NodeReference>
+              <Pin Id="C9BFU3TSVTgNZeC2d60uuW" Name="Force" Kind="InputPin" />
+              <Pin Id="IUwVx4qcSjBLTYdqx5BeTD" Name="Dispose Cached Outputs" Kind="InputPin" />
+              <Pin Id="QNfzceqSiICPsyDTs4IOcH" Name="Has Changed" Kind="OutputPin" />
+              <Patch Id="IdyWNTaw6imPqD2LbVR14Y" ManuallySortedPins="true">
+                <Patch Id="SCpgwiwHaiZPXOiV8ozISp" Name="Create" ManuallySortedPins="true" />
+                <Patch Id="JiKDSGsDzGjLVhIWDE8g1D" Name="Then" ManuallySortedPins="true" />
+                <Node Bounds="433,455,55,19" Id="D0MjiU8XQfEPYQAvS30FFC">
+                  <p:NodeReference LastCategoryFullName="IO.Path" LastDependency="VL.CoreLib.vl">
+                    <Choice Kind="NodeFlag" Name="Node" Fixed="true" />
+                    <CategoryReference Kind="4026531840" Name="Path" />
+                    <Choice Kind="OperationCallFlag" Name="ToString" />
+                  </p:NodeReference>
+                  <Pin Id="E2wE3CAdjdlLSWlzTATbAC" Name="Input" Kind="StateInputPin" />
+                  <Pin Id="Bx8wI3gi5icLYy6SkAiUGx" Name="Result" Kind="OutputPin" />
+                </Node>
+                <Node Bounds="432,514,92,19" Id="Ln64hbBRkRvN6fzrF62Tn9">
+                  <p:NodeReference LastCategoryFullName="VL.OCIO.OCIOConfigUtils" LastDependency="VL.OCIO.dll">
+                    <Choice Kind="NodeFlag" Name="Node" Fixed="true" />
+                    <CategoryReference Kind="Category" Name="VL" />
+                    <CategoryReference Kind="Category" Name="OCIO" />
+                    <Choice Kind="OperationCallFlag" Name="LoadOCIOConfig" />
+                  </p:NodeReference>
+                  <Pin Id="UUxS2mpNvChPCg285503fZ" Name="Config Path" Kind="InputPin" />
+                </Node>
+              </Patch>
+              <ControlPoint Id="SzrY4yuXDNrPNA9n4Kx4Uc" Bounds="436,426" Alignment="Top" />
+            </Node>
+            <Pad Id="AlNGEzPE9s1NDSsRV133kq" Comment="Force" Bounds="363,358,35,35" ShowValueBox="true" isIOBox="true" Value="False">
+              <p:TypeAnnotation LastCategoryFullName="Primitive" LastDependency="VL.CoreLib.vl">
+                <Choice Kind="ImmutableTypeFlag" Name="Boolean" />
+              </p:TypeAnnotation>
+              <p:ValueBoxSettings>
+                <p:buttonmode p:Assembly="VL.UI.Forms" p:Type="VL.HDE.PatchEditor.Editors.ButtonModeEnum">Toggle</p:buttonmode>
+              </p:ValueBoxSettings>
+            </Pad>
+          </Canvas>
+          <Patch Id="BRL3QjSCz2xLHrESzSyoy1" Name="Create" />
+          <Patch Id="EDV0EHXjruCOR9RIt5ivPw" Name="Update">
+            <Pin Id="SNMODGQr5sON8OH05f2ytM" Name="Config File" Kind="InputPin" />
+          </Patch>
+          <ProcessDefinition Id="Ub0Hq3Znux3QXZKF8HgV0Q">
+            <Fragment Id="U00459ZFAFMNyTMM27Y1hf" Patch="BRL3QjSCz2xLHrESzSyoy1" Enabled="true" />
+            <Fragment Id="Oc7iTS9AdrYLbLuo5NN80f" Patch="EDV0EHXjruCOR9RIt5ivPw" Enabled="true" />
+          </ProcessDefinition>
+          <Link Id="FA1J4bmPzrMLzEUNm72AyT" Ids="SNMODGQr5sON8OH05f2ytM,FwVdUuBzVHNO79NSmR92aD" IsHidden="true" />
+          <Link Id="JgBrBxZClfYOd6FWReUy8V" Ids="FwVdUuBzVHNO79NSmR92aD,SzrY4yuXDNrPNA9n4Kx4Uc" />
+          <Link Id="JJgdq0wjiaRQWGRIeorrr5" Ids="SzrY4yuXDNrPNA9n4Kx4Uc,E2wE3CAdjdlLSWlzTATbAC" />
+          <Link Id="D0TqGYxLKtAOvcGm9ODKPz" Ids="AlNGEzPE9s1NDSsRV133kq,C9BFU3TSVTgNZeC2d60uuW" />
+          <Link Id="FGaQPFFyYIUPsO3rWzaNQW" Ids="Bx8wI3gi5icLYy6SkAiUGx,UUxS2mpNvChPCg285503fZ" />
+        </Patch>
+      </Node>
+      <!--
+
+    ************************ GetColorspace ************************
+
+-->
+      <Node Name="GetColorspace" Bounds="551,215" Id="ROlVfaDZfeaQMDn45Qu9SO">
+        <p:NodeReference>
+          <Choice Kind="ContainerDefinition" />
+        </p:NodeReference>
+        <Patch Id="NVF9d90eoNYLjgU7opdxXQ">
+          <Canvas Id="FMA8FXkydsZLoI0dxHDfSX" CanvasType="Group">
+            <Node Bounds="446,328,128,95" Id="Ueh9AbL5cLhQF96155Q9CE">
+              <p:NodeReference LastCategoryFullName="Primitive" LastDependency="Builtin">
+                <Choice Kind="StatefulRegion" Name="Region (Stateful)" Fixed="true" />
+                <CategoryReference Kind="Category" Name="Primitive" />
+                <Choice Kind="ProcessStatefulRegion" Name="Cache" />
+              </p:NodeReference>
+              <Pin Id="Ib9f4jMd53UL3unCJjNC1N" Name="Force" Kind="InputPin" />
+              <Pin Id="AKi3C12qgeNMRfQw3t9CRV" Name="Dispose Cached Outputs" Kind="InputPin" />
+              <Pin Id="HATrzr0Tgh6OXNA1FEzr7O" Name="Has Changed" Kind="OutputPin" />
+              <Patch Id="CgyOh1VjQNHOpXPcK5gfGJ" ManuallySortedPins="true">
+                <Patch Id="CzhB4tlBH97LpxElahdAik" Name="Create" ManuallySortedPins="true" />
+                <Patch Id="PR5B0cbFIjsPZhg1Iyj0r5" Name="Then" ManuallySortedPins="true" />
+                <Node Bounds="458,354,96,19" Id="N0h95bEj702NJH7sCx8M3z">
+                  <p:NodeReference LastCategoryFullName="VL.OCIO.OCIOConfigUtils" LastDependency="VL.OCIO.dll">
+                    <Choice Kind="NodeFlag" Name="Node" Fixed="true" />
+                    <Choice Kind="OperationCallFlag" Name="GetGPUResources" />
+                  </p:NodeReference>
+                  <Pin Id="OpJPtIZOqTnPRbiCBzuvBf" Name="Ocio Color Space Enum" Kind="InputPin" />
+                  <Pin Id="Pi2592wWpV8NJK2SoPdYnt" Name="Result" Kind="OutputPin" />
+                  <Pin Id="UeGNdzIdIRKNudToK3YO2T" Name="Input Colorspace" Kind="InputPin" />
+                </Node>
+              </Patch>
+              <ControlPoint Id="TbPLzjsGsRQQDiQKoo4ihb" Bounds="459,334" Alignment="Top" />
+              <ControlPoint Id="JRZahcVDHVWNu3iHCe8X1m" Bounds="460,417" Alignment="Bottom" />
+            </Node>
+            <ControlPoint Id="JGt62h5zzIwNzVMAn7gFoe" Bounds="458,270" />
+            <ControlPoint Id="KUDd30hXtB3PjRLjabFhji" Bounds="459,445" />
+          </Canvas>
+          <Patch Id="FYTjix6HkORMzXwIghzmWU" Name="Create" />
+          <Patch Id="AniZ7Mo9H00M3JGFpQwODj" Name="Update">
+            <Pin Id="NcBKb0jX9KsLJNuLk5UkaR" Name="Input" Kind="InputPin">
+              <p:TypeAnnotation LastCategoryFullName="VL.OCIO" LastDependency="VL.OCIO.dll">
+                <Choice Kind="TypeFlag" Name="OCIODisplayColorSpaceEnum" />
+              </p:TypeAnnotation>
+            </Pin>
+            <Pin Id="Lldx4iamXZ0PDhZjGQTXGq" Name="Output" Kind="OutputPin" />
+          </Patch>
+          <ProcessDefinition Id="JpQVKFWSKcgQCxQ9wpOMF0">
+            <Fragment Id="UARqMBJW64TK9bM0SJjdnJ" Patch="FYTjix6HkORMzXwIghzmWU" Enabled="true" />
+            <Fragment Id="Ozj8nyP5P7eLaJ8PEeoFI9" Patch="AniZ7Mo9H00M3JGFpQwODj" Enabled="true" />
+          </ProcessDefinition>
+          <Link Id="DYkU6JzwzWXPiTzWYMFrZg" Ids="JGt62h5zzIwNzVMAn7gFoe,TbPLzjsGsRQQDiQKoo4ihb" />
+          <Link Id="OmSM6MbLaz0M2erb4AVkSg" Ids="NcBKb0jX9KsLJNuLk5UkaR,JGt62h5zzIwNzVMAn7gFoe" IsHidden="true" />
+          <Link Id="J5g3A89UFxkOjRslGrNcKh" Ids="TbPLzjsGsRQQDiQKoo4ihb,OpJPtIZOqTnPRbiCBzuvBf" />
+          <Link Id="ULw8EZ0vJznPEqwNqPh3WQ" Ids="Pi2592wWpV8NJK2SoPdYnt,JRZahcVDHVWNu3iHCe8X1m" />
+          <Link Id="OtlZV3DRYilMEeGGNaCFis" Ids="JRZahcVDHVWNu3iHCe8X1m,KUDd30hXtB3PjRLjabFhji" />
+          <Link Id="OWazkv2ib1YODlEztlRCwJ" Ids="KUDd30hXtB3PjRLjabFhji,Lldx4iamXZ0PDhZjGQTXGq" IsHidden="true" />
+        </Patch>
+      </Node>
+      <Canvas Id="C4fiQnOSryKQcf1GDFJWe5" Name="Adavnced" Position="328,335">
+        <!--
+
+    ************************ Display ************************
+
+-->
+        <Node Name="Display" Bounds="217,313" Id="GGXpT1UweerPWTZEXGpRak">
+          <p:NodeReference>
+            <Choice Kind="ForwardDefinition" Name="Forward" />
+            <CategoryReference Kind="Category" Name="Primitive" />
+          </p:NodeReference>
+          <p:TypeAnnotation LastCategoryFullName="OcioSharpCLI" LastDependency="OcioSharpCLI.dll">
+            <Choice Kind="TypeFlag" Name="Display" />
+          </p:TypeAnnotation>
+          <Patch Id="T8oRR0kizAIPwnNO2PVfgT">
+            <Canvas Id="MYW9n4SBqBNObNik62ywu4" BordersChecked="false" CanvasType="Group" />
+            <ProcessDefinition Id="Ngar8Kn56nIL5A9LG7HB7U" IsHidden="true" />
+          </Patch>
+        </Node>
+        <!--
+
+    ************************ InterpolationType ************************
+
+-->
+        <Node Name="InterpolationType" Bounds="497,313" Id="Pm79Z8MV3EZOLfmkFnwU9v">
+          <p:NodeReference>
+            <Choice Kind="ForwardRecordDefinition" Name="Immutable Forward" />
+            <CategoryReference Kind="Category" Name="Primitive" />
+          </p:NodeReference>
+          <p:TypeAnnotation LastCategoryFullName="OcioSharpCLI" LastDependency="OcioSharpCLI.dll">
+            <Choice Kind="TypeFlag" Name="InterpolationType" />
+          </p:TypeAnnotation>
+          <Patch Id="GVbSagjo494LVGFgSUShtR">
+            <Canvas Id="HRJraVqPQa2O8r156uzeiR" BordersChecked="false" CanvasType="Group" />
+            <ProcessDefinition Id="TfdxsK3HdvAOrcGkGhxJWT" IsHidden="true" />
+          </Patch>
+        </Node>
+        <!--
+
+    ************************ OCIOConfig ************************
+
+-->
+        <Node Name="OCIOConfig" Bounds="777,313" Id="SdiDf1f2H2zMKA5g0a7OFK">
+          <p:NodeReference>
+            <Choice Kind="ForwardDefinition" Name="Forward" />
+            <CategoryReference Kind="Category" Name="Primitive" />
+          </p:NodeReference>
+          <p:TypeAnnotation LastCategoryFullName="OcioSharpCLI" LastDependency="OcioSharpCLI.dll">
+            <Choice Kind="TypeFlag" Name="OCIOConfig" />
+          </p:TypeAnnotation>
+          <Patch Id="S9CX9dBUA4iQRj13dqxtal">
+            <Canvas Id="NDAPe4FboA0O3A98iPIam7" BordersChecked="false" CanvasType="Group" />
+            <ProcessDefinition Id="I1ZG1z81c1QPA1fDPUwjyu" IsHidden="true" />
+          </Patch>
+        </Node>
+        <!--
+
+    ************************ Texture3DInfo ************************
+
+-->
+        <Node Name="Texture3DInfo" Bounds="217,363" Id="Hm4jhTpWkKQNXmi5gLvCIp">
+          <p:NodeReference>
+            <Choice Kind="ForwardDefinition" Name="Forward" />
+            <CategoryReference Kind="Category" Name="Primitive" />
+          </p:NodeReference>
+          <p:TypeAnnotation LastCategoryFullName="OcioSharpCLI" LastDependency="OcioSharpCLI.dll">
+            <Choice Kind="TypeFlag" Name="Texture3DInfo" />
+          </p:TypeAnnotation>
+          <Patch Id="VM0TSS8PMtsPyDOYMuQNfA">
+            <Canvas Id="CHKsZECyHw8QCEOLVU2gai" BordersChecked="false" CanvasType="Group" />
+            <ProcessDefinition Id="L3VJIu848KmM87SsEYE33z" IsHidden="true" />
+          </Patch>
+        </Node>
+        <!--
+
+    ************************ TextureDimensions ************************
+
+-->
+        <Node Name="TextureDimensions" Bounds="497,363" Id="MPd2o6WHnHTLUSxFHKs93v">
+          <p:NodeReference>
+            <Choice Kind="ForwardRecordDefinition" Name="Immutable Forward" />
+            <CategoryReference Kind="Category" Name="Primitive" />
+          </p:NodeReference>
+          <p:TypeAnnotation LastCategoryFullName="OcioSharpCLI" LastDependency="OcioSharpCLI.dll">
+            <Choice Kind="TypeFlag" Name="TextureDimensions" />
+          </p:TypeAnnotation>
+          <Patch Id="FwzO4ZgBY1zNd1TzkM1Moa">
+            <Canvas Id="Bc0ztb9kJVCLw7cMknHM8A" BordersChecked="false" CanvasType="Group" />
+            <ProcessDefinition Id="CzDSPltdCAwO6eYCHgBn7D" IsHidden="true" />
+          </Patch>
+        </Node>
+        <!--
+
+    ************************ TextureInfo ************************
+
+-->
+        <Node Name="TextureInfo" Bounds="777,363" Id="DGFufNn4DagPSltf8B3Gop">
+          <p:NodeReference>
+            <Choice Kind="ForwardDefinition" Name="Forward" />
+            <CategoryReference Kind="Category" Name="Primitive" />
+          </p:NodeReference>
+          <p:TypeAnnotation LastCategoryFullName="OcioSharpCLI" LastDependency="OcioSharpCLI.dll">
+            <Choice Kind="TypeFlag" Name="TextureInfo" />
+          </p:TypeAnnotation>
+          <Patch Id="Op4MkG3uyJPN5Ex9yR2Atu">
+            <Canvas Id="SafuIMSqUPNNxcXjk6A6eW" BordersChecked="false" CanvasType="Group" />
+            <ProcessDefinition Id="JUbxz8rVqgXLdgE8yJ4mJe" IsHidden="true" />
+          </Patch>
+        </Node>
+        <!--
+
+    ************************ TextureType ************************
+
+-->
+        <Node Name="TextureType" Bounds="217,413" Id="KQC0uhdWRWpLu3iZapGfDw">
+          <p:NodeReference>
+            <Choice Kind="ForwardRecordDefinition" Name="Immutable Forward" />
+            <CategoryReference Kind="Category" Name="Primitive" />
+          </p:NodeReference>
+          <p:TypeAnnotation LastCategoryFullName="OcioSharpCLI" LastDependency="OcioSharpCLI.dll">
+            <Choice Kind="TypeFlag" Name="TextureType" />
+          </p:TypeAnnotation>
+          <Patch Id="LUdvTNbZc21NkYKWu1uLg9">
+            <Canvas Id="I6Wg8qbxjT1LntbQTyyCud" BordersChecked="false" CanvasType="Group" />
+            <ProcessDefinition Id="JcttSgkYUWcPCnRRSsVpsB" IsHidden="true" />
+          </Patch>
+        </Node>
+        <!--
+
+    ************************ UniformInfo ************************
+
+-->
+        <Node Name="UniformInfo" Bounds="497,413" Id="AS3dqAblAf4M2QenbCgBND">
+          <p:NodeReference>
+            <Choice Kind="ForwardDefinition" Name="Forward" />
+            <CategoryReference Kind="Category" Name="Primitive" />
+          </p:NodeReference>
+          <p:TypeAnnotation LastCategoryFullName="OcioSharpCLI" LastDependency="OcioSharpCLI.dll">
+            <Choice Kind="TypeFlag" Name="UniformInfo" />
+          </p:TypeAnnotation>
+          <Patch Id="QIuDVuzbELvOXwfw5am5qm">
+            <Canvas Id="MK5VcGDuDkLMdfeaAbdtbU" BordersChecked="false" CanvasType="Group" />
+            <ProcessDefinition Id="Dm1DPWbs24JPcMKPPGrsHL" IsHidden="true" />
+          </Patch>
+        </Node>
+        <!--
+
+    ************************ UniformType ************************
+
+-->
+        <Node Name="UniformType" Bounds="777,413" Id="G1d94P2szP8O8oHTyZfZi8">
+          <p:NodeReference>
+            <Choice Kind="ForwardRecordDefinition" Name="Immutable Forward" />
+            <CategoryReference Kind="Category" Name="Primitive" />
+          </p:NodeReference>
+          <p:TypeAnnotation LastCategoryFullName="OcioSharpCLI" LastDependency="OcioSharpCLI.dll">
+            <Choice Kind="TypeFlag" Name="UniformType" />
+          </p:TypeAnnotation>
+          <Patch Id="CFqHd8CVASwO7KhqBCk8Ad">
+            <Canvas Id="SxjNLDQPrVYQNymxIwZUw1" BordersChecked="false" CanvasType="Group" />
+            <ProcessDefinition Id="RWjbkg5cUX5QacCVWcqw6F" IsHidden="true" />
+          </Patch>
+        </Node>
+        <!--
+
+    ************************ View ************************
+
+-->
+        <Node Name="View" Bounds="217,463" Id="U5Xe2I0MQLEPYhokTnHe6V">
+          <p:NodeReference>
+            <Choice Kind="ForwardDefinition" Name="Forward" />
+            <CategoryReference Kind="Category" Name="Primitive" />
+          </p:NodeReference>
+          <p:TypeAnnotation LastCategoryFullName="OcioSharpCLI" LastDependency="OcioSharpCLI.dll">
+            <Choice Kind="TypeFlag" Name="View" />
+          </p:TypeAnnotation>
+          <Patch Id="DTwvRqWOGPYLdvlp5SUlZC">
+            <Canvas Id="HPDhWVGIKCjNCzGk7Iy5QH" BordersChecked="false" CanvasType="Group" />
+            <ProcessDefinition Id="EuOk0snL0DiN963pJdnwln" IsHidden="true" />
+          </Patch>
+        </Node>
+      </Canvas>
+    </Canvas>
+    <!--
+
+    ************************ Application ************************
+
+-->
+    <Node Name="Application" Bounds="100,100" Id="HMOdSeiE7loL2U4X6W0vn1">
+      <p:NodeReference>
+        <Choice Kind="ContainerDefinition" Name="Process" />
+        <CategoryReference Kind="Category" Name="Primitive" />
+      </p:NodeReference>
+      <Patch Id="EcNmFMJoMMeMjzvnrJoUUa">
+        <Canvas Id="SheTcbpwjXBPlplk8oqxKx" CanvasType="Group" />
+        <Patch Id="Cw8BiInGWPOLYQf5tpocrf" Name="Create" />
+        <Patch Id="PJFxeRESmp2NLNZPIoaSWN" Name="Update" />
+        <ProcessDefinition Id="Nx3mz0kmcrbLnUUvv6etTD">
+          <Fragment Id="JVdh5misxX4ORRq651FxGr" Patch="Cw8BiInGWPOLYQf5tpocrf" Enabled="true" />
+          <Fragment Id="FMN91almyDrNsyyyum6zow" Patch="PJFxeRESmp2NLNZPIoaSWN" Enabled="true" />
+        </ProcessDefinition>
+      </Patch>
+    </Node>
+  </Patch>
+  <PlatformDependency Id="RgjHYARailLObvyrKzeBVd" Location="./src/bin/Debug/net8.0/VL.OCIO.dll" />
+  <NugetDependency Id="Tr98xYW9B4CQUL02k1wpQV" Location="YamlDotNet" Version="16.2.1" />
+  <PlatformDependency Id="TzrXHvnc3nHMkaiyJSghS1" Location="./src/bin/Debug/net8.0-windows7.0/OcioSharpCLI.dll" />
+</Document>

@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-Windows7.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>True</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="VL.Core" Version="2024.6.6" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\OCIOSharp\OcioSharpCLI\OcioSharpCLI.vcxproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="VL.Core" />
+    <Using Include="VL.Core.Import" />
+    <Using Include="VL.Lib.Collections" />
+    <Using Include="Stride.Core.Mathematics" />
+  </ItemGroup>
+
+</Project>

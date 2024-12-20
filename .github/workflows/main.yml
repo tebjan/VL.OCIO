@@ -36,6 +36,17 @@ jobs:
         echo INCLUDE=$INCLUDE
         echo LIB=$LIB
 
+    - name: Set environment variables
+      run: |
+        $vcIncludePath = $env:VC_IncludePath
+        if (-not $vcIncludePath) { $vcIncludePath = "" }
+        $vcLibraryPath = $env:VC_LibraryPath_x64
+        if (-not $vcLibraryPath) { $vcLibraryPath = "" }
+        $customIncludePath = "$(Get-Location)\src\OCIOSharp\OCIOSharpCLI\ThirdParty\OCIO\include"
+        $customLibraryPath = "$(Get-Location)\src\OCIOSharp\OCIOSharpCLI\ThirdParty\OCIO\lib"
+        echo "VC_IncludePath=$vcIncludePath;$customIncludePath" >> $env:GITHUB_ENV
+        echo "VC_LibraryPath_x64=$vcLibraryPath;$customLibraryPath" >> $env:GITHUB_ENV
+
     - name: Publish VL Nuget
       uses: vvvv/PublishVLNuget@1.0.43
       with:

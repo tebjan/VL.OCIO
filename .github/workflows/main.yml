@@ -17,6 +17,8 @@ jobs:
     steps:
     - name: Git Checkout
       uses: actions/checkout@master
+      with:
+          submodules: true
     
     - name: Setup MSBuild.exe
       uses: microsoft/setup-msbuild@v2
@@ -24,11 +26,21 @@ jobs:
     - name: Setup Nuget.exe
       uses: nuget/setup-nuget@v2.0.0
 
+    - name: Configure environment variables
+      run: |
+        echo "INCLUDE=${{ github.workspace }}\src\OCIOSharp\OCIOSharpCLI\ThirdParty\OCIO\include" >> $GITHUB_ENV
+        echo "LIB=${{ github.workspace }}\src\OCIOSharp\OCIOSharpCLI\ThirdParty\OCIO\lib" >> $GITHUB_ENV
+
+    - name: Verify environment variables
+      run: |
+        echo INCLUDE=$INCLUDE
+        echo LIB=$LIB
+
     - name: Publish VL Nuget
       uses: vvvv/PublishVLNuget@1.0.43
       with:
-        csproj: src\VL.NewLibrary.Template.csproj
-        nuspec: deployment\VL.NewLibrary.Template.nuspec
+        csproj: src\VL.OCIO.csproj
+        nuspec: deployment\VL.OCIO.nuspec
 
         # Fill the Icon file
         icon-src: https://raw.githubusercontent.com/vvvv/PublicContent/master/nugeticon.png

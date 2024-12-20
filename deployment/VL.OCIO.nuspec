@@ -6,24 +6,24 @@
 
 <package xmlns="http://schemas.microsoft.com/packaging/2011/10/nuspec.xsd">
   <metadata>
-    <id>VL.NewLibrary.Template</id>
+    <id>VL.OCIO</id>
     <!-- For more about versions see: https://thegraybook.vvvv.org/reference/extending/publishing.html#version -->
-    <version>0.0.1-alpha</version>
-    <title>VL.NewLibrary.Template</title>
+    <version>1.0.0-alpha</version>
+    <title>VL.OCIO</title>
     <!-- Provide authors and projectUrl --> 
-    <authors></authors>
-    <projectUrl></projectUrl>
+    <authors>Tebjan Halm</authors>
+    <projectUrl>https://github.com/tebjan/VL.OCIO</projectUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <!-- Provide description and tags-->
-    <description></description>
-    <tags>VL</tags>
-    <license type="expression">LGPL-3.0-only</license>
+    <description>Reads OpenColorIO (OCIO) config files.</description>
+    <tags>VL ocio aces hdr</tags>
+    <license type="expression">BSD-3-Clause</license>
     <icon>icon\nugeticon.png</icon>
     <readme>docs\README.md</readme>
   </metadata>
   <files>
-    <!-- <file src="..\lib\**\*.dll" target="lib\" exclude="" /> -->
-	  <!-- <file src="..\runtimes\**\*.dll" target="runtimes\" exclude="" /> -->
+    <file src="..\lib\**\*.dll" target="lib\" exclude="" />
+	  <file src="..\runtimes\**\*.dll" target="runtimes\" exclude="" />
     <file src="..\*.vl" target="" exclude="" />
     <file src="..\help\**" target="help\" exclude="" />
     <file src="nugeticon.png" target="icon\" />

@@ -12,7 +12,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\OCIOSharp\OcioSharpCLI\OcioSharpCLI.vcxproj" />
+    <ProjectReference Include="OCIOSharp\OcioSharpCLI\OcioSharpCLI.vcxproj" />
   </ItemGroup>
 
   <ItemGroup>

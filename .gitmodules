@@ -1,0 +1,4 @@
+[submodule "src/OCIOSharp"]
+	path = src/OCIOSharp
+	url = https://github.com/tebjan/OCIOSharp.git
+	branch = main

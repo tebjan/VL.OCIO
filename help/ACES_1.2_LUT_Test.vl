@@ -578,9 +578,9 @@
             <Pin Id="PD5NwfOmj3YNsffUigHQUt" Name="Input" Kind="InputPin" />
             <Pin Id="DUrKSjBhR5QMF2alpSNFFg" Name="Output" Kind="OutputPin" />
           </Node>
-          <Pad Id="ChTClcgRMLzQBlLmEe5y7w" Comment="" Bounds="899,115,150,15" ShowValueBox="true" isIOBox="true" Value="Rec.2020 ST2084 1000 nits">
+          <Pad Id="IEkicjJxGbFO41t6FnU3iL" Comment="" Bounds="900,99,150,15" ShowValueBox="true" isIOBox="true" Value="Rec.2020 ST2084 1000 nits">
             <p:TypeAnnotation LastCategoryFullName="VL.OCIO" LastDependency="VL.OCIO.vl">
-              <Choice Kind="TypeFlag" Name="OcioDisplayColorSpaceEnum" />
+              <Choice Kind="TypeFlag" Name="OCIODisplayColorSpaceEnum" />
             </p:TypeAnnotation>
           </Pad>
         </Canvas>
@@ -604,7 +604,7 @@
         <Link Id="PMSLdIsKYbuL8anOYRMNed" Ids="Tv2Ha5p9Kv9MWV4dftAP5q,KlhJIJF2lTbLCElabfksY7" />
         <Link Id="Mvz5x8yfhFkLGIb16kJ9fX" Ids="E2o2UiG96EsPyYM9Y6ll3p,Ry7yWwU9IqqNd4QrnTGS2R" />
         <Link Id="QKo30ifpEytLdja0GxSZ1H" Ids="TuZMovxsWpqMGeqZ8n6pIQ,BGZnvGHME0SMsquqR7VsHm" />
-        <Link Id="Cbaj7RmlP0YOUtLZSGNDsl" Ids="ChTClcgRMLzQBlLmEe5y7w,PD5NwfOmj3YNsffUigHQUt" />
+        <Link Id="Esx90mOsm3cNImeqhmlQqM" Ids="IEkicjJxGbFO41t6FnU3iL,PD5NwfOmj3YNsffUigHQUt" />
       </Patch>
     </Node>
   </Patch>

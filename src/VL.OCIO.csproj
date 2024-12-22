@@ -2,17 +2,27 @@
 
   <PropertyGroup>
     <TargetFramework>net8.0-Windows7.0</TargetFramework>
+	<RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <GenerateDocumentationFile>True</GenerateDocumentationFile>
+	<OutputPath>..\lib\</OutputPath>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="VL.Core" Version="2024.6.6" />
   </ItemGroup>
 
-  <ItemGroup>
+  <ItemGroup Condition="'$(Configuration)' == 'Debug'">
     <ProjectReference Include="OCIOSharp\OcioSharpCLI\OcioSharpCLI.vcxproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(Configuration)' == 'Release'">
+	<!-- DLL reference for deployment -->
+	<Reference Include="OCIOSharpCLI">
+		<HintPath>OCIOSharp\OcioSharpCLI\x64\Release\OCIOSharpCLI.dll</HintPath>
+		<Private>true</Private>
+	</Reference>
   </ItemGroup>
 
   <ItemGroup>
@@ -21,5 +31,25 @@
     <Using Include="VL.Lib.Collections" />
     <Using Include="Stride.Core.Mathematics" />
   </ItemGroup>
+
+  <!-- Custom target to copy native DLL to runtimes folder -->
+  <Target Name="CopyNativeDll" AfterTargets="Build">
+	<PropertyGroup>
+		<!-- Define the source path of the native DLL -->
+		<NativeDllSourcePath>OCIOSharp\OcioSharpCLI\x64\Release\OpenColorIO_2_4.dll</NativeDllSourcePath>
+		<!-- Define the target path within the NuGet package structure -->
+		<NativeDllTargetPath>..\runtimes\win-x64\native</NativeDllTargetPath>
+	</PropertyGroup>
+	<!-- Copy the native DLL to the target path -->
+	<Copy SourceFiles="$(NativeDllSourcePath)" DestinationFolder="$(NativeDllTargetPath)" />
+	<PropertyGroup>
+		<!-- Define the source path of the native DLL -->
+		<NativeDllSourcePath>OCIOSharp\OcioSharpCLI\x64\Release\Ijwhost.dll</NativeDllSourcePath>
+		<!-- Define the target path within the NuGet package structure -->
+		<NativeDllTargetPath>..\runtimes\win-x64\native</NativeDllTargetPath>
+	</PropertyGroup>
+	<!-- Copy the native DLL to the target path -->
+	<Copy SourceFiles="$(NativeDllSourcePath)" DestinationFolder="$(NativeDllTargetPath)" />
+  </Target>	
 
 </Project>

@@ -8,7 +8,7 @@
   <metadata>
     <id>VL.OCIO</id>
     <!-- For more about versions see: https://thegraybook.vvvv.org/reference/extending/publishing.html#version -->
-    <version>0.9.1-alpha</version>
+    <version>0.9.2-alpha</version>
     <title>VL.OCIO</title>
     <!-- Provide authors and projectUrl --> 
     <authors>Tebjan Halm</authors>
@@ -27,7 +27,7 @@
   </metadata>
   <files>
     <file src="..\lib\**\*.dll" target="lib\" exclude="" />
-	  <file src="..\runtimes\**\*.dll" target="runtimes\" exclude="" />
+	  <!-- <file src="..\runtimes\**\*.dll" target="runtimes\" exclude="" /> -->
     <file src="..\*.vl" target="" exclude="" />
     <file src="..\help\**" target="help\" exclude="" />
     <file src="nugeticon.png" target="icon\" />

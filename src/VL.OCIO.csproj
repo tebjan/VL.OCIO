@@ -2,7 +2,6 @@
 
   <PropertyGroup>
     <TargetFramework>net8.0-Windows7.0</TargetFramework>
-	<RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <GenerateDocumentationFile>True</GenerateDocumentationFile>
@@ -37,19 +36,15 @@
 	<PropertyGroup>
 		<!-- Define the source path of the native DLL -->
 		<NativeDllSourcePath>OCIOSharp\OcioSharpCLI\x64\Release\OpenColorIO_2_4.dll</NativeDllSourcePath>
-		<!-- Define the target path within the NuGet package structure -->
-		<NativeDllTargetPath>..\runtimes\win-x64\native</NativeDllTargetPath>
 	</PropertyGroup>
 	<!-- Copy the native DLL to the target path -->
-	<Copy SourceFiles="$(NativeDllSourcePath)" DestinationFolder="$(NativeDllTargetPath)" />
+	<Copy SourceFiles="$(NativeDllSourcePath)" DestinationFolder="$(OutputPath)" />
 	<PropertyGroup>
 		<!-- Define the source path of the native DLL -->
 		<NativeDllSourcePath>OCIOSharp\OcioSharpCLI\x64\Release\Ijwhost.dll</NativeDllSourcePath>
-		<!-- Define the target path within the NuGet package structure -->
-		<NativeDllTargetPath>..\runtimes\win-x64\native</NativeDllTargetPath>
 	</PropertyGroup>
 	<!-- Copy the native DLL to the target path -->
-	<Copy SourceFiles="$(NativeDllSourcePath)" DestinationFolder="$(NativeDllTargetPath)" />
+	<Copy SourceFiles="$(NativeDllSourcePath)" DestinationFolder="$(OutputPath)" />
   </Target>	
 
 </Project>

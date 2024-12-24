@@ -1,0 +1,7 @@
+shader OCIOBase
+{
+    float4 OCIODisplay(float4 inPixel)
+    {
+        return inPixel;
+    }
+};

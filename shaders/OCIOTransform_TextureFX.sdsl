@@ -1,0 +1,12 @@
+[Category("Filter")]
+[Summary("")]
+shader OCIOTransform_TextureFX : TextureFX
+{
+    stage compose OCIOBase Display;
+
+    stage override float4 Shading()
+    {
+        float4 tex0col = Texture0.SampleLevel(PointSampler, streams.TexCoord, 0);
+        return Display.OCIODisplay(tex0col);
+    }
+};

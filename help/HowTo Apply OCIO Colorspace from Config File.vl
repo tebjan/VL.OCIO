@@ -1,0 +1,268 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Document xmlns:p="property" xmlns:r="reflection" Id="BCZP1hQ6l5RPmyjf3Vk9wb" LanguageVersion="2024.6.6" Version="0.128">
+  <NugetDependency Id="B8cGXVB4R8LNB0un36hDqG" Location="VL.CoreLib" Version="2024.6.6" />
+  <Patch Id="FRsXcHuLgXIOiuEhJiLMRh">
+    <Canvas Id="CQFd9EzgaamNn5KmdRUhVd" DefaultCategory="Main" CanvasType="FullCategory" />
+    <!--
+
+    ************************ Application ************************
+
+-->
+    <Node Name="Application" Bounds="100,100" Id="MtXEyHGjfL6MW2UwHOeeVn">
+      <p:NodeReference>
+        <Choice Kind="ContainerDefinition" Name="Process" />
+        <CategoryReference Kind="Category" Name="Primitive" />
+      </p:NodeReference>
+      <Patch Id="PZnepsVQBfrNHmrhkaKNxh">
+        <Canvas Id="HnBRyKV4bnSNT1VWXwi78O" CanvasType="Group">
+          <Node Bounds="600,1072,225,19" Id="SEsAD6qI0TDMDVTjmro1H8">
+            <p:NodeReference LastCategoryFullName="Stride" LastDependency="VL.Stride.vl">
+              <Choice Kind="NodeFlag" Name="Node" Fixed="true" />
+              <Choice Kind="ProcessAppFlag" Name="SceneWindow" />
+            </p:NodeReference>
+            <Pin Id="H7efrODkldlM01X19leuP3" Name="Node Context" Kind="InputPin" IsHidden="true" />
+            <Pin Id="JVz9BgCkKFnNhk1TcYUKsW" Name="Bounds" Kind="InputPin" DefaultValue="2767.3333, 404.66666, 1504, 790" IsHidden="true" />
+            <Pin Id="Meg35mxa0ygPQcE1YIAbOg" Name="Bound to Document" Kind="InputPin" IsHidden="true" />
+            <Pin Id="JtQj9PA6pvqMdh8d1bhiqq" Name="Dialog If Document Changed" Kind="InputPin" IsHidden="true" />
+            <Pin Id="QVnesXzOeQULa3uZXmKQlV" Name="Save Bounds" Kind="InputPin" IsHidden="true" />
+            <Pin Id="IjYt3CFeavZP9bJq5CNVUR" Name="Back Buffer Format" Kind="InputPin" />
+            <Pin Id="AsfzLfBnTkON6rb497PKvj" Name="Depth Buffer Format" Kind="InputPin" IsHidden="true" />
+            <Pin Id="UIKmbMvn5agPNxRAIVepCc" Name="Input" Kind="InputPin" />
+            <Pin Id="TuhmASSsDXoPe9GcMJ1YnE" Name="Camera" Kind="InputPin" />
+            <Pin Id="UdtghKknMpjNhS0y6WFyZ3" Name="Enable Default Camera" Kind="InputPin" />
+            <Pin Id="SsebTmdAheqMU7AUvaHsyR" Name="Title" Kind="InputPin" />
+            <Pin Id="NzXz4gb26QEMU9JN46QnK2" Name="Clear Color" Kind="InputPin" />
+            <Pin Id="Ffzp1lYDe67O8mWlPRS8tO" Name="Clear" Kind="InputPin" />
+            <Pin Id="K1FPgVmdtmEM8r3WPEAtRD" Name="Post Effects" Kind="InputPin" />
+            <Pin Id="MUC5W6VTTWvLDCcBsfhvyT" Name="Enable Default Post Effects" Kind="InputPin" />
+            <Pin Id="NX2AHZK1utMOZllaVqKf3R" Name="Render Group Mask" Kind="InputPin" IsHidden="true" />
+            <Pin Id="LlmmW3wLa0HO8QXW3d6KyB" Name="Commands" Kind="InputPin" IsHidden="true" />
+            <Pin Id="SGv2sdolSqeO3SNNPzuB6Z" Name="Enable Keyboard Shortcuts" Kind="InputPin" />
+            <Pin Id="EsRZBagaN7YPDBLh9bM7tu" Name="Model Effect Name" Kind="InputPin" IsHidden="true" />
+            <Pin Id="GzMzokWGrzMLg3mU6xTacB" Name="Additional Scene Renderers" Kind="InputPin" IsHidden="true" />
+            <Pin Id="EtLHmtUvUslOOE6z2B5Gai" Name="Enabled" Kind="InputPin" />
+            <Pin Id="Qx6qv6pTQS7P6GUIUpHvTK" Name="Present Interval" Kind="InputPin" />
+            <Pin Id="GRg7WJwNqyKNokqb4We6hG" Name="Output" Kind="OutputPin" />
+            <Pin Id="G9MyGMQIusoL6DNAYRQNds" Name="Client Bounds" Kind="OutputPin" />
+            <Pin Id="K5R4vi8qjwoNE4xpM8OyM6" Name="Input Source" Kind="OutputPin" />
+            <Pin Id="BY5HAjOmXdVQNT5KJ7ahmK" Name="MSAALevel" Kind="InputPin" IsHidden="true" />
+            <Pin Id="OUqKZnkjUrBOSvEOwdtZL6" Name="MSAAResolver" Kind="InputPin" IsHidden="true" />
+            <Pin Id="NIynaSCdyKjP7qX6Bbuqcd" Name="Light Shafts" Kind="InputPin" IsHidden="true" />
+            <Pin Id="ADb8OgCEY3VODh3CC8bq0N" Name="VR Settings" Kind="InputPin" IsHidden="true" />
+            <Pin Id="PWoadefnQ9GOqM2SjaKL5s" Name="Viewport Settings" Kind="InputPin" IsHidden="true" />
+            <Pin Id="OabJMHquOBHLyeZQD5xeyd" Name="Subsurface Scattering Blur Settings" Kind="InputPin" IsHidden="true" />
+            <Pin Id="TDDgZz47wc3LxYv1gOE6FV" Name="Bind Depth As Resource During Transparent Rendering" Kind="InputPin" IsHidden="true" />
+            <Pin Id="UlRC8jKxZ2YNd8UyEUUXMx" Name="Back Buffer" Kind="OutputPin" IsHidden="true" />
+            <Pin Id="IhjSRHztYHQMhcU5fMjYUm" Name="Depth Buffer" Kind="OutputPin" IsHidden="true" />
+          </Node>
+          <Node Bounds="774,372,83,19" Id="O9YuWtvn6oRODAW3eevRK8">
+            <p:NodeReference LastCategoryFullName="Stride.Textures" LastDependency="VL.Stride.vl">
+              <Choice Kind="NodeFlag" Name="Node" Fixed="true" />
+              <Choice Kind="ProcessAppFlag" Name="TextureReader" />
+            </p:NodeReference>
+            <Pin Id="CljpgawXPrgPudQP1k2T6G" Name="Node Context" Kind="InputPin" IsHidden="true" />
+            <Pin Id="TSfJMi9wxo9MzUC4qRNSY4" Name="File Path" Kind="InputPin" />
+            <Pin Id="TKYwr7KAloJQSwFyGv7R4n" Name="Is sRGB" Kind="InputPin" />
+            <Pin Id="DB8VYFpaaqTPA7l4jPDNw7" Name="Output" Kind="OutputPin" />
+          </Node>
+          <Node Bounds="638,884,145,19" Id="Bou3UHtGEIHPXkfyKXCesK">
+            <p:NodeReference LastCategoryFullName="Stride.Rendering" LastDependency="VL.Stride.vl">
+              <Choice Kind="NodeFlag" Name="Node" Fixed="true" />
+              <Choice Kind="ProcessAppFlag" Name="FullscreenQuadRenderer" />
+            </p:NodeReference>
+            <Pin Id="N2p4n0RtoXvOFxELEP8emk" Name="Node Context" Kind="InputPin" IsHidden="true" />
+            <Pin Id="MZIEoItCZQ9MvhUMLedgVF" Name="Transformation" Kind="InputPin" />
+            <Pin Id="U3Ydo1zEgsyOTNpMXlLh1N" Name="Texture" Kind="InputPin" />
+            <Pin Id="DfinXsh6bUKLjXhkpwSQsr" Name="Sampler" Kind="InputPin" />
+            <Pin Id="TDv7enyPattQShXYPsHNJO" Name="Sample Mode" Kind="InputPin" />
+            <Pin Id="NookvmmBwI6L3upa6XA9Ew" Name="Blend State" Kind="InputPin" />
+            <Pin Id="M1JCOzYSPMQMNlnr3LvRjT" Name="Color" Kind="InputPin" />
+            <Pin Id="DOxyvnUN1sUQXErJlZjEwK" Name="Rasterizer State" Kind="InputPin" />
+            <Pin Id="HdSi96jXpp9MPeaWzwkHqn" Name="Depth Stencil State" Kind="InputPin" />
+            <Pin Id="UGpELZOABsiPzi96irFcGm" Name="Output" Kind="OutputPin" />
+          </Node>
+          <Node Bounds="620,1012,63,19" Id="PBlRxrZktDENTBQtN2iZH0">
+            <p:NodeReference LastCategoryFullName="Stride" LastDependency="VL.Stride.vl">
+              <Choice Kind="NodeFlag" Name="Node" Fixed="true" />
+              <CategoryReference Kind="Category" Name="Stride" NeedsToBeDirectParent="true" />
+              <Choice Kind="ProcessAppFlag" Name="RootScene" />
+            </p:NodeReference>
+            <Pin Id="F2ZINPK93FlOAYl2z2Y55l" Name="Node Context" Kind="InputPin" IsHidden="true" />
+            <Pin Id="Oyw3p88cuekNHoBrNlp9es" Name="Child" Kind="InputPin" />
+            <Pin Id="Oh0a4izYwmoOCWDNqfCgu9" Name="Child 2" Kind="InputPin" />
+            <Pin Id="EZ5l9fr7apzPyyj2ki3V5R" Name="Child Scenes" Kind="InputPin" IsHidden="true" />
+            <Pin Id="Oq9lokd9JmAPyMNiElJ8UL" Name="Enabled" Kind="InputPin" />
+            <Pin Id="EmG5Khl5PXXO6JawQ5eduy" Name="Output" Kind="OutputPin" />
+          </Node>
+          <Node Bounds="618,953,165,19" Id="Qq9VXTydU9VL7Q3UMlN4Jg">
+            <p:NodeReference LastCategoryFullName="Stride.Rendering" LastDependency="VL.Stride.vl">
+              <Choice Kind="NodeFlag" Name="Node" Fixed="true" />
+              <Choice Kind="ProcessAppFlag" Name="RenderEntity" />
+            </p:NodeReference>
+            <Pin Id="O77s9qlwn1FPj5uqo0hcx7" Name="Node Context" Kind="InputPin" IsHidden="true" />
+            <Pin Id="E5uBdIqz6faP4mlN2eIAEn" Name="Transformation" Kind="InputPin" />
+            <Pin Id="M5FJDywS85VLAuvczZ1gEH" Name="Input" Kind="InputPin" />
+            <Pin Id="GZzLcZIYhbUMGbsJcU86Ru" Name="Render Stage" Kind="InputPin" />
+            <Pin Id="VIrfIr4g6gGPhWHwAVZRhP" Name="Single Call Per Frame" Kind="InputPin" />
+            <Pin Id="FK680uTQgUBL7OgDBR9vcJ" Name="Render Group" Kind="InputPin" />
+            <Pin Id="OfIdeN1V1m0MtOuehurD7H" Name="Components" Kind="InputPin" />
+            <Pin Id="CnPftItoqBNNxLpnDTQNei" Name="Children" Kind="InputPin" />
+            <Pin Id="I3egcQvFyXeQOMvzXfhnoD" Name="Name" Kind="InputPin" />
+            <Pin Id="AhRbGzvIYv4MfkQ13m254D" Name="Enabled" Kind="InputPin" />
+            <Pin Id="N5szPGe87gVPoUoofeLd2l" Name="Output" Kind="OutputPin" />
+          </Node>
+          <Pad Id="LaUlfczngx3NjGeQRALXCM" Comment="Linear Texture" Bounds="776,305,263,23" ShowValueBox="true" isIOBox="true" Value="test_hdr_dds_linear_BC6.dds">
+            <p:TypeAnnotation LastCategoryFullName="IO" LastDependency="VL.CoreLib.vl">
+              <Choice Kind="TypeFlag" Name="Path" />
+            </p:TypeAnnotation>
+            <p:ValueBoxSettings>
+              <p:fontsize p:Type="Int32">11</p:fontsize>
+            </p:ValueBoxSettings>
+          </Pad>
+          <Pad Id="SklYtxqb0KePUdQyki8y7Y" Comment="Back Buffer Format" Bounds="306,960,167,15" ShowValueBox="true" isIOBox="true" Value="R16G16B16A16_Float">
+            <p:TypeAnnotation LastCategoryFullName="Stride.API.Graphics" LastDependency="VL.Stride.vl">
+              <Choice Kind="TypeFlag" Name="PixelFormat" />
+            </p:TypeAnnotation>
+          </Pad>
+          <Pad Id="K6j0oKI5bmwM7mvKs15cpU" Bounds="283,911,259,25" ShowValueBox="true" isIOBox="true" Value="Restart patch with F9 after change">
+            <p:TypeAnnotation LastCategoryFullName="Primitive" LastDependency="VL.CoreLib.vl">
+              <Choice Kind="TypeFlag" Name="String" />
+            </p:TypeAnnotation>
+            <p:ValueBoxSettings>
+              <p:fontsize p:Type="Int32">9</p:fontsize>
+              <p:stringtype p:Assembly="VL.Core" p:Type="VL.Core.StringType">Comment</p:stringtype>
+            </p:ValueBoxSettings>
+          </Pad>
+          <Node Bounds="302,672,70,19" Id="M9Zx2K6VsHvP7yhOrGAvdW">
+            <p:NodeReference LastCategoryFullName="OCIO" LastDependency="VL.OCIO.vl">
+              <Choice Kind="NodeFlag" Name="Node" Fixed="true" />
+              <Choice Kind="ProcessAppFlag" Name="OCIOConfig" />
+            </p:NodeReference>
+            <Pin Id="MdOteQQKxw5NKN7odZdBEZ" Name="Node Context" Kind="InputPin" IsHidden="true" />
+            <Pin Id="BGZnvGHME0SMsquqR7VsHm" Name="Config File" Kind="InputPin" />
+          </Node>
+          <Pad Id="TuZMovxsWpqMGeqZ8n6pIQ" Comment="Config File" Bounds="304,637,104,15" ShowValueBox="true" isIOBox="true" Value="aces_1.2\config.ocio">
+            <p:TypeAnnotation LastCategoryFullName="IO" LastDependency="VL.CoreLib.vl">
+              <Choice Kind="TypeFlag" Name="Path" />
+            </p:TypeAnnotation>
+          </Pad>
+          <Node Bounds="773,622,123,19" Id="LibOMh1KicWLtLEORE3Ylz">
+            <p:NodeReference LastCategoryFullName="OCIO" LastDependency="VL.OCIO.vl">
+              <Choice Kind="NodeFlag" Name="Node" Fixed="true" />
+              <Choice Kind="ProcessAppFlag" Name="OCIODisplayColorspace" />
+            </p:NodeReference>
+            <Pin Id="SXaWkpy6fKqNIJvDBzQNW2" Name="Node Context" Kind="InputPin" IsHidden="true" />
+            <Pin Id="KaBo4jID0F4NWhaUPD1v6Y" Name="Input" Kind="InputPin" />
+            <Pin Id="GXH7avdbDuBP5oS8QjMot2" Name="Input Color Space" Kind="InputPin" />
+            <Pin Id="JAGX86ASZuQQFTxLjXBnrB" Name="Display" Kind="InputPin" />
+            <Pin Id="EOOuFq3fp6nOyFVWY0uChX" Name="Output Format" Kind="InputPin" />
+            <Pin Id="HpxSqzCnjj0LQr2yN7K1wg" Name="Apply" Kind="InputPin" />
+            <Pin Id="SXSDYkvBssKOxfLfN4ow9g" Name="Output" Kind="OutputPin" />
+          </Node>
+          <Pad Id="PDbiIo6ZAGDOhWioht4RqC" Comment="" Bounds="775,675,200,166" ShowValueBox="true" isIOBox="true" />
+          <Pad Id="PWNzmud83qXO50z5epBsiu" Comment="Output Format" Bounds="863,597,167,15" ShowValueBox="true" isIOBox="true" Value="R16G16B16A16_Float">
+            <p:TypeAnnotation LastCategoryFullName="Stride.API.Graphics" LastDependency="VL.Stride.vl">
+              <Choice Kind="TypeFlag" Name="PixelFormat" />
+            </p:TypeAnnotation>
+          </Pad>
+          <Pad Id="A7wiUs74zIUNfLjjQqfjFk" Comment="Display" Bounds="834,545,306,29" ShowValueBox="true" isIOBox="true" Value="Rec.2020 ST2084 1000 nits">
+            <p:TypeAnnotation LastCategoryFullName="VL.OCIO" LastDependency="VL.OCIO.vl">
+              <Choice Kind="TypeFlag" Name="OCIODisplayColorSpaceEnum" />
+            </p:TypeAnnotation>
+            <p:ValueBoxSettings>
+              <p:fontsize p:Type="Int32">14</p:fontsize>
+            </p:ValueBoxSettings>
+          </Pad>
+          <Pad Id="RIRgVLm34DsLtv9JB7Nb7o" Comment="Render Stage" Bounds="660,931,135,15" ShowValueBox="true" isIOBox="true" Value="AfterScene">
+            <p:TypeAnnotation LastCategoryFullName="VL.Stride.Rendering" LastDependency="VL.Stride.vl">
+              <Choice Kind="TypeFlag" Name="DrawerRenderStage" />
+            </p:TypeAnnotation>
+          </Pad>
+          <Pad Id="LLLPg4DNafOOx2EUB9jC3a" Bounds="876,261,61,19" ShowValueBox="true" isIOBox="true" Value="Test File">
+            <p:TypeAnnotation LastCategoryFullName="Primitive" LastDependency="VL.CoreLib.vl">
+              <Choice Kind="TypeFlag" Name="String" />
+            </p:TypeAnnotation>
+            <p:ValueBoxSettings>
+              <p:fontsize p:Type="Int32">9</p:fontsize>
+              <p:stringtype p:Assembly="VL.Core" p:Type="VL.Core.StringType">Comment</p:stringtype>
+            </p:ValueBoxSettings>
+          </Pad>
+          <Pad Id="FjnryQz6E5INdxEBVe4vy6" Bounds="280,592,389,19" ShowValueBox="true" isIOBox="true" Value="1. Select OCIO Config File (restart patch wirh F9 after change)">
+            <p:TypeAnnotation LastCategoryFullName="Primitive" LastDependency="VL.CoreLib.vl">
+              <Choice Kind="TypeFlag" Name="String" />
+            </p:TypeAnnotation>
+            <p:ValueBoxSettings>
+              <p:fontsize p:Type="Int32">9</p:fontsize>
+              <p:stringtype p:Assembly="VL.Core" p:Type="VL.Core.StringType">Comment</p:stringtype>
+            </p:ValueBoxSettings>
+          </Pad>
+          <Pad Id="OHsNhua8aRIOwkFxTOqRY5" Bounds="798,454,336,22" ShowValueBox="true" isIOBox="true" Value="2. Select input and display color space from config file">
+            <p:TypeAnnotation LastCategoryFullName="Primitive" LastDependency="VL.CoreLib.vl">
+              <Choice Kind="TypeFlag" Name="String" />
+            </p:TypeAnnotation>
+            <p:ValueBoxSettings>
+              <p:fontsize p:Type="Int32">9</p:fontsize>
+              <p:stringtype p:Assembly="VL.Core" p:Type="VL.Core.StringType">Comment</p:stringtype>
+            </p:ValueBoxSettings>
+          </Pad>
+          <Pad Id="OjHbXx33oslPXsxndlEzbw" Bounds="281,858,276,57" ShowValueBox="true" isIOBox="true" Value="3. Set backbuffer format to HDR if connect to HDR display">
+            <p:TypeAnnotation LastCategoryFullName="Primitive" LastDependency="VL.CoreLib.vl">
+              <Choice Kind="TypeFlag" Name="String" />
+            </p:TypeAnnotation>
+            <p:ValueBoxSettings>
+              <p:fontsize p:Type="Int32">9</p:fontsize>
+              <p:stringtype p:Assembly="VL.Core" p:Type="VL.Core.StringType">Comment</p:stringtype>
+            </p:ValueBoxSettings>
+          </Pad>
+          <Pad Id="CgnzWqD6Rw8QKr5KypN16Y" Bounds="281,155,359,19" ShowValueBox="true" isIOBox="true" Value="0. Download an OCIO colorspace config file, for example:">
+            <p:TypeAnnotation LastCategoryFullName="Primitive" LastDependency="VL.CoreLib.vl">
+              <Choice Kind="TypeFlag" Name="String" />
+            </p:TypeAnnotation>
+            <p:ValueBoxSettings>
+              <p:fontsize p:Type="Int32">9</p:fontsize>
+              <p:stringtype p:Assembly="VL.Core" p:Type="VL.Core.StringType">Comment</p:stringtype>
+            </p:ValueBoxSettings>
+          </Pad>
+          <Pad Id="Ljv8DXEydA9NZVOFfi0YXU" Bounds="284,184,713,19" ShowValueBox="true" isIOBox="true" Value="https://github.com/colour-science/OpenColorIO-Configs/releases/download/v1.2/OpenColorIO-Config-ACES-1.2.zip">
+            <p:TypeAnnotation LastCategoryFullName="Primitive" LastDependency="VL.CoreLib.vl">
+              <Choice Kind="TypeFlag" Name="String" />
+            </p:TypeAnnotation>
+            <p:ValueBoxSettings>
+              <p:fontsize p:Type="Int32">9</p:fontsize>
+              <p:stringtype p:Assembly="VL.Core" p:Type="VL.Core.StringType">Link</p:stringtype>
+            </p:ValueBoxSettings>
+          </Pad>
+          <Pad Id="JAwOFcAXCiCPcPvCVx7HTe" Comment="Input Color Space" Bounds="804,492,313,29" ShowValueBox="true" isIOBox="true" Value="lin_srgb">
+            <p:TypeAnnotation LastCategoryFullName="VL.OCIO" LastDependency="VL.OCIO.vl">
+              <Choice Kind="TypeFlag" Name="OCIOColorSpaceEnum" />
+            </p:TypeAnnotation>
+            <p:ValueBoxSettings>
+              <p:fontsize p:Type="Int32">14</p:fontsize>
+            </p:ValueBoxSettings>
+          </Pad>
+        </Canvas>
+        <Patch Id="KquqYjbOowvQbZMkh0kq99" Name="Create" ParticipatingElements="QKo30ifpEytLdja0GxSZ1H" />
+        <Patch Id="I1N9EGgzPL5OnONTHnmpgS" Name="Update" />
+        <ProcessDefinition Id="BAYitbXUSaHN8u7yNlqc8y">
+          <Fragment Id="PlhPHzg3fbTO4puW4dv4Ko" Patch="KquqYjbOowvQbZMkh0kq99" Enabled="true" />
+          <Fragment Id="PsLN6vnW8B9QDpRA8SOhJg" Patch="I1N9EGgzPL5OnONTHnmpgS" Enabled="true" />
+        </ProcessDefinition>
+        <Link Id="Afd68KZAee1O1sUkaehEGr" Ids="EmG5Khl5PXXO6JawQ5eduy,UIKmbMvn5agPNxRAIVepCc" />
+        <Link Id="Da9u5BQ9frkMk4XyjkqUge" Ids="UGpELZOABsiPzi96irFcGm,M5FJDywS85VLAuvczZ1gEH" />
+        <Link Id="DJTrAnEMTezNNJdptHaqZH" Ids="N5szPGe87gVPoUoofeLd2l,Oyw3p88cuekNHoBrNlp9es" />
+        <Link Id="FWnKvLxDpBJLRWu3rU1uoI" Ids="LaUlfczngx3NjGeQRALXCM,TSfJMi9wxo9MzUC4qRNSY4" />
+        <Link Id="QUlUiVF1j6qQBAWUZ4B9cf" Ids="SklYtxqb0KePUdQyki8y7Y,IjYt3CFeavZP9bJq5CNVUR" />
+        <Link Id="QKo30ifpEytLdja0GxSZ1H" Ids="TuZMovxsWpqMGeqZ8n6pIQ,BGZnvGHME0SMsquqR7VsHm" />
+        <Link Id="SqPuhuaBgC4QAqVvs74IVL" Ids="DB8VYFpaaqTPA7l4jPDNw7,KaBo4jID0F4NWhaUPD1v6Y" />
+        <Link Id="VYZlqF9AfwBNHdjkn1GXv6" Ids="SXSDYkvBssKOxfLfN4ow9g,PDbiIo6ZAGDOhWioht4RqC" />
+        <Link Id="JzPZ4wXrtxaNP8Ud5avcEI" Ids="PWNzmud83qXO50z5epBsiu,EOOuFq3fp6nOyFVWY0uChX" />
+        <Link Id="PnTlugNDTyoPYT7prOMatu" Ids="SXSDYkvBssKOxfLfN4ow9g,U3Ydo1zEgsyOTNpMXlLh1N" />
+        <Link Id="VPC67F77QpiMg33poxXYVd" Ids="RIRgVLm34DsLtv9JB7Nb7o,GZzLcZIYhbUMGbsJcU86Ru" />
+        <Link Id="CumtfKGMCNUPuOaMOgf7OQ" Ids="A7wiUs74zIUNfLjjQqfjFk,JAGX86ASZuQQFTxLjXBnrB" />
+        <Link Id="TbiMA9tsJNuPcIZGKyqIK0" Ids="JAwOFcAXCiCPcPvCVx7HTe,GXH7avdbDuBP5oS8QjMot2" />
+      </Patch>
+    </Node>
+  </Patch>
+  <NugetDependency Id="FlgtNCEXsa8NEYRfQht4tj" Location="VL.Stride" Version="2024.6.6" />
+  <NugetDependency Id="Sj724T1Z1JYNOk2sHODOUc" Location="VL.OCIO" Version="0.0.0" />
+</Document>

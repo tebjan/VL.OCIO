@@ -1,4 +1,5 @@
-﻿using Stride.Engine;
+﻿using SharpDX.DXGI;
+using Stride.Engine;
 using Stride.Rendering.Materials;
 using Stride.Shaders;
 using Stride.Shaders.Compiler;
@@ -64,6 +65,30 @@ public static class RenderingUtils
         catch (Exception)
         {
             // ignored
+        }
+    }
+
+    public static bool TrySetColorSpace(SwapChain swapChain, ColorSpaceType colorSpace)
+    {
+        if (swapChain == null)
+            return false;
+
+        try
+        {
+            using (var swapChain3 = swapChain.QueryInterfaceOrNull<SwapChain3>())
+            {
+                if (swapChain3 == null)
+                    return false;
+
+                // Set the desired color space
+                swapChain3.ColorSpace1 = colorSpace;
+
+                return true;
+            }
+        }
+        catch
+        {
+            return false;
         }
     }
 }

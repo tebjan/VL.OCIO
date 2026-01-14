@@ -1,6 +1,22 @@
 ﻿using OCIOSharpCLI;
 
 namespace VL.OCIO;
+
+public enum TargetKind
+{
+    ColorSpace,
+    DisplayView
+}
+
+public sealed class OCIOTargetTag
+{
+    public OCIOConfig Config;
+    public TargetKind Kind;
+    public string ColorSpace;
+    public string Display;
+    public string View;
+}
+
 public class GPUResources
 {
     public string Shader;
@@ -16,67 +32,82 @@ public static class OCIOConfigUtils
         var config = new OCIOConfig();
         config.LoadConfig(configPath);
 
-        var displays = config.GetDisplays();
+        var inputDef = OCIOColorSpaceEnumDefinition.Instance;
+        inputDef.ClearEntries();
 
-        // Create the color space enum
-        var def = OCIODisplayColorSpaceEnumDefinition.Instance;
+        // Get all concrete color spaces
+        var allSpaces = config.GetColorSpaces();
+        var spaceSet = new HashSet<string>(allSpaces); // fast lookup
 
-        if (def.Entries.Count > 0)
+        foreach (var space in allSpaces)
+            inputDef.AddEntry(space, config);
+
+        // Add role resolutions (only if they resolve to concrete color spaces not yet added)
+        foreach (var role in config.GetRoles())
         {
-            var entryDict = def.GetInternalEntries();
-
-            var tag = entryDict.Values.FirstOrDefault() as Tuple<OCIOConfig, string>;
-
-            if (tag != null)
+            var resolved = config.GetRoleColorSpace(role);
+            if (!string.IsNullOrWhiteSpace(resolved) && spaceSet.Add(resolved))
             {
-                try
-                {
-                    tag.Item1.Dispose();
-                }
-                catch (Exception)
-                {
-                    // ignored
-                }
+                inputDef.AddEntry(resolved, config);
             }
-
-            def.ClearEntries();
         }
 
-        // Add the display color spaces to the enum
-        foreach (var display in displays)
+        var outputDef = OCIODisplayColorSpaceEnumDefinition.Instance;
+        outputDef.ClearEntries();
+
+        // Add all concrete color spaces as possible targets
+        foreach (var space in spaceSet)
+        {
+            outputDef.AddEntry(space, new OCIOTargetTag
+            {
+                Config = config,
+                Kind = TargetKind.ColorSpace,
+                ColorSpace = space
+            });
+        }
+
+        // Add display/view combinations as display targets
+        foreach (var display in config.GetDisplays())
         {
             foreach (var view in display.Views)
             {
-                var tag = new Tuple<OCIOConfig, string>(config, display.Name);
-                def.AddEntry(view, tag);
+                var label = $"{display.Name} – {view}";
+                outputDef.AddEntry(label, new OCIOTargetTag
+                {
+                    Config = config,
+                    Kind = TargetKind.DisplayView,
+                    Display = display.Name,
+                    View = view
+                });
             }
-        }
-
-        var spaces = config.GetColorSpaces();
-
-        var spacesDef = OCIOColorSpaceEnumDefinition.Instance;
-
-        foreach (var space in spaces)
-        {
-            spacesDef.AddEntry(space, config);
         }
     }
 
-    public static GPUResources GetGPUResources(OCIOColorSpaceEnum inputColorSpace, OCIODisplayColorSpaceEnum ocioColorSpaceEnum, string inputColorspace)
+    public static GPUResources GetGPUResources(
+    OCIOColorSpaceEnum inputColorSpace,
+    OCIODisplayColorSpaceEnum ocioColorSpaceEnum,
+    bool inverse)
     {
-        var tag = ocioColorSpaceEnum.Tag as Tuple<OCIOConfig, string>;
-        var config = tag.Item1;
-        var display = tag.Item2;
-        var view = ocioColorSpaceEnum.Value;
+        var srcName = inputColorSpace?.Value;
+        var tag = ocioColorSpaceEnum?.Tag as OCIOTargetTag;
+        if (string.IsNullOrWhiteSpace(srcName) || tag?.Config == null)
+            return null;
 
-        config.CreateProcessor(inputColorSpace?.Value ?? "scene_linear", display, view);
+        if (tag.Kind == TargetKind.ColorSpace)
+        {
+            tag.Config.CreateProcessor(srcName, tag.ColorSpace, inverse);
+        }
+        else
+        {
+            tag.Config.CreateProcessor(srcName, tag.Display, tag.View, inverse);
+        }
 
         return new GPUResources
         {
-            Shader = config.GetHLSLShader(),
-            Uniforms = config.GetUniforms(),
-            Textures = config.GetTextures(),
-            Textures3D = config.Get3DTextures()
+            Shader = tag.Config.GetHLSLShader(),
+            Uniforms = tag.Config.GetUniforms(),
+            Textures = tag.Config.GetTextures(),
+            Textures3D = tag.Config.Get3DTextures()
         };
     }
 }

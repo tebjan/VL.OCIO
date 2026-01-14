@@ -1,6 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<Document xmlns:p="property" xmlns:r="reflection" Id="JCdvnz0fDU5Mxor6pX0iJN" LanguageVersion="2025.7.0-0214-ge19c6f6088" Version="0.128">
-  <NugetDependency Id="UFvDwSwGjfjPjL9lcojbul" Location="VL.CoreLib" Version="2025.7.0-0214-ge19c6f6088" />
+<Document xmlns:p="property" xmlns:r="reflection" Id="JCdvnz0fDU5Mxor6pX0iJN" LanguageVersion="2025.7.0" Version="0.128">
+  <NugetDependency Id="UFvDwSwGjfjPjL9lcojbul" Location="VL.CoreLib" Version="2025.7.0" />
   <Patch Id="ImltkCghK9bM35jdMzAaMc">
     <Canvas Id="AWif7Adg4V8LiqizDWQzfv" DefaultCategory="OCIO" CanvasType="FullCategory">
       <!--
@@ -103,12 +103,13 @@
                   <Pin Id="AizUdrTjDRgOET2hhhYsr3" Name="Input Color Space" Kind="InputPin" />
                   <Pin Id="OpJPtIZOqTnPRbiCBzuvBf" Name="Ocio Color Space Enum" Kind="InputPin" />
                   <Pin Id="Pi2592wWpV8NJK2SoPdYnt" Name="Result" Kind="OutputPin" />
-                  <Pin Id="UeGNdzIdIRKNudToK3YO2T" Name="Input Colorspace" Kind="InputPin" />
+                  <Pin Id="VW7XHLuuQ4sNs68lTQ9Z59" Name="Inverse" Kind="InputPin" />
                 </Node>
               </Patch>
               <ControlPoint Id="TbPLzjsGsRQQDiQKoo4ihb" Bounds="831,66" Alignment="Top" />
               <ControlPoint Id="JRZahcVDHVWNu3iHCe8X1m" Bounds="785,150" Alignment="Bottom" />
               <ControlPoint Id="UxQM3iO8cFdOZWYpdvkZqc" Bounds="785,66" Alignment="Top" />
+              <ControlPoint Id="JmFkIgWc8HqQQiKDfWtOz6" Bounds="876,66" Alignment="Top" />
             </Node>
             <ControlPoint Id="JGt62h5zzIwNzVMAn7gFoe" Bounds="833,-17" />
             <Node Bounds="771,295,1185,775" Id="KUdZNkNH8rOQaEJzabpJ14">
@@ -221,7 +222,7 @@
                   <Pin Id="Ns4cJcJc5UjLZUhX01sDHW" Name="Comparison Type" Kind="InputPin" />
                   <Pin Id="HTPIne7bhMINpntrzTvh6e" Name="Result" Kind="OutputPin" />
                 </Node>
-                <Pad Id="FOIp7IP3FXxLqfE7ochYxa" Comment="Comparison Type" Bounds="1216,326,147,15" ShowValueBox="true" isIOBox="true" Value="OrdinalIgnoreCase">
+                <Pad Id="FOIp7IP3FXxLqfE7ochYxa" Comment="Comparison Type" Bounds="1216,326,153,15" ShowValueBox="true" isIOBox="true" Value="OrdinalIgnoreCase">
                   <p:TypeAnnotation LastCategoryFullName="Primitive.String" LastDependency="VL.CoreLib.vl">
                     <Choice Kind="TypeFlag" Name="StringComparison" />
                   </p:TypeAnnotation>
@@ -488,6 +489,7 @@
               </p:ValueBoxSettings>
             </Pad>
             <ControlPoint Id="DjBzBSwsn38Nta0SoF0I0f" Bounds="785,-49" />
+            <ControlPoint Id="TUtsX5hGgJaMiA96cB5e7D" Bounds="876,20" />
           </Canvas>
           <Patch Id="FYTjix6HkORMzXwIghzmWU" Name="Create" />
           <Patch Id="AniZ7Mo9H00M3JGFpQwODj" Name="Update">
@@ -506,6 +508,7 @@
                 <Choice Kind="TypeFlag" Name="OCIODisplayColorSpaceEnum" />
               </p:TypeAnnotation>
             </Pin>
+            <Pin Id="CcutpNaqSfUOEmNfMts9AF" Name="Inverse" Kind="InputPin" />
           </Patch>
           <ProcessDefinition Id="JpQVKFWSKcgQCxQ9wpOMF0">
             <Fragment Id="UARqMBJW64TK9bM0SJjdnJ" Patch="FYTjix6HkORMzXwIghzmWU" Enabled="true" />
@@ -558,6 +561,9 @@
           <Link Id="LEzLmLgdJJ7QQX19FnKrxO" Ids="DjBzBSwsn38Nta0SoF0I0f,UxQM3iO8cFdOZWYpdvkZqc" />
           <Link Id="QcTlqloGAXMLJnOXToeP18" Ids="NcBKb0jX9KsLJNuLk5UkaR,DjBzBSwsn38Nta0SoF0I0f" IsHidden="true" />
           <Link Id="AO0nj5gtD77LVcn9xKNCD5" Ids="B6ywfyLNKeTNZH7cr9gcCO,JGt62h5zzIwNzVMAn7gFoe" IsHidden="true" />
+          <Link Id="CwruRY3DIW1PYITCU0OamA" Ids="JmFkIgWc8HqQQiKDfWtOz6,VW7XHLuuQ4sNs68lTQ9Z59" />
+          <Link Id="EAcMuY1n3HfQIySKbCAE0b" Ids="TUtsX5hGgJaMiA96cB5e7D,JmFkIgWc8HqQQiKDfWtOz6" />
+          <Link Id="Fw1rZtDvHiVLWy6ZrLqpF9" Ids="CcutpNaqSfUOEmNfMts9AF,TUtsX5hGgJaMiA96cB5e7D" IsHidden="true" />
         </Patch>
       </Node>
       <Canvas Id="C4fiQnOSryKQcf1GDFJWe5" Name="Advanced" Position="87,225">
@@ -2669,7 +2675,7 @@
             <Link Id="RyNHDC4QbkdNyJ4JdWvJkk" Ids="HCR84SA2oGpOuTFZ7clfUy,HZfXefCXcaJNgzj2gt6nFm" />
             <Patch Id="HKKPFSxpgnMLCFVGFwqLRF" Name="Create" />
             <Patch Id="Ftk9IA2YaHVNTLkbnBQ7Mc" Name="Update">
-              <Pin Id="PlkdE3JsUNIQNrsizfu3hU" Name="Input Setter" Kind="InputPin" PinGroupDefaultCount="2">
+              <Pin Id="PlkdE3JsUNIQNrsizfu3hU" Name="Input Setter" Kind="InputPin">
                 <p:TypeAnnotation LastCategoryFullName="Collections" LastDependency="VL.CoreLib.vl">
                   <Choice Kind="TypeFlag" Name="Spread" />
                   <p:TypeArguments>
@@ -2731,8 +2737,9 @@
               <Pin Id="AWtJiVVH0hCLcFLAhWbKCQ" Name="Input" Kind="InputPin" />
               <Pin Id="NImPnP0AnphLzEh1TE5joT" Name="Shader" Kind="OutputPin" />
               <Pin Id="Iud06QgVkL3M5rj2EhrWz5" Name="Display" Kind="InputPin" />
+              <Pin Id="UofdPmlzYfyMv6P2VGPzew" Name="Inverse" Kind="InputPin" />
             </Node>
-            <ControlPoint Id="UOOzyzDEAO4OE5CCsZUQis" Bounds="740,437" />
+            <ControlPoint Id="UOOzyzDEAO4OE5CCsZUQis" Bounds="740,418" />
             <ControlPoint Id="LC8YMZnXp59P0zopnN7PD3" Bounds="647,491" />
             <ControlPoint Id="Ev1HQsela2WN8l1ggTUbeT" Bounds="714,778" />
             <ControlPoint Id="P9YXfrZWEKJLeZyRBhGdUH" Bounds="1032,562" />
@@ -2752,14 +2759,16 @@
               <Pin Id="Q8mN2mc2dSmPcZFwaul6TW" Name="Apply" Kind="InputPin" />
               <Pin Id="M8OLsUahUu2OZKNXr3W7Bg" Name="Output" Kind="OutputPin" />
             </Node>
-            <ControlPoint Id="Pj9E4HZCwciL7FK8kNCaMV" Bounds="855,450" />
+            <ControlPoint Id="Pj9E4HZCwciL7FK8kNCaMV" Bounds="796,451" />
+            <ControlPoint Id="QSgCWjO9GtwMBa37xGjt1D" Bounds="871,480" />
           </Canvas>
           <Patch Id="K7zCquDCNyUMcGN1WsnebS" Name="Create" />
           <Patch Id="QfUVjmTFypPNf9th1F8NHT" Name="Update">
             <Pin Id="P56PiDKsrsOLrvZiNc2RM2" Name="Input" Kind="InputPin" />
             <Pin Id="DuR97iQBGJRPbrcbiW3oa2" Name="Output" Kind="OutputPin" />
             <Pin Id="Qyij8AnZibOMA4M2UEBUKW" Name="Input Color Space" Kind="InputPin" />
-            <Pin Id="BrBdlWXK7JKOZAAUudC7IN" Name="Display" Kind="InputPin" DefaultValue="sRGB" />
+            <Pin Id="BrBdlWXK7JKOZAAUudC7IN" Name="Output Color Space" Kind="InputPin" DefaultValue="sRGB" />
+            <Pin Id="KWHCyYSnzZKMOZbQEmUtdU" Name="Inverse" Kind="InputPin" />
             <Pin Id="Kx7kGcXBnyrLR9m5zlzJl3" Name="Output Format" Kind="InputPin" DefaultValue="R16G16B16A16_Float" />
             <Pin Id="MoFnAALVqMvP4aYARjToKY" Name="Apply" Kind="InputPin" />
           </Patch>
@@ -2780,6 +2789,8 @@
           <Link Id="J3qKNVNmzBEP0X1ro4X6uD" Ids="Pj9E4HZCwciL7FK8kNCaMV,Iud06QgVkL3M5rj2EhrWz5" />
           <Link Id="OxUsJE3ph1DLJv2MVAlVgr" Ids="BrBdlWXK7JKOZAAUudC7IN,Pj9E4HZCwciL7FK8kNCaMV" IsHidden="true" />
           <Link Id="NlPcZF52QrYMclA7Zl8OGZ" Ids="Qyij8AnZibOMA4M2UEBUKW,UOOzyzDEAO4OE5CCsZUQis" IsHidden="true" />
+          <Link Id="Jnt19qKPSy0OEGIFBbL8CC" Ids="QSgCWjO9GtwMBa37xGjt1D,UofdPmlzYfyMv6P2VGPzew" />
+          <Link Id="Dg6RGU25xBrNTbPcd3vVKs" Ids="KWHCyYSnzZKMOZbQEmUtdU,QSgCWjO9GtwMBa37xGjt1D" IsHidden="true" />
         </Patch>
       </Node>
       <!--
@@ -2999,7 +3010,7 @@
   </Patch>
   <PlatformDependency Id="BVC662kU0VIQFiYBCEvxlE" Location="./lib/net8.0-windows7.0/win-x64/OCIOSharpCLI.dll" />
   <PlatformDependency Id="QlYEkLKxsHxMHWX9fZ5GF0" Location="./lib/net8.0-windows7.0/win-x64/VL.OCIO.dll" />
-  <NugetDependency Id="Ft83XaSjWUMMmTaRzfG7kv" Location="VL.Stride" Version="2025.7.0-0214-ge19c6f6088" />
+  <NugetDependency Id="Ft83XaSjWUMMmTaRzfG7kv" Location="VL.Stride" Version="2025.7.0" />
   <PlatformDependency Id="QyWR1PdMpFkMhrRVQLqTON" Location="C:/Program Files/vvvv/vvvv_gamma_6.6/packs/VL.Stride.Runtime/src/bin/Debug/netstandard2.0/VL.Stride.Runtime.dll" />
   <PlatformDependency Id="FjRJIMGiOwZOR0RVaCORmN" Location="mscorlib" />
   <NugetDependency Id="RhHz3tFu7w1LTnXq30hSvN" Location="VL.OCIO" Version="0.0.0" />

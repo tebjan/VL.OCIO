@@ -1,6 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<Document xmlns:p="property" xmlns:r="reflection" Id="BCZP1hQ6l5RPmyjf3Vk9wb" LanguageVersion="2025.7.0-0214-ge19c6f6088" Version="0.128">
-  <NugetDependency Id="B8cGXVB4R8LNB0un36hDqG" Location="VL.CoreLib" Version="2025.7.0-0214-ge19c6f6088" />
+<Document xmlns:p="property" xmlns:r="reflection" Id="EYgIzx8kZ0OPyNfR21y6hf" LanguageVersion="2025.7.0" Version="0.128">
+  <NugetDependency Id="B8cGXVB4R8LNB0un36hDqG" Location="VL.CoreLib" Version="2025.7.0" />
   <Patch Id="FRsXcHuLgXIOiuEhJiLMRh">
     <Canvas Id="CQFd9EzgaamNn5KmdRUhVd" DefaultCategory="Main" CanvasType="FullCategory" />
     <!--
@@ -15,19 +15,19 @@
       </p:NodeReference>
       <Patch Id="PZnepsVQBfrNHmrhkaKNxh">
         <Canvas Id="HnBRyKV4bnSNT1VWXwi78O" CanvasType="Group">
-          <Node Bounds="516,1088,245,19" Id="SEsAD6qI0TDMDVTjmro1H8">
+          <Node Bounds="516,1088,265,19" Id="SEsAD6qI0TDMDVTjmro1H8">
             <p:NodeReference LastCategoryFullName="Stride" LastDependency="VL.Stride.vl">
               <Choice Kind="NodeFlag" Name="Node" Fixed="true" />
               <Choice Kind="ProcessAppFlag" Name="SceneWindow" />
             </p:NodeReference>
-            <Pin Id="H7efrODkldlM01X19leuP3" Name="Node Context" Kind="InputPin" IsHidden="true" />
-            <Pin Id="JVz9BgCkKFnNhk1TcYUKsW" Name="Bounds" Kind="InputPin" DefaultValue="1183.2, 84.8, 1504, 789.6" IsHidden="true" />
+            <Pin Id="JVz9BgCkKFnNhk1TcYUKsW" Name="Bounds" Kind="InputPin" DefaultValue="1182.6666, 84.666664, 1504, 789.3333" IsHidden="true" />
             <Pin Id="Meg35mxa0ygPQcE1YIAbOg" Name="Bound to Document" Kind="InputPin" IsHidden="true" />
             <Pin Id="JtQj9PA6pvqMdh8d1bhiqq" Name="Dialog If Document Changed" Kind="InputPin" IsHidden="true" />
             <Pin Id="QVnesXzOeQULa3uZXmKQlV" Name="Save Bounds" Kind="InputPin" IsHidden="true" />
             <Pin Id="IjYt3CFeavZP9bJq5CNVUR" Name="Back Buffer Format" Kind="InputPin" />
             <Pin Id="AsfzLfBnTkON6rb497PKvj" Name="Depth Buffer Format" Kind="InputPin" IsHidden="true" />
             <Pin Id="NqzaZskrxT7O0FAYKSZHRy" Name="Input Priority" Kind="InputPin" IsHidden="true" />
+            <Pin Id="H7efrODkldlM01X19leuP3" Name="Node Context" Kind="InputPin" />
             <Pin Id="UIKmbMvn5agPNxRAIVepCc" Name="Input" Kind="InputPin" />
             <Pin Id="TuhmASSsDXoPe9GcMJ1YnE" Name="Camera" Kind="InputPin" />
             <Pin Id="UdtghKknMpjNhS0y6WFyZ3" Name="Enable Default Camera" Kind="InputPin" />
@@ -42,6 +42,7 @@
             <Pin Id="EsRZBagaN7YPDBLh9bM7tu" Name="Model Effect Name" Kind="InputPin" IsHidden="true" />
             <Pin Id="GzMzokWGrzMLg3mU6xTacB" Name="Additional Scene Renderers" Kind="InputPin" IsHidden="true" />
             <Pin Id="EtLHmtUvUslOOE6z2B5Gai" Name="Enabled" Kind="InputPin" />
+            <Pin Id="EVG5hU8vYeiL2gwI8XQMLA" Name="Input Source" Kind="InputPin" IsHidden="true" />
             <Pin Id="Qx6qv6pTQS7P6GUIUpHvTK" Name="Present Interval" Kind="InputPin" />
             <Pin Id="GRg7WJwNqyKNokqb4We6hG" Name="Output" Kind="OutputPin" />
             <Pin Id="G9MyGMQIusoL6DNAYRQNds" Name="Client Bounds" Kind="OutputPin" />
@@ -121,7 +122,7 @@
               <p:fontsize p:Type="Int32">11</p:fontsize>
             </p:ValueBoxSettings>
           </Pad>
-          <Pad Id="SklYtxqb0KePUdQyki8y7Y" Comment="Back Buffer Format" Bounds="128,910,167,15" ShowValueBox="true" isIOBox="true" Value="R16G16B16A16_Float">
+          <Pad Id="SklYtxqb0KePUdQyki8y7Y" Comment="Back Buffer Format" Bounds="128,910,173,15" ShowValueBox="true" isIOBox="true" Value="R16G16B16A16_Float">
             <p:TypeAnnotation LastCategoryFullName="Stride.API.Graphics" LastDependency="VL.Stride.vl">
               <Choice Kind="TypeFlag" Name="PixelFormat" />
             </p:TypeAnnotation>
@@ -148,7 +149,7 @@
               <Choice Kind="TypeFlag" Name="Path" />
             </p:TypeAnnotation>
           </Pad>
-          <Node Bounds="574,478,123,19" Id="LibOMh1KicWLtLEORE3Ylz">
+          <Node Bounds="574,478,125,19" Id="LibOMh1KicWLtLEORE3Ylz">
             <p:NodeReference LastCategoryFullName="OCIO" LastDependency="VL.OCIO.vl">
               <Choice Kind="NodeFlag" Name="Node" Fixed="true" />
               <Choice Kind="ProcessAppFlag" Name="OCIODisplayColorspace" />
@@ -156,26 +157,19 @@
             <Pin Id="SXaWkpy6fKqNIJvDBzQNW2" Name="Node Context" Kind="InputPin" IsHidden="true" />
             <Pin Id="KaBo4jID0F4NWhaUPD1v6Y" Name="Input" Kind="InputPin" />
             <Pin Id="GXH7avdbDuBP5oS8QjMot2" Name="Input Color Space" Kind="InputPin" />
-            <Pin Id="JAGX86ASZuQQFTxLjXBnrB" Name="Display" Kind="InputPin" />
+            <Pin Id="T4yADeBVX7yO91FIgc9Uif" Name="Output Color Space" Kind="InputPin" />
+            <Pin Id="Lj2pG2fG7miQQzPyU4tBBL" Name="Inverse" Kind="InputPin" />
             <Pin Id="EOOuFq3fp6nOyFVWY0uChX" Name="Output Format" Kind="InputPin" />
             <Pin Id="HpxSqzCnjj0LQr2yN7K1wg" Name="Apply" Kind="InputPin" />
             <Pin Id="SXSDYkvBssKOxfLfN4ow9g" Name="Output" Kind="OutputPin" />
           </Node>
           <Pad Id="PDbiIo6ZAGDOhWioht4RqC" Comment="" Bounds="1047,691,198,261" ShowValueBox="true" isIOBox="true" />
-          <Pad Id="PWNzmud83qXO50z5epBsiu" Comment="Output Format" Bounds="664,453,167,15" ShowValueBox="true" isIOBox="true" Value="R16G16B16A16_Float">
+          <Pad Id="PWNzmud83qXO50z5epBsiu" Comment="Output Format" Bounds="672,450,173,15" ShowValueBox="true" isIOBox="true" Value="R16G16B16A16_Float">
             <p:TypeAnnotation LastCategoryFullName="Stride.API.Graphics" LastDependency="VL.Stride.vl">
               <Choice Kind="TypeFlag" Name="PixelFormat" />
             </p:TypeAnnotation>
           </Pad>
-          <Pad Id="A7wiUs74zIUNfLjjQqfjFk" Comment="Display" Bounds="635,401,306,29" ShowValueBox="true" isIOBox="true" Value="Rec.709">
-            <p:TypeAnnotation LastCategoryFullName="VL.OCIO" LastDependency="VL.OCIO.vl">
-              <Choice Kind="TypeFlag" Name="OCIODisplayColorSpaceEnum" />
-            </p:TypeAnnotation>
-            <p:ValueBoxSettings>
-              <p:fontsize p:Type="Int32">14</p:fontsize>
-            </p:ValueBoxSettings>
-          </Pad>
-          <Pad Id="RIRgVLm34DsLtv9JB7Nb7o" Comment="" Bounds="576,947,135,15" ShowValueBox="true" isIOBox="true" Value="AfterScene">
+          <Pad Id="RIRgVLm34DsLtv9JB7Nb7o" Comment="" Bounds="576,947,141,15" ShowValueBox="true" isIOBox="true" Value="AfterScene">
             <p:TypeAnnotation LastCategoryFullName="VL.Stride.Rendering" LastDependency="VL.Stride.vl">
               <Choice Kind="TypeFlag" Name="DrawerRenderStage" />
             </p:TypeAnnotation>
@@ -198,7 +192,7 @@
               <p:stringtype p:Assembly="VL.Core" p:Type="VL.Core.StringType">Comment</p:stringtype>
             </p:ValueBoxSettings>
           </Pad>
-          <Pad Id="OHsNhua8aRIOwkFxTOqRY5" Bounds="599,310,336,22" ShowValueBox="true" isIOBox="true" Value="2. Select input and display color space from config file">
+          <Pad Id="OHsNhua8aRIOwkFxTOqRY5" Bounds="599,281,336,22" ShowValueBox="true" isIOBox="true" Value="2. Select input and display color space from config file">
             <p:TypeAnnotation LastCategoryFullName="Primitive" LastDependency="VL.CoreLib.vl">
               <Choice Kind="TypeFlag" Name="String" />
             </p:TypeAnnotation>
@@ -234,7 +228,7 @@
               <p:stringtype p:Assembly="VL.Core" p:Type="VL.Core.StringType">Link</p:stringtype>
             </p:ValueBoxSettings>
           </Pad>
-          <Pad Id="JAwOFcAXCiCPcPvCVx7HTe" Comment="Input Color Space" Bounds="605,348,313,29" ShowValueBox="true" isIOBox="true" Value="ACES - ACEScg">
+          <Pad Id="JAwOFcAXCiCPcPvCVx7HTe" Comment="Input Color Space" Bounds="600,312,313,29" ShowValueBox="true" isIOBox="true" Value="ACES - ACEScct">
             <p:TypeAnnotation LastCategoryFullName="VL.OCIO" LastDependency="VL.OCIO.vl">
               <Choice Kind="TypeFlag" Name="OCIOColorSpaceEnum" />
             </p:TypeAnnotation>
@@ -242,7 +236,7 @@
               <p:fontsize p:Type="Int32">14</p:fontsize>
             </p:ValueBoxSettings>
           </Pad>
-          <Pad Id="SsoFx0UZQ24N4xaHZZN3Uc" Comment="Apply" Bounds="951,456,35,35" ShowValueBox="true" isIOBox="true" Value="True">
+          <Pad Id="SsoFx0UZQ24N4xaHZZN3Uc" Comment="Apply" Bounds="953,451,35,35" ShowValueBox="true" isIOBox="true" Value="True">
             <p:TypeAnnotation LastCategoryFullName="Primitive" LastDependency="VL.CoreLib.vl">
               <Choice Kind="ImmutableTypeFlag" Name="Boolean" />
             </p:TypeAnnotation>
@@ -261,7 +255,7 @@
             <Pin Id="UCjyUiunr2jMgK5CB6nNkw" Name="Output" Kind="StateOutputPin" />
             <Pin Id="TZiGrcxXiEyPM8ErJBH9KE" Name="Success" Kind="OutputPin" />
           </Node>
-          <Pad Id="QxoMZ3R9m6cN0PLzuv01Fi" Comment="Color Space" Bounds="758,991,169,15" ShowValueBox="true" isIOBox="true" Value="RgbFullG10NoneP709">
+          <Pad Id="QxoMZ3R9m6cN0PLzuv01Fi" Comment="Color Space" Bounds="758,991,175,15" ShowValueBox="true" isIOBox="true" Value="RgbFullG10NoneP709">
             <p:TypeAnnotation LastCategoryFullName="OCIO" LastDependency="VL.OCIO.vl">
               <Choice Kind="TypeFlag" Name="ColorSpaceType" />
             </p:TypeAnnotation>
@@ -368,6 +362,19 @@
               <p:stringtype p:Assembly="VL.Core" p:Type="VL.Core.StringType">Link</p:stringtype>
             </p:ValueBoxSettings>
           </Pad>
+          <Pad Id="MVm4ECHcHomLSJWyJ2IxZA" Comment="Output Color Space" Bounds="624,371,306,15" ShowValueBox="true" isIOBox="true" Value="ACES - ACEScg">
+            <p:TypeAnnotation LastCategoryFullName="VL.OCIO" LastDependency="VL.OCIO.vl">
+              <Choice Kind="TypeFlag" Name="OCIODisplayColorSpaceEnum" />
+            </p:TypeAnnotation>
+          </Pad>
+          <Pad Id="VovSF8QrgmqNt4rJ9oMAk1" Comment="Inverse" Bounds="648,400,35,35" ShowValueBox="true" isIOBox="true" Value="False">
+            <p:TypeAnnotation LastCategoryFullName="Primitive" LastDependency="VL.CoreLib.vl">
+              <Choice Kind="ImmutableTypeFlag" Name="Boolean" />
+            </p:TypeAnnotation>
+            <p:ValueBoxSettings>
+              <p:buttonmode p:Assembly="VL.UI.Forms" p:Type="VL.HDE.PatchEditor.Editors.ButtonModeEnum">Toggle</p:buttonmode>
+            </p:ValueBoxSettings>
+          </Pad>
         </Canvas>
         <Patch Id="KquqYjbOowvQbZMkh0kq99" Name="Create" ParticipatingElements="QKo30ifpEytLdja0GxSZ1H" />
         <Patch Id="I1N9EGgzPL5OnONTHnmpgS" Name="Update" />
@@ -384,7 +391,6 @@
         <Link Id="SqPuhuaBgC4QAqVvs74IVL" Ids="DB8VYFpaaqTPA7l4jPDNw7,KaBo4jID0F4NWhaUPD1v6Y" />
         <Link Id="JzPZ4wXrtxaNP8Ud5avcEI" Ids="PWNzmud83qXO50z5epBsiu,EOOuFq3fp6nOyFVWY0uChX" />
         <Link Id="VPC67F77QpiMg33poxXYVd" Ids="RIRgVLm34DsLtv9JB7Nb7o,GZzLcZIYhbUMGbsJcU86Ru" />
-        <Link Id="CumtfKGMCNUPuOaMOgf7OQ" Ids="A7wiUs74zIUNfLjjQqfjFk,JAGX86ASZuQQFTxLjXBnrB" />
         <Link Id="TbiMA9tsJNuPcIZGKyqIK0" Ids="JAwOFcAXCiCPcPvCVx7HTe,GXH7avdbDuBP5oS8QjMot2" />
         <Link Id="GcJmi0ySICVOndQZPdjjjk" Ids="SsoFx0UZQ24N4xaHZZN3Uc,HpxSqzCnjj0LQr2yN7K1wg" />
         <Link Id="QDXU29XIrviPI1WtBzpl6Q" Ids="UCjyUiunr2jMgK5CB6nNkw,GIAxnIovreVLgjV0GRdVgw" />
@@ -404,9 +410,11 @@
         <Link Id="E8GSbO0ohbzP7lY0BWSN0z" Ids="VuUcgXBPCjSLaqkp0adijE,Ng28DQHlGl1NlQfA3EuM6N" />
         <Link Id="FEjY8lUXbcpLpGNER7yzBI" Ids="Plc0SE5Xt81L3cNJcDrOvR,TCeHIgrTr1qPXqvRbiG6VE" />
         <Link Id="D7DVGQJ33XAOSRoSOoN3kK" Ids="C1nmpTO82vuN0lBJMAt0Sk,PDbiIo6ZAGDOhWioht4RqC" />
+        <Link Id="NN1CYkXRgFxLO6PYHYllhO" Ids="MVm4ECHcHomLSJWyJ2IxZA,T4yADeBVX7yO91FIgc9Uif" />
+        <Link Id="EWPFv3OAaGwLVLjZyvmL6T" Ids="VovSF8QrgmqNt4rJ9oMAk1,Lj2pG2fG7miQQzPyU4tBBL" />
       </Patch>
     </Node>
   </Patch>
-  <NugetDependency Id="FlgtNCEXsa8NEYRfQht4tj" Location="VL.Stride" Version="2025.7.0-0214-ge19c6f6088" />
+  <NugetDependency Id="FlgtNCEXsa8NEYRfQht4tj" Location="VL.Stride" Version="2025.7.0" />
   <NugetDependency Id="Sj724T1Z1JYNOk2sHODOUc" Location="VL.OCIO" Version="0.0.0" />
 </Document>

@@ -15,8 +15,8 @@
     <projectUrl>https://github.com/tebjan/VL.OCIO</projectUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <!-- Provide description and tags-->
-    <description>Reads OpenColorIO (OCIO) config files.</description>
-    <tags>VL ocio aces hdr</tags>
+    <description>Reads OpenColorIO (OCIO) config files and makes a vvvv TextureFX shader for color space conversion from it.</description>
+    <tags>VL color ocio aces hdr graphics texturefx</tags>
     <license type="expression">BSD-3-Clause</license>
     <icon>icon\nugeticon.png</icon>
     <readme>docs\README.md</readme>

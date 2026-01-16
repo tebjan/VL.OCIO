@@ -1,5 +1,7 @@
+// This is a base shader for OpenColorIO color transformations.
 shader OCIOBase
 {
+    // This method gets overridden by derived shaders to implement specific color transformations.
     float4 OCIODisplay(float4 inPixel)
     {
         return inPixel;

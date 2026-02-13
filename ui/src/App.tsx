@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useWebSocket } from './hooks/useWebSocket'
 import { LiftGammaGain } from './components/LiftGammaGain'
 import { Slider } from './components/Slider'
@@ -39,6 +39,7 @@ function App() {
     presets,
     instances,
     selectedInstanceId,
+    serverInfo,
     updateColorCorrection,
     updateTonemap,
     setInputFile,
@@ -77,6 +78,13 @@ function App() {
   const [liftMaster, setLiftMaster] = useState(0)
   const [gammaMaster, setGammaMaster] = useState(1)
   const [gainMaster, setGainMaster] = useState(1)
+
+  // Reset master sliders when switching instances (they're relative controls)
+  useEffect(() => {
+    setLiftMaster(0)
+    setGammaMaster(1)
+    setGainMaster(1)
+  }, [selectedInstanceId])
 
   const handleLiftMasterChange = useCallback((newMaster: number) => {
     const delta = newMaster - liftMaster
@@ -123,11 +131,31 @@ function App() {
     [updateColorCorrection, updateTonemap]
   )
 
+  // Build network URL for display
+  const networkUrl = serverInfo
+    ? `http://${serverInfo.hostname}:${serverInfo.port}/`
+    : null
+
   return (
-    <div className="min-h-screen bg-surface-950 p-4">
+    <div className="min-h-screen bg-surface-950 p-4 relative">
+      {/* Disconnection overlay */}
+      {!isConnected && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-surface-950/80 backdrop-blur-sm">
+          <div className="bg-surface-900 rounded-xl p-8 max-w-sm mx-4 text-center border border-surface-700">
+            <div className="w-10 h-10 mx-auto mb-4 rounded-full border-2 border-surface-500 border-t-surface-200 animate-spin" />
+            <h2 className="text-lg font-semibold text-surface-100 mb-2">
+              Connecting to server...
+            </h2>
+            <p className="text-sm text-surface-400">
+              Waiting for the vvvv ColorGradingServer to start.
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-2xl mx-auto">
-        {/* Header Row - Title, Status, Instance, Preset */}
-        <div className="flex items-center justify-between mb-3">
+        {/* Header Row - Title, Status, Preset */}
+        <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-3">
             <h1 className="text-lg font-semibold text-surface-100">
               HDR Color Grading
@@ -139,23 +167,29 @@ function App() {
               )}
               title={isConnected ? 'Connected' : 'Disconnected'}
             />
+            {/* Show network URL so users on other machines know where to connect */}
+            {isConnected && networkUrl && (
+              <span className="text-xs text-surface-500" title="Access from any device on the network">
+                {networkUrl}
+              </span>
+            )}
           </div>
-          <div className="flex items-center gap-3">
-            <InstanceSelector
-              instances={instances}
-              selectedInstanceId={selectedInstanceId}
-              onSelectInstance={selectInstance}
-              compact
-            />
-            <PresetManager
-              currentPreset={settings.presetName}
-              presets={presets}
-              onLoad={loadPreset}
-              onSave={savePreset}
-              onReset={reset}
-              compact
-            />
-          </div>
+          <PresetManager
+            currentPreset={settings.presetName}
+            presets={presets}
+            onLoad={loadPreset}
+            onSave={savePreset}
+            onReset={reset}
+            compact
+          />
+        </div>
+        {/* Instance tabs - own row for breathing room */}
+        <div className="mb-3">
+          <InstanceSelector
+            instances={instances}
+            selectedInstanceId={selectedInstanceId}
+            onSelectInstance={selectInstance}
+          />
         </div>
 
         {/* ========== INPUT ========== */}

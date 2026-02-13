@@ -16,6 +16,17 @@
     <None Remove="OCIOSharp\**" />
   </ItemGroup>
 
+  <!-- Embed the built web UI files as resources in the DLL (~192KB) -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\ui\dist\**" LinkBase="ui-dist" />
+  </ItemGroup>
+
+  <!-- Build web UI before C# compilation (requires Node.js on dev machine) -->
+  <Target Name="BuildWebUI" BeforeTargets="BeforeBuild">
+    <Exec Command="npm install --prefer-offline" WorkingDirectory="..\ui" />
+    <Exec Command="npm run build" WorkingDirectory="..\ui" />
+  </Target>
+
   <ItemGroup>
     <PackageReference Include="VL.Stride.Runtime" Version="2025.7.0-0214-ge19c6f6088" />
   </ItemGroup>

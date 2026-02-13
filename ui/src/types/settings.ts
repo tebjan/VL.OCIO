@@ -22,6 +22,7 @@ export interface ColorCorrectionSettings {
   highlightKnee: number
   shadowKnee: number
   inputSpace: ColorSpace
+  gradingSpace: GradingSpace
   outputSpace: ColorSpace
 }
 
@@ -56,6 +57,13 @@ export interface InstanceState {
   presetName: string
 }
 
+export interface ServerInfo {
+  hostname: string
+  ip: string
+  port: number
+  networkEnabled: boolean
+}
+
 // Input/working color spaces (for textures and grading)
 // NOTE: These must match C# enum names after JsonNamingPolicy.CamelCase conversion
 export type ColorSpace =
@@ -72,6 +80,8 @@ export type ColorSpace =
 // Display output formats (what DX/Stride can output)
 // NOTE: These must match C# enum names after JsonNamingPolicy.CamelCase conversion
 export type DisplayFormat = 'sRgb' | 'linear_Rec709' | 'pQ_Rec2020'
+
+export type GradingSpace = 'log' | 'linear'
 
 export type TonemapOperator = 'none' | 'aces' | 'reinhard' | 'reinhardExtended'
 
@@ -91,6 +101,11 @@ export const DISPLAY_FORMAT_LABELS: Record<DisplayFormat, string> = {
   sRgb: 'sRGB (SDR)',
   linear_Rec709: 'Linear HDR (scRGB)',
   pQ_Rec2020: 'PQ HDR (HDR10)',
+}
+
+export const GRADING_SPACE_LABELS: Record<GradingSpace, string> = {
+  log: 'Log (ACEScct)',
+  linear: 'Linear (ACEScg)',
 }
 
 export const TONEMAP_LABELS: Record<TonemapOperator, string> = {
@@ -119,6 +134,7 @@ export function createDefaultColorCorrection(): ColorCorrectionSettings {
     highlightKnee: 1,
     shadowKnee: 0.1,
     inputSpace: 'acesCc',
+    gradingSpace: 'log',
     outputSpace: 'linear_Rec709',
   }
 }

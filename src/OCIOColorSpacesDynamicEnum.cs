@@ -146,34 +146,17 @@ public class OCIOConfigEnumDefinition : DynamicEnumDefinitionBase<OCIOConfigEnum
 {
     Dictionary<string, object> entries = new();
     Subject<object> trigger = new();
+    bool _builtinsLoaded;
 
-    protected override IReadOnlyDictionary<string, object> GetEntries()
+    private void EnsureBuiltins()
     {
-        if (entries.Count == 0)
-            AddBuiltinEntries();
-        return entries;
-    }
+        if (_builtinsLoaded) return;
+        _builtinsLoaded = true;
 
-    protected override IObservable<object> GetEntriesChangedObservable() => trigger;
-    protected override bool AutoSortAlphabetically => false;
-
-    public void AddEntry(string name, object tag = null)
-    {
-        entries[name] = tag;
-        trigger.OnNext("");
-    }
-
-    public bool HasEntry(string name) => entries.ContainsKey(name);
-
-    public IReadOnlyDictionary<string, object> GetAllEntries()
-    {
-        if (entries.Count == 0)
-            AddBuiltinEntries();
-        return entries;
-    }
-
-    private void AddBuiltinEntries()
-    {
+        // Insert builtins first, then re-add anything that was added before builtins
+        // (e.g. if a loader ran before the manager on the same frame)
+        var existing = new Dictionary<string, object>(entries);
+        entries.Clear();
         entries["ACES 2.0 CG"] = new OCIOConfigTag
             { IsBuiltin = true, BuiltinUri = "ocio://cg-config-v4.0.0_aces-v2.0_ocio-v2.5", Source = "builtin" };
         entries["ACES 2.0 Studio"] = new OCIOConfigTag
@@ -182,5 +165,35 @@ public class OCIOConfigEnumDefinition : DynamicEnumDefinitionBase<OCIOConfigEnum
             { IsBuiltin = true, BuiltinUri = "ocio://cg-config-v2.2.0_aces-v1.3_ocio-v2.4", Source = "builtin" };
         entries["ACES 1.3 Studio"] = new OCIOConfigTag
             { IsBuiltin = true, BuiltinUri = "ocio://studio-config-v2.2.0_aces-v1.3_ocio-v2.4", Source = "builtin" };
+        foreach (var kvp in existing)
+            entries[kvp.Key] = kvp.Value;
+    }
+
+    protected override IReadOnlyDictionary<string, object> GetEntries()
+    {
+        EnsureBuiltins();
+        return entries;
+    }
+
+    protected override IObservable<object> GetEntriesChangedObservable() => trigger;
+    protected override bool AutoSortAlphabetically => false;
+
+    public void AddEntry(string name, object tag = null)
+    {
+        EnsureBuiltins();
+        entries[name] = tag;
+        trigger.OnNext("");
+    }
+
+    public bool HasEntry(string name)
+    {
+        EnsureBuiltins();
+        return entries.ContainsKey(name);
+    }
+
+    public IReadOnlyDictionary<string, object> GetAllEntries()
+    {
+        EnsureBuiltins();
+        return entries;
     }
 }

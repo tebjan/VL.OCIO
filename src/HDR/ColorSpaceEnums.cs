@@ -55,36 +55,6 @@ public enum TonemapOperator
 }
 
 /// <summary>
-/// Debug visualization modes
-/// </summary>
-public enum DebugMode
-{
-    /// <summary>Normal processing</summary>
-    Off = 0,
-    /// <summary>Show raw input</summary>
-    RawInput = 1,
-    /// <summary>Visualize ACEScc values directly</summary>
-    ACESccVisualize = 2,
-    /// <summary>Threshold test: R>0.3, G>0.4, B>0.5</summary>
-    ThresholdTest = 3
-}
-
-/// <summary>
-/// Input/Output color spaces for HDRGrade shader
-/// </summary>
-public enum IOColorSpace
-{
-    /// <summary>ACEScg (AP1 linear) - VFX working space, zero conversion</summary>
-    ACEScg = 0,
-    /// <summary>Linear Rec.709 - sRGB primaries, linear (game engines)</summary>
-    Linear709 = 1,
-    /// <summary>sRGB - Rec.709 with gamma encoding (web/monitors)</summary>
-    sRGB = 2,
-    /// <summary>ACEScct - AP1 log encoding (graded footage)</summary>
-    ACEScct = 3
-}
-
-/// <summary>
 /// Internal grading space (where color math happens)
 /// </summary>
 public enum GradingSpace

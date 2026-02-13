@@ -1,74 +1,53 @@
+using System.Text.Json.Serialization;
 using Stride.Core.Mathematics;
 
 namespace VL.OCIO;
 
 /// <summary>
-/// Settings for ACEScc color correction shader
-/// All values map directly to shader parameters
+/// Settings for HDR color correction shader.
+/// All values map directly to shader parameters.
+/// Use Split() to extract individual values for vvvv shader pins.
 /// </summary>
 public class ColorCorrectionSettings
 {
     // Basic adjustments
-    public float Exposure { get; set; } = 0f;
-    public float Contrast { get; set; } = 1f;
-    public float Saturation { get; set; } = 1f;
+    [JsonInclude] internal float Exposure { get; set; } = 0f;
+    [JsonInclude] internal float Contrast { get; set; } = 1f;
+    [JsonInclude] internal float Saturation { get; set; } = 1f;
 
     // White balance
-    public float Temperature { get; set; } = 0f;
-    public float Tint { get; set; } = 0f;
+    [JsonInclude] internal float Temperature { get; set; } = 0f;
+    [JsonInclude] internal float Tint { get; set; } = 0f;
 
     // Lift/Gamma/Gain (color wheels) - stored as RGB vectors
-    public Vector3Json Lift { get; set; } = new(0f, 0f, 0f);
-    public Vector3Json Gamma { get; set; } = new(1f, 1f, 1f);
-    public Vector3Json Gain { get; set; } = new(1f, 1f, 1f);
-    public Vector3Json Offset { get; set; } = new(0f, 0f, 0f);
+    [JsonInclude] internal Vector3Json Lift { get; set; } = new(0f, 0f, 0f);
+    [JsonInclude] internal Vector3Json Gamma { get; set; } = new(1f, 1f, 1f);
+    [JsonInclude] internal Vector3Json Gain { get; set; } = new(1f, 1f, 1f);
+    [JsonInclude] internal Vector3Json Offset { get; set; } = new(0f, 0f, 0f);
 
     // Color wheels (shadow/mid/highlight tinting)
-    public Vector3Json ShadowColor { get; set; } = new(0f, 0f, 0f);
-    public Vector3Json MidtoneColor { get; set; } = new(0f, 0f, 0f);
-    public Vector3Json HighlightColor { get; set; } = new(0f, 0f, 0f);
+    [JsonInclude] internal Vector3Json ShadowColor { get; set; } = new(0f, 0f, 0f);
+    [JsonInclude] internal Vector3Json MidtoneColor { get; set; } = new(0f, 0f, 0f);
+    [JsonInclude] internal Vector3Json HighlightColor { get; set; } = new(0f, 0f, 0f);
 
     // Soft clipping
-    public float HighlightSoftClip { get; set; } = 0f;
-    public float ShadowSoftClip { get; set; } = 0f;
-    public float HighlightKnee { get; set; } = 1f;
-    public float ShadowKnee { get; set; } = 0.1f;
+    [JsonInclude] internal float HighlightSoftClip { get; set; } = 0f;
+    [JsonInclude] internal float ShadowSoftClip { get; set; } = 0f;
+    [JsonInclude] internal float HighlightKnee { get; set; } = 1f;
+    [JsonInclude] internal float ShadowKnee { get; set; } = 0.1f;
 
     // Color space for this shader stage
-    public HDRColorSpace InputSpace { get; set; } = HDRColorSpace.Linear_Rec709;
-    public HDRColorSpace OutputSpace { get; set; } = HDRColorSpace.Linear_Rec709;
-
-    /// <summary>
-    /// Reset all values to defaults
-    /// </summary>
-    public void Reset()
-    {
-        Exposure = 0f;
-        Contrast = 1f;
-        Saturation = 1f;
-        Temperature = 0f;
-        Tint = 0f;
-        Lift = new(0f, 0f, 0f);
-        Gamma = new(1f, 1f, 1f);
-        Gain = new(1f, 1f, 1f);
-        Offset = new(0f, 0f, 0f);
-        ShadowColor = new(0f, 0f, 0f);
-        MidtoneColor = new(0f, 0f, 0f);
-        HighlightColor = new(0f, 0f, 0f);
-        HighlightSoftClip = 0f;
-        ShadowSoftClip = 0f;
-        HighlightKnee = 1f;
-        ShadowKnee = 0.1f;
-        InputSpace = HDRColorSpace.Linear_Rec709;
-        OutputSpace = HDRColorSpace.Linear_Rec709;
-    }
+    [JsonInclude] internal HDRColorSpace InputSpace { get; set; } = HDRColorSpace.Linear_Rec709;
+    [JsonInclude] internal GradingSpace GradingSpace { get; set; } = GradingSpace.Log;
+    [JsonInclude] internal HDRColorSpace OutputSpace { get; set; } = HDRColorSpace.Linear_Rec709;
 
     /// <summary>
     /// Split settings into individual out parameters matching shader input order.
-    /// Use directly with VVVV nodes for HDRGrade_TextureFX.
+    /// Use directly with vvvv nodes for HDRGrade_TextureFX.
     /// </summary>
     public void Split(
         out HDRColorSpace inputSpace,
+        out GradingSpace gradingSpace,
         out HDRColorSpace outputSpace,
         out float exposure,
         out float contrast,
@@ -88,6 +67,7 @@ public class ColorCorrectionSettings
         out float shadowKnee)
     {
         inputSpace = InputSpace;
+        gradingSpace = GradingSpace;
         outputSpace = OutputSpace;
         exposure = Exposure;
         contrast = Contrast;
@@ -109,13 +89,14 @@ public class ColorCorrectionSettings
 }
 
 /// <summary>
-/// JSON-serializable Vector3 (Stride Vector3 doesn't serialize well)
+/// JSON-serializable Vector3 (Stride Vector3 doesn't serialize well).
+/// Internal properties — not exposed to vvvv node graph.
 /// </summary>
 public class Vector3Json
 {
-    public float X { get; set; }
-    public float Y { get; set; }
-    public float Z { get; set; }
+    [JsonInclude] internal float X { get; set; }
+    [JsonInclude] internal float Y { get; set; }
+    [JsonInclude] internal float Z { get; set; }
 
     public Vector3Json() { }
 

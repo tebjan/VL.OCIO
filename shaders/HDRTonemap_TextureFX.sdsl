@@ -72,20 +72,7 @@ shader HDRTonemap_TextureFX : FilterBase, ColorSpaceConversion
     // Note: Color conversion functions inherited from ColorSpaceConversion
     // ========================================================================
 
-    // ACES Filmic Tonemap (Fitted approximation of RRT+ODT)
-    // Reference: Krzysztof Narkowicz, 2015
-    float3 ACESFilmic(float3 x)
-    {
-        float a = 2.51;
-        float b = 0.03;
-        float c = 2.43;
-        float d = 0.59;
-        float e = 0.14;
-
-        return saturate((x * (a * x + b)) / (x * (c * x + d) + e));
-    }
-
-    // Full ACES Tonemap with gamut mapping (Stephen Hill approximation)
+    // ACES Tonemap with gamut mapping (Stephen Hill approximation)
     float3 ACESTonemap(float3 color)
     {
         // Convert to ACES AP1 working space
@@ -151,38 +138,41 @@ shader HDRTonemap_TextureFX : FilterBase, ColorSpaceConversion
     {
         float3 color = tex0col.rgb;
 
-        // Step 1: Convert input to Linear Rec.709 using base shader
+        // Step 1: Convert input to Linear Rec.709
         float3 linear709 = ToLinearRec709(color, InputSpace);
 
         // Step 2: Apply exposure
         linear709 *= exp2(Exposure);
 
-        // Step 3: Apply tonemapping (before output conversion for SDR targets)
-        // Tonemapping is applied for sRGB output or when explicitly requested
-        bool needsTonemap = (OutputSpace == 5) || (Tonemap > 0 && OutputSpace <= 5);
-        if (needsTonemap)
+        // Step 3: Apply tonemapping (any output space can be tonemapped)
+        if (Tonemap > 0)
         {
             linear709 = ApplyTonemap(linear709, Tonemap, WhitePoint);
         }
 
-        // Step 4: Handle HDR-specific scaling before conversion
-        // For PQ/HLG outputs, apply paper white scaling
-        float3 scaledLinear = linear709;
-        if (OutputSpace == 6)  // PQ Rec.2020
+        // Step 4: Convert to output color space
+        // HDR outputs handle gamut + PaperWhite + transfer function directly
+        // to give user explicit control (FromLinearRec709 has hardcoded nit values)
+        float3 result;
+        if (OutputSpace == 6)       // PQ Rec.2020
         {
-            scaledLinear = linear709 * PaperWhite / PQ_MAX_NITS;
+            float3 rec2020 = mul(Rec709_to_Rec2020, linear709);
+            result = LinearToPQ(rec2020 * PaperWhite / PQ_MAX_NITS);
         }
         else if (OutputSpace == 7)  // HLG Rec.2020
         {
-            scaledLinear = clamp(linear709 * (PaperWhite / 100.0) / 12.0, 0.0, 1.0);
+            float3 rec2020 = mul(Rec709_to_Rec2020, linear709);
+            float peak = max(PeakBrightness, 1.0);
+            result = LinearToHLG(clamp(rec2020 * PaperWhite / peak, 0.0, 1.0));
         }
         else if (OutputSpace == 8)  // scRGB
         {
-            scaledLinear = linear709 * (PaperWhite / 80.0);
+            result = linear709 * (PaperWhite / 80.0);
         }
-
-        // Step 5: Convert to output color space
-        float3 result = FromLinearRec709(scaledLinear, OutputSpace);
+        else                        // Non-HDR outputs (0-5): use standard conversion
+        {
+            result = FromLinearRec709(linear709, OutputSpace);
+        }
 
         return float4(result, tex0col.a);
     }

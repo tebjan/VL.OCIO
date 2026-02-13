@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { ProjectSettings, ColorCorrectionSettings, TonemapSettings, InstanceInfo, InstanceState } from '../types/settings'
+import type { ProjectSettings, ColorCorrectionSettings, TonemapSettings, InstanceInfo, InstanceState, ServerInfo } from '../types/settings'
 import { createDefaultProject } from '../types/settings'
 
 interface WebSocketState {
@@ -10,6 +10,7 @@ interface WebSocketState {
   instances: InstanceInfo[]
   selectedInstanceId: string | null
   instanceStates: Record<string, InstanceState>
+  serverInfo: ServerInfo | null
 }
 
 interface WebSocketActions {
@@ -25,33 +26,31 @@ interface WebSocketActions {
   selectInstance: (instanceId: string) => void
 }
 
-// Default fallback - will be overridden by discovery file
+// Default fallback port for Vite dev mode
 const DEFAULT_PORT = 9999
-const RECONNECT_DELAY_MIN = 500      // Start fast
-const RECONNECT_DELAY_MAX = 5000     // Cap at 5 seconds
-const PING_INTERVAL = 3000           // Ping every 3 seconds
-const PONG_TIMEOUT = 5000            // Wait 5 seconds for pong
-const DISCOVERY_CHECK_INTERVAL = 2000 // Check discovery file every 2 seconds
+const RECONNECT_DELAY_MIN = 500
+const RECONNECT_DELAY_MAX = 5000
+const PING_INTERVAL = 3000
+const PONG_TIMEOUT = 5000
 
-// Fetch the discovery file to get the actual server port
-async function discoverServerPort(): Promise<number> {
-  try {
-    // Try to fetch discovery.json from the same origin (works when served by C# server)
-    const response = await fetch('/discovery.json', { cache: 'no-store' })
-    if (response.ok) {
-      const data = await response.json()
-      if (data.port && typeof data.port === 'number') {
-        console.log(`[WebSocket] Discovered server on port ${data.port}`)
-        return data.port
-      }
-    }
-  } catch {
-    // Discovery file not found or not served - use default
+/**
+ * Get the WebSocket URL based on how the UI is being served.
+ * - Production (embedded in C# server): use same origin as the page (works on any machine/IP)
+ * - Dev mode (Vite on port 5173/3000): connect directly to C# server on DEFAULT_PORT
+ */
+function getWebSocketUrl(): string {
+  const loc = window.location
+  const host = loc.hostname || '127.0.0.1'
+  const port = loc.port || '80'
+
+  // Vite dev mode: dev server runs on 5173 (default) or 3000
+  if (port === '5173' || port === '3000') {
+    return `ws://${host}:${DEFAULT_PORT}`
   }
 
-  // Fallback: try default port
-  console.log(`[WebSocket] Discovery failed, using default port ${DEFAULT_PORT}`)
-  return DEFAULT_PORT
+  // Production: UI is served by the C# server, so same origin works.
+  // This handles localhost, LAN IPs, hostnames — whatever the browser used to reach us.
+  return `ws://${host}:${port}`
 }
 
 export function useWebSocket(): WebSocketState & WebSocketActions {
@@ -62,20 +61,26 @@ export function useWebSocket(): WebSocketState & WebSocketActions {
   const [instances, setInstances] = useState<InstanceInfo[]>([])
   const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null)
   const [instanceStates, setInstanceStates] = useState<Record<string, InstanceState>>({})
+  const [serverInfo, setServerInfo] = useState<ServerInfo | null>(null)
 
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimeoutRef = useRef<number | null>(null)
   const pingIntervalRef = useRef<number | null>(null)
   const pongTimeoutRef = useRef<number | null>(null)
-  const discoveryIntervalRef = useRef<number | null>(null)
   const reconnectDelayRef = useRef(RECONNECT_DELAY_MIN)
   const isConnectingRef = useRef(false)
   const mountedRef = useRef(true)
-  const currentPortRef = useRef<number>(DEFAULT_PORT)
   // Track if we've received initial state from server - don't send updates until then
   const hasReceivedInitialStateRef = useRef(false)
   // Track selected instance for including in messages
   const selectedInstanceIdRef = useRef<string | null>(null)
+  // Ref mirror of instanceStates to avoid stale closures in message handlers
+  const instanceStatesRef = useRef<Record<string, InstanceState>>({})
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    instanceStatesRef.current = instanceStates
+  }, [instanceStates])
 
   // Clear all timers
   const clearTimers = useCallback(() => {
@@ -90,10 +95,6 @@ export function useWebSocket(): WebSocketState & WebSocketActions {
     if (pongTimeoutRef.current) {
       clearTimeout(pongTimeoutRef.current)
       pongTimeoutRef.current = null
-    }
-    if (discoveryIntervalRef.current) {
-      clearInterval(discoveryIntervalRef.current)
-      discoveryIntervalRef.current = null
     }
   }, [])
 
@@ -142,7 +143,20 @@ export function useWebSocket(): WebSocketState & WebSocketActions {
     }, PING_INTERVAL)
   }, [])
 
-  const connect = useCallback(async () => {
+  /**
+   * Apply settings from an instance state to the UI.
+   * Used when switching instances or when server pushes a new selection.
+   */
+  const applyInstanceSettings = useCallback((state: InstanceState) => {
+    setSettings({
+      colorCorrection: state.colorCorrection,
+      tonemap: state.tonemap,
+      inputFilePath: state.inputFilePath,
+      presetName: state.presetName || ''
+    })
+  }, [])
+
+  const connect = useCallback(() => {
     // Prevent multiple simultaneous connection attempts
     if (isConnectingRef.current) return
     if (wsRef.current?.readyState === WebSocket.OPEN) return
@@ -161,11 +175,8 @@ export function useWebSocket(): WebSocketState & WebSocketActions {
         wsRef.current = null
       }
 
-      // Discover the server port
-      const port = await discoverServerPort()
-      currentPortRef.current = port
-      const wsUrl = `ws://127.0.0.1:${port}`
-
+      const wsUrl = getWebSocketUrl()
+      console.log(`[WebSocket] Connecting to ${wsUrl}`)
       const ws = new WebSocket(wsUrl)
 
       ws.onopen = () => {
@@ -218,22 +229,24 @@ export function useWebSocket(): WebSocketState & WebSocketActions {
           }
 
           if (msg.type === 'state') {
+            // Extract server info if present
+            if (msg.serverInfo) {
+              setServerInfo(msg.serverInfo)
+            }
+
             // Handle multi-instance state
             if (msg.instances) {
               setInstanceStates(msg.instances)
+              instanceStatesRef.current = msg.instances
               if (msg.selectedInstanceId) {
                 setSelectedInstanceId(msg.selectedInstanceId)
                 selectedInstanceIdRef.current = msg.selectedInstanceId
               }
-              // Update settings from selected instance for backward compatibility
-              const selectedState = msg.instances[msg.selectedInstanceId || Object.keys(msg.instances)[0]]
+              // Update settings from selected instance
+              const selectedId = msg.selectedInstanceId || Object.keys(msg.instances)[0]
+              const selectedState = msg.instances[selectedId]
               if (selectedState) {
-                setSettings({
-                  colorCorrection: selectedState.colorCorrection,
-                  tonemap: selectedState.tonemap,
-                  inputFilePath: selectedState.inputFilePath,
-                  presetName: selectedState.presetName || ''
-                })
+                applyInstanceSettings(selectedState)
               }
             } else if (msg.data) {
               // Legacy single-instance mode
@@ -241,13 +254,28 @@ export function useWebSocket(): WebSocketState & WebSocketActions {
             }
             hasReceivedInitialStateRef.current = true // Now safe to send updates
           } else if (msg.type === 'instancesChanged') {
-            // Handle instance list changes
+            // Handle instance list changes (e.g. instance added/removed)
             if (msg.instances) {
               setInstances(msg.instances)
             }
             if (msg.selectedInstanceId) {
-              setSelectedInstanceId(msg.selectedInstanceId)
-              selectedInstanceIdRef.current = msg.selectedInstanceId
+              const newId = msg.selectedInstanceId
+              const oldId = selectedInstanceIdRef.current
+
+              setSelectedInstanceId(newId)
+              selectedInstanceIdRef.current = newId
+
+              // If selection changed, load the new instance's settings from cache
+              if (newId !== oldId) {
+                const cachedState = instanceStatesRef.current[newId]
+                if (cachedState) {
+                  applyInstanceSettings(cachedState)
+                }
+                // Also request fresh state from server to ensure cache is up-to-date
+                if (wsRef.current?.readyState === WebSocket.OPEN) {
+                  wsRef.current.send(JSON.stringify({ type: 'getState' }))
+                }
+              }
             }
           } else if (msg.type === 'presets' && msg.list) {
             setPresets(msg.list)
@@ -263,33 +291,13 @@ export function useWebSocket(): WebSocketState & WebSocketActions {
       isConnectingRef.current = false
       scheduleReconnect()
     }
-  }, [clearTimers, scheduleReconnect, startHeartbeat])
+  }, [clearTimers, scheduleReconnect, startHeartbeat, applyInstanceSettings])
 
   useEffect(() => {
     mountedRef.current = true
 
     // Start connection
     connect()
-
-    // Periodically check discovery file in case server restarts on different port
-    discoveryIntervalRef.current = window.setInterval(async () => {
-      if (!mountedRef.current) return
-
-      // Only check if disconnected
-      if (wsRef.current?.readyState !== WebSocket.OPEN) {
-        const newPort = await discoverServerPort()
-        if (newPort !== currentPortRef.current) {
-          console.log(`[WebSocket] Server port changed from ${currentPortRef.current} to ${newPort}`)
-          currentPortRef.current = newPort
-          // Trigger reconnect with new port
-          if (reconnectTimeoutRef.current) {
-            clearTimeout(reconnectTimeoutRef.current)
-          }
-          reconnectDelayRef.current = RECONNECT_DELAY_MIN
-          connect()
-        }
-      }
-    }, DISCOVERY_CHECK_INTERVAL)
 
     return () => {
       mountedRef.current = false
@@ -375,21 +383,16 @@ export function useWebSocket(): WebSocketState & WebSocketActions {
   const selectInstance = useCallback((instanceId: string) => {
     setSelectedInstanceId(instanceId)
     selectedInstanceIdRef.current = instanceId
-    // Update settings from the selected instance
-    const instanceState = instanceStates[instanceId]
-    if (instanceState) {
-      setSettings({
-        colorCorrection: instanceState.colorCorrection,
-        tonemap: instanceState.tonemap,
-        inputFilePath: instanceState.inputFilePath,
-        presetName: instanceState.presetName || ''
-      })
+    // Update settings from the cached instance state
+    const cachedState = instanceStatesRef.current[instanceId]
+    if (cachedState) {
+      applyInstanceSettings(cachedState)
     }
     // Notify server of selection change
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'selectInstance', instanceId }))
     }
-  }, [instanceStates])
+  }, [applyInstanceSettings])
 
   return {
     isConnected,
@@ -398,6 +401,7 @@ export function useWebSocket(): WebSocketState & WebSocketActions {
     instances,
     selectedInstanceId,
     instanceStates,
+    serverInfo,
     updateColorCorrection,
     updateTonemap,
     setInputFile,

@@ -103,8 +103,8 @@ public class ProjectSettings
     public void Reset()
     {
         InputFilePath = "";
-        ColorCorrection.Reset();
-        Tonemap.Reset();
+        ColorCorrection = new ColorCorrectionSettings();
+        Tonemap = new TonemapSettings();
         PresetName = "Default";
     }
 

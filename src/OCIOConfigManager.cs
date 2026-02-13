@@ -10,6 +10,7 @@ public class OCIOConfigManager : IDisposable
     private readonly OCIOConfigService _service;
     private string _cachedSelection;
     private string _cachedConfigList;
+    private int _lastConfigVersion = -1;
 
     public OCIOConfigManager(NodeContext nodeContext)
     {
@@ -28,6 +29,13 @@ public class OCIOConfigManager : IDisposable
         {
             _cachedSelection = selectedName;
             error = _service.SwitchConfig(selectedName);
+        }
+
+        // Refresh list whenever config version changes (loader added/removed configs)
+        var currentVersion = _service.ConfigVersion;
+        if (currentVersion != _lastConfigVersion)
+        {
+            _lastConfigVersion = currentVersion;
             _cachedConfigList = _service.GetConfigList();
         }
 

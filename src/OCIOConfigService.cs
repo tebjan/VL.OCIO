@@ -13,9 +13,16 @@ public class OCIOConfigService : IDisposable
     private string _activeConfigName;
     private readonly Dictionary<string, string> _loadedFilePaths = new(); // name → normalized path
     private bool _initialized;
+    private int _configVersion;
 
     public OCIOConfig ActiveConfig => _activeConfig;
     public string ActiveConfigName => _activeConfigName;
+
+    /// <summary>
+    /// Increments whenever configs are added or switched. Loaders compare against
+    /// their last-seen version to know when to re-verify their enum entry.
+    /// </summary>
+    public int ConfigVersion => _configVersion;
 
     public static OCIOConfigService GetOrCreate(AppHost appHost)
     {
@@ -63,6 +70,7 @@ public class OCIOConfigService : IDisposable
 
             _activeConfigName = configName;
             _initialized = true;
+            _configVersion++;
             OCIOConfigUtils.RefreshEnumsFrom(_activeConfig);
             return null;
         }
@@ -86,11 +94,12 @@ public class OCIOConfigService : IDisposable
 
         var normalizedPath = Path.GetFullPath(filePath);
 
-        // Dedup: same path already loaded → return existing name
+        // Dedup: same path already loaded → re-ensure enum entry exists and return
         foreach (var kvp in _loadedFilePaths)
         {
             if (string.Equals(kvp.Value, normalizedPath, StringComparison.OrdinalIgnoreCase))
             {
+                EnsureFileConfigInEnum(kvp.Key, normalizedPath);
                 error = null;
                 return kvp.Key;
             }
@@ -131,9 +140,29 @@ public class OCIOConfigService : IDisposable
 
         enumDef.AddEntry(name, tag);
         _loadedFilePaths[name] = normalizedPath;
+        _configVersion++;
 
         error = null;
         return name;
+    }
+
+    /// <summary>
+    /// Re-adds a file config's enum entry if it went missing (e.g. after restart).
+    /// </summary>
+    private void EnsureFileConfigInEnum(string name, string normalizedPath)
+    {
+        var enumDef = OCIOConfigEnumDefinition.Instance;
+        if (!enumDef.HasEntry(name))
+        {
+            var tag = new OCIOConfigTag
+            {
+                IsBuiltin = false,
+                FilePath = normalizedPath,
+                Source = normalizedPath
+            };
+            enumDef.AddEntry(name, tag);
+            _configVersion++;
+        }
     }
 
     /// <summary>

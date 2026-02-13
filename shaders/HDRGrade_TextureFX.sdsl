@@ -24,16 +24,18 @@ shader HDRGrade_TextureFX : FilterBase, ColorSpaceConversion
     // ========================================================================
 
     // What color space is my input?
-    [EnumType("VL.OCIO.IOColorSpace, VL.OCIO")]
-    int InputSpace = 0;  // 0=ACEScg, 1=Linear709, 2=sRGB, 3=ACEScct
+    // 0=Linear709, 1=Linear2020, 2=ACEScg, 3=ACEScc, 4=ACEScct, 5=sRGB, 6=PQ2020, 7=HLG2020, 8=scRGB
+    [EnumType("VL.OCIO.HDRColorSpace, VL.OCIO")]
+    int InputSpace = 0;
 
     // Where should grading math happen?
     [EnumType("VL.OCIO.GradingSpace, VL.OCIO")]
     int GradingSpace = 0;  // 0=Log (ACEScct), 1=Linear (ACEScg)
 
     // What color space do I need for output?
-    [EnumType("VL.OCIO.IOColorSpace, VL.OCIO")]
-    int OutputSpace = 0;  // 0=ACEScg, 1=Linear709, 2=sRGB, 3=ACEScct
+    // 0=Linear709, 1=Linear2020, 2=ACEScg, 3=ACEScc, 4=ACEScct, 5=sRGB, 6=PQ2020, 7=HLG2020, 8=scRGB
+    [EnumType("VL.OCIO.HDRColorSpace, VL.OCIO")]
+    int OutputSpace = 0;
 
     // ========================================================================
     // GRADING PARAMETERS
@@ -198,30 +200,32 @@ shader HDRGrade_TextureFX : FilterBase, ColorSpaceConversion
     // I/O CONVERSION (transparent to user)
     // ========================================================================
 
-    // Decode input to Linear AP1 (the hub)
+    // Decode any HDRColorSpace to Linear AP1 (the grading hub)
+    // Direct paths for AP1 variants, hub through Linear709 for everything else
     float3 DecodeInput(float3 color)
     {
-        if (InputSpace == 0)       // ACEScg - already AP1 linear
+        if (InputSpace == 2)       // ACEScg - already AP1 linear
             return color;
-        else if (InputSpace == 1)  // Linear Rec.709
-            return mul(Rec709_to_AP1, color);
-        else if (InputSpace == 2)  // sRGB
-            return mul(Rec709_to_AP1, sRGBToLinear(color));
-        else                       // ACEScct
+        else if (InputSpace == 3)  // ACEScc - log AP1
+            return ACESccToLinear(color);
+        else if (InputSpace == 4)  // ACEScct - log AP1
             return ACEScctToLinear(color);
+        else                       // All others → Linear709 → AP1
+            return mul(Rec709_to_AP1, ToLinearRec709(color, InputSpace));
     }
 
-    // Encode Linear AP1 to output space
+    // Encode Linear AP1 to any HDRColorSpace
+    // Direct paths for AP1 variants, hub through Linear709 for everything else
     float3 EncodeOutput(float3 linearAP1)
     {
-        if (OutputSpace == 0)       // ACEScg - already AP1 linear
+        if (OutputSpace == 2)       // ACEScg - already AP1 linear
             return linearAP1;
-        else if (OutputSpace == 1)  // Linear Rec.709
-            return mul(AP1_to_Rec709, linearAP1);
-        else if (OutputSpace == 2)  // sRGB
-            return LinearToSRGB(saturate(mul(AP1_to_Rec709, linearAP1)));
-        else                        // ACEScct
+        else if (OutputSpace == 3)  // ACEScc - log AP1
+            return LinearToACEScc(linearAP1);
+        else if (OutputSpace == 4)  // ACEScct - log AP1
             return LinearToACEScct(linearAP1);
+        else                        // AP1 → Linear709 → target space
+            return FromLinearRec709(mul(AP1_to_Rec709, linearAP1), OutputSpace);
     }
 
     // ========================================================================

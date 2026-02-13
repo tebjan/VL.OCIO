@@ -1,12 +1,45 @@
+# Build output
 obj/
-.vs/
+bin/
+/lib/
 
-# .v4p backup files
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.cache
+*.rsuser
+launchSettings.json
+
+# .NET
+*.pdb
+
+# vvvv
+.vl/
 *~.xml
 
-# Dynamic plugins .dll
-bin/
+# Node.js (web UI)
+node_modules/
+ui/dist/
+ui/.vite/
 
-.vl/
-/lib/
+# OCIO help assets (large files)
 /help/aces_1.2/
+
+# IDE
+.vscode/.env
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Temporary files
+*.tmp
+*.log
+nul
+
+# Color grading runtime files
+presets/_lastsession.json
+presets/instances/
+ui/dist/discovery.json

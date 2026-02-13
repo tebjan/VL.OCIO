@@ -1,0 +1,286 @@
+// ============================================================================
+// ColorSpaceConversion.sdsl
+// Base shader with all color space conversion functions
+// ============================================================================
+//
+// This shader provides conversion functions between color spaces:
+// - Linear Rec.709 (sRGB primaries)
+// - Linear Rec.2020 (HDR wide gamut)
+// - ACEScg (Linear AP1 - ACES working space)
+// - ACEScc (Log AP1 - color grading)
+// - ACEScct (Log AP1 with toe)
+// - sRGB (gamma encoded)
+// - PQ/ST.2084 (HDR10)
+// - HLG (Broadcast HDR)
+//
+// References:
+// - ACES S-2014-003 (ACEScc)
+// - ACES S-2016-001 (ACEScct)
+// - SMPTE ST 2084:2014 (PQ)
+// - ARIB STD-B67 / ITU-R BT.2100 (HLG)
+// - IEC 61966-2-1:1999 (sRGB)
+//
+// ============================================================================
+
+shader ColorSpaceConversion : ColorUtility
+{
+    // ========================================================================
+    // CONSTANTS
+    // ========================================================================
+
+    // ACEScc mid-gray: 18% gray in ACEScc encoding
+    // Calculated as: (log2(0.18) + 9.72) / 17.52 = 0.4135884
+    static const float ACESCC_MIDGRAY = 0.4135884;
+
+    // ACEScct constants (from ACES 1.0.3 specification)
+    static const float ACEScct_A = 10.5402377416545;
+    static const float ACEScct_B = 0.0729055341958355;
+    static const float ACEScct_CUT_LINEAR = 0.0078125;           // 2^-7, linear breakpoint
+    static const float ACEScct_CUT_LOG = 0.155251141552511;      // Y_break in log
+
+    // ACEScc maximum encodable value (half-float max = 65504)
+    static const float ACESCC_MAX = 1.4679964372;  // (log2(65504) + 9.72) / 17.52
+
+    // SMPTE ST 2084 (PQ) constants
+    static const float PQ_m1 = 0.1593017578125;      // = 2610 / 16384
+    static const float PQ_m2 = 78.84375;             // = 2523 / 32 * 128
+    static const float PQ_c1 = 0.8359375;            // = 3424 / 4096 = c3 - c2 + 1
+    static const float PQ_c2 = 18.8515625;           // = 2413 / 4096 * 32
+    static const float PQ_c3 = 18.6875;              // = 2392 / 4096 * 32
+    static const float PQ_MAX_NITS = 10000.0;
+
+    // ARIB STD-B67 (HLG) constants
+    static const float HLG_a = 0.17883277;
+    static const float HLG_b = 0.28466892;           // = 1 - 4a
+    static const float HLG_c = 0.55991073;           // = 0.5 - a * ln(4a)
+
+    // ACEScc/ACEScct range constants (for grading normalization)
+    static const float ACESCC_MIN = -0.3584474886;   // ACEScc at linear 0.00001
+    static const float ACESCC_RANGE = 1.8264439258;  // ACESCC_MAX - ACESCC_MIN
+    static const float ACESCCT_MIDGRAY = 0.4135884;  // Same as ACEScc for 18% gray
+
+    // AP1 luminance coefficients (Y from AP1→XYZ matrix)
+    static const float3 AP1_LUMA = float3(0.2722287, 0.6740818, 0.0536895);
+
+    // Linear grading pivot (18% gray in linear)
+    static const float LINEAR_MIDGRAY = 0.18;
+
+    // ========================================================================
+    // GAMUT TRANSFORMATION MATRICES
+    // ========================================================================
+
+    // Rec.709 to Rec.2020 (BT.709 to BT.2020)
+    static const float3x3 Rec709_to_Rec2020 = float3x3(
+        0.6274039, 0.3292830, 0.0433131,
+        0.0690973, 0.9195404, 0.0113623,
+        0.0163914, 0.0880133, 0.8955953
+    );
+
+    // Rec.2020 to Rec.709
+    static const float3x3 Rec2020_to_Rec709 = float3x3(
+         1.6604910, -0.5876411, -0.0728499,
+        -0.1245505,  1.1328999, -0.0083494,
+        -0.0181508, -0.1005789,  1.1187297
+    );
+
+    // Rec.709/sRGB to ACES AP1 (ACEScg)
+    // Includes D65 to D60 chromatic adaptation (Bradford)
+    static const float3x3 Rec709_to_AP1 = float3x3(
+        0.6131324, 0.3395381, 0.0473296,
+        0.0701934, 0.9163539, 0.0134527,
+        0.0206155, 0.1095697, 0.8698148
+    );
+
+    // ACES AP1 to Rec.709/sRGB
+    // Includes D60 to D65 chromatic adaptation (Bradford)
+    static const float3x3 AP1_to_Rec709 = float3x3(
+         1.7048586, -0.6217160, -0.0831426,
+        -0.1300768,  1.1407357, -0.0106589,
+        -0.0239640, -0.1289755,  1.1529395
+    );
+
+    // Rec.2020 to ACES AP1
+    static const float3x3 Rec2020_to_AP1 = float3x3(
+        0.9792711,  0.0125307,  0.0082013,
+        0.0083406,  0.9787678,  0.0128916,
+        0.0058225,  0.0284863,  0.9656912
+    );
+
+    // ACES AP1 to Rec.2020
+    static const float3x3 AP1_to_Rec2020 = float3x3(
+        1.0211818, -0.0130790, -0.0081028,
+       -0.0087055,  1.0220618, -0.0133563,
+       -0.0054779, -0.0292020,  1.0346800
+    );
+
+    // ========================================================================
+    // sRGB TRANSFER FUNCTIONS
+    // IEC 61966-2-1:1999
+    // Using Stride's precise implementations from ColorUtility
+    // ========================================================================
+
+    // sRGB to Linear - using VVVV's precise version
+    float3 sRGBToLinear(float3 srgb)
+    {
+        return SRgbToLinearPrecise(float4(srgb, 1.0)).rgb;
+    }
+
+    // Linear to sRGB - using VVVV's precise version
+    float3 LinearToSRGB(float3 lin)
+    {
+        return LinearToSRgbPrecise(float4(lin, 1.0)).rgb;
+    }
+
+    // ========================================================================
+    // ACEScc CONVERSION FUNCTIONS
+    // ACES S-2014-003 specification
+    // ========================================================================
+
+    // Linear AP1 to ACEScc (branchless)
+    float3 LinearToACEScc(float3 lin)
+    {
+        float3 linClamped = max(lin, 1e-10);
+        float3 cc = (log2(linClamped) + 9.72) / 17.52;
+        return cc;
+    }
+
+    // ACEScc to Linear AP1 (branchless)
+    float3 ACESccToLinear(float3 cc)
+    {
+        float3 lin = exp2(cc * 17.52 - 9.72);
+        return clamp(lin, 0.0, 65504.0);
+    }
+
+    // ========================================================================
+    // ACEScct CONVERSION FUNCTIONS
+    // ACES S-2016-001 specification
+    // ========================================================================
+
+    // Linear AP1 to ACEScct (branchless)
+    float3 LinearToACEScct(float3 lin)
+    {
+        float3 linClamped = max(lin, 1e-10);
+        float3 linearSeg = ACEScct_A * linClamped + ACEScct_B;
+        float3 logSeg = (log2(linClamped) + 9.72) / 17.52;
+        float3 useLog = step(ACEScct_CUT_LINEAR, linClamped);
+        return lerp(linearSeg, logSeg, useLog);
+    }
+
+    // ACEScct to Linear AP1 (branchless)
+    float3 ACEScctToLinear(float3 cct)
+    {
+        float3 linearSeg = (cct - ACEScct_B) / ACEScct_A;
+        float3 logSeg = exp2(cct * 17.52 - 9.72);
+        float3 useLog = step(ACEScct_CUT_LOG, cct);
+        float3 lin = lerp(linearSeg, logSeg, useLog);
+        return clamp(lin, 0.0, 65504.0);
+    }
+
+    // ========================================================================
+    // PQ (ST.2084) TRANSFER FUNCTIONS
+    // SMPTE ST 2084:2014
+    // ========================================================================
+
+    // Linear (normalized 0-1 where 1=10000 nits) to PQ
+    float3 LinearToPQ(float3 L)
+    {
+        float3 Y = max(L, 0.0);
+        float3 Ym1 = pow(Y, PQ_m1);
+        float3 N = pow((PQ_c1 + PQ_c2 * Ym1) / (1.0 + PQ_c3 * Ym1), PQ_m2);
+        return N;
+    }
+
+    // PQ to Linear (returns normalized 0-1)
+    float3 PQToLinear(float3 N)
+    {
+        float3 Nm2 = pow(max(N, 0.0), 1.0 / PQ_m2);
+        float3 L = pow(max(Nm2 - PQ_c1, 0.0) / (PQ_c2 - PQ_c3 * Nm2), 1.0 / PQ_m1);
+        return L;
+    }
+
+    // ========================================================================
+    // HLG (BT.2100) TRANSFER FUNCTIONS
+    // ARIB STD-B67, ITU-R BT.2100
+    // ========================================================================
+
+    // Linear to HLG (branchless approximation)
+    float3 LinearToHLG(float3 L)
+    {
+        L = max(L, 0.0);
+        float3 sqrtSeg = sqrt(3.0 * L);
+        float3 logSeg = HLG_a * log(max(12.0 * L - HLG_b, 1e-10)) + HLG_c;
+        float3 useLog = step(1.0 / 12.0, L);
+        return lerp(sqrtSeg, logSeg, useLog);
+    }
+
+    // HLG to Linear (branchless approximation)
+    float3 HLGToLinear(float3 V)
+    {
+        float3 sqrtSeg = (V * V) / 3.0;
+        float3 logSeg = (exp((V - HLG_c) / HLG_a) + HLG_b) / 12.0;
+        float3 useLog = step(0.5, V);
+        return lerp(sqrtSeg, logSeg, useLog);
+    }
+
+    // ========================================================================
+    // UNIFIED CONVERSION FUNCTIONS
+    // Convert between any two color spaces via Linear Rec.709 hub
+    // ========================================================================
+
+    // Convert any space to Linear Rec.709
+    // Space enum: 0=Linear709, 1=Linear2020, 2=ACEScg, 3=ACEScc, 4=ACEScct, 5=sRGB, 6=PQ2020, 7=HLG2020, 8=scRGB
+    float3 ToLinearRec709(float3 color, int space)
+    {
+        if (space == 0)      // Linear Rec.709 - passthrough
+            return color;
+        else if (space == 1) // Linear Rec.2020
+            return mul(Rec2020_to_Rec709, color);
+        else if (space == 2) // ACEScg (Linear AP1)
+            return mul(AP1_to_Rec709, color);
+        else if (space == 3) // ACEScc
+            return mul(AP1_to_Rec709, ACESccToLinear(color));
+        else if (space == 4) // ACEScct
+            return mul(AP1_to_Rec709, ACEScctToLinear(color));
+        else if (space == 5) // sRGB
+            return sRGBToLinear(color);
+        else if (space == 6) // PQ Rec.2020
+            return mul(Rec2020_to_Rec709, PQToLinear(color) * PQ_MAX_NITS);
+        else if (space == 7) // HLG Rec.2020
+            return mul(Rec2020_to_Rec709, HLGToLinear(color) * 12.0);
+        else                 // scRGB (linear, 80 nits = 1.0)
+            return color * 80.0;
+    }
+
+    // Convert from Linear Rec.709 to any space
+    float3 FromLinearRec709(float3 color, int space)
+    {
+        if (space == 0)      // Linear Rec.709 - passthrough
+            return color;
+        else if (space == 1) // Linear Rec.2020
+            return mul(Rec709_to_Rec2020, color);
+        else if (space == 2) // ACEScg (Linear AP1)
+            return mul(Rec709_to_AP1, color);
+        else if (space == 3) // ACEScc
+            return LinearToACEScc(mul(Rec709_to_AP1, color));
+        else if (space == 4) // ACEScct
+            return LinearToACEScct(mul(Rec709_to_AP1, color));
+        else if (space == 5) // sRGB
+            return LinearToSRGB(saturate(color));
+        else if (space == 6) // PQ Rec.2020 (assumes 200 nit paper white)
+            return LinearToPQ(mul(Rec709_to_Rec2020, color) * 200.0 / PQ_MAX_NITS);
+        else if (space == 7) // HLG Rec.2020
+            return LinearToHLG(clamp(mul(Rec709_to_Rec2020, color) / 12.0, 0.0, 1.0));
+        else                 // scRGB (linear, 80 nits = 1.0)
+            return color / 80.0;
+    }
+
+    // Direct conversion between any two spaces
+    float3 ConvertColorSpace(float3 color, int fromSpace, int toSpace)
+    {
+        if (fromSpace == toSpace)
+            return color;
+
+        float3 linear709 = ToLinearRec709(color, fromSpace);
+        return FromLinearRec709(linear709, toSpace);
+    }
+};

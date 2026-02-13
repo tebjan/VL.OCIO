@@ -1,0 +1,189 @@
+// ============================================================================
+// HDRTonemap_TextureFX.sdsl
+// HDR Output Transforms and Tonemapping for VVVV
+// ============================================================================
+//
+// This shader handles the final stage of the HDR pipeline:
+// - ACES Tonemapping (RRT+ODT approximation)
+// - HDR10 output (PQ/ST.2084 + Rec.2020)
+// - HLG output (Hybrid Log-Gamma + Rec.2020)
+// - SDR output (sRGB)
+//
+// References:
+// - SMPTE ST 2084:2014 (PQ transfer function)
+// - ARIB STD-B67 (HLG transfer function)
+// - ITU-R BT.2100 (HDR Television)
+// - ACES Reference Rendering Transform
+//
+// ============================================================================
+
+shader HDRTonemap_TextureFX : FilterBase, ColorSpaceConversion
+{
+    // ========================================================================
+    // INPUT CONFIGURATION
+    // ========================================================================
+
+    // Input color space (see HDRColorSpace enum)
+    // 0=Linear709, 1=Linear2020, 2=ACEScg, 3=ACEScc, 4=ACEScct, 5=sRGB, 6=PQ, 7=HLG, 8=scRGB
+    [EnumType("VL.OCIO.HDRColorSpace, VL.OCIO")]
+    int InputSpace = 0;
+
+    // ========================================================================
+    // OUTPUT CONFIGURATION
+    // ========================================================================
+
+    // Output color space (see HDRColorSpace enum)
+    [EnumType("VL.OCIO.HDRColorSpace, VL.OCIO")]
+    int OutputSpace = 5;  // Default to sRGB for display
+
+    // Tonemapping operator (see TonemapOperator enum)
+    // 0=None, 1=ACES, 2=Reinhard, 3=ReinhardExtended
+    [EnumType("VL.OCIO.TonemapOperator, VL.OCIO")]
+    int Tonemap = 1;  // Default ACES
+
+    // ========================================================================
+    // HDR OUTPUT PARAMETERS
+    // ========================================================================
+
+    // Paper white level in nits (cd/m²)
+    // This is the brightness of "diffuse white" (e.g., white paper under normal lighting)
+    // SDR content typically assumes 80-100 nits
+    // HDR paper white is typically 200-400 nits
+    float PaperWhite = 200.0;
+
+    // Peak brightness in nits for HDR output
+    // Common values: 400, 600, 1000, 2000, 4000, 10000
+    // Set this to match your display's peak luminance
+    float PeakBrightness = 1000.0;
+
+    // ========================================================================
+    // TONEMAPPING PARAMETERS
+    // ========================================================================
+
+    // Pre-tonemap exposure adjustment (in stops)
+    float Exposure = 0.0;
+
+    // Shoulder strength for Reinhard Extended (affects highlight rolloff)
+    // Higher values = brighter white point before compression
+    float WhitePoint = 4.0;
+
+    // ========================================================================
+    // TONEMAPPING OPERATORS
+    // Note: Color conversion functions inherited from ColorSpaceConversion
+    // ========================================================================
+
+    // ACES Filmic Tonemap (Fitted approximation of RRT+ODT)
+    // Reference: Krzysztof Narkowicz, 2015
+    float3 ACESFilmic(float3 x)
+    {
+        float a = 2.51;
+        float b = 0.03;
+        float c = 2.43;
+        float d = 0.59;
+        float e = 0.14;
+
+        return saturate((x * (a * x + b)) / (x * (c * x + d) + e));
+    }
+
+    // Full ACES Tonemap with gamut mapping (Stephen Hill approximation)
+    float3 ACESTonemap(float3 color)
+    {
+        // Convert to ACES AP1 working space
+        float3 aces = mul(Rec709_to_AP1, color);
+
+        // Apply RRT+ODT fit
+        float3x3 ACESInputMat = float3x3(
+            0.59719, 0.35458, 0.04823,
+            0.07600, 0.90834, 0.01566,
+            0.02840, 0.13383, 0.83777
+        );
+
+        float3x3 ACESOutputMat = float3x3(
+             1.60475, -0.53108, -0.07367,
+            -0.10208,  1.10813, -0.00605,
+            -0.00327, -0.07276,  1.07602
+        );
+
+        float3 v = mul(ACESInputMat, aces);
+        float3 a = v * (v + 0.0245786) - 0.000090537;
+        float3 b = v * (0.983729 * v + 0.4329510) + 0.238081;
+        v = a / b;
+
+        float3 result = mul(ACESOutputMat, v);
+
+        // Convert back to Rec.709 primaries
+        result = mul(AP1_to_Rec709, result);
+
+        return saturate(result);
+    }
+
+    // Reinhard tonemap (simple)
+    float3 ReinhardTonemap(float3 color)
+    {
+        return color / (color + 1.0);
+    }
+
+    // Extended Reinhard with adjustable white point
+    float3 ReinhardExtendedTonemap(float3 color, float wp)
+    {
+        float3 numerator = color * (1.0 + color / (wp * wp));
+        return numerator / (1.0 + color);
+    }
+
+    // Apply selected tonemap operator
+    float3 ApplyTonemap(float3 color, int op, float wp)
+    {
+        if (op == 0)      // None
+            return color;
+        else if (op == 1) // ACES
+            return ACESTonemap(color);
+        else if (op == 2) // Reinhard
+            return ReinhardTonemap(color);
+        else              // Reinhard Extended
+            return ReinhardExtendedTonemap(color, wp);
+    }
+
+    // ========================================================================
+    // MAIN FILTER FUNCTION
+    // ========================================================================
+
+    float4 Filter(float4 tex0col)
+    {
+        float3 color = tex0col.rgb;
+
+        // Step 1: Convert input to Linear Rec.709 using base shader
+        float3 linear709 = ToLinearRec709(color, InputSpace);
+
+        // Step 2: Apply exposure
+        linear709 *= exp2(Exposure);
+
+        // Step 3: Apply tonemapping (before output conversion for SDR targets)
+        // Tonemapping is applied for sRGB output or when explicitly requested
+        bool needsTonemap = (OutputSpace == 5) || (Tonemap > 0 && OutputSpace <= 5);
+        if (needsTonemap)
+        {
+            linear709 = ApplyTonemap(linear709, Tonemap, WhitePoint);
+        }
+
+        // Step 4: Handle HDR-specific scaling before conversion
+        // For PQ/HLG outputs, apply paper white scaling
+        float3 scaledLinear = linear709;
+        if (OutputSpace == 6)  // PQ Rec.2020
+        {
+            scaledLinear = linear709 * PaperWhite / PQ_MAX_NITS;
+        }
+        else if (OutputSpace == 7)  // HLG Rec.2020
+        {
+            scaledLinear = clamp(linear709 * (PaperWhite / 100.0) / 12.0, 0.0, 1.0);
+        }
+        else if (OutputSpace == 8)  // scRGB
+        {
+            scaledLinear = linear709 * (PaperWhite / 80.0);
+        }
+
+        // Step 5: Convert to output color space
+        float3 result = FromLinearRec709(scaledLinear, OutputSpace);
+
+        return float4(result, tex0col.a);
+    }
+};

@@ -5,23 +5,27 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <GenerateDocumentationFile>True</GenerateDocumentationFile>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 	<OutputPath>..\lib\</OutputPath>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="OCIOSharp\**" />
+    <EmbeddedResource Remove="OCIOSharp\**" />
+    <None Remove="OCIOSharp\**" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="VL.Stride.Runtime" Version="2025.7.0-0214-ge19c6f6088" />
   </ItemGroup>
 
-  <ItemGroup Condition="'$(Configuration)' == 'Debug'">
-    <ProjectReference Include="OCIOSharp\OcioSharpCLI\OcioSharpCLI.vcxproj" />
-  </ItemGroup>
-
-  <ItemGroup Condition="'$(Configuration)' == 'Release'">
-	<!-- DLL reference for deployment -->
-	<Reference Include="OCIOSharpCLI">
-		<HintPath>OCIOSharp\OcioSharpCLI\x64\Release\OCIOSharpCLI.dll</HintPath>
-		<Private>true</Private>
-	</Reference>
+  <!-- DLL reference - build OCIOSharpCLI.vcxproj manually in Visual Studio -->
+  <ItemGroup>
+    <Reference Include="OCIOSharpCLI">
+      <HintPath>OCIOSharp\OcioSharpCLI\x64\Release\OCIOSharpCLI.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
   </ItemGroup>
 
   <ItemGroup>
@@ -35,7 +39,7 @@
   <Target Name="CopyNativeDll" AfterTargets="Build">
 	<PropertyGroup>
 		<!-- Define the source path of the native DLL -->
-		<NativeDllSourcePath>OCIOSharp\OcioSharpCLI\x64\Release\OpenColorIO_2_4.dll</NativeDllSourcePath>
+		<NativeDllSourcePath>OCIOSharp\OcioSharpCLI\x64\Release\OpenColorIO_2_5.dll</NativeDllSourcePath>
 		<!-- Define the target path within the NuGet package structure -->
 		<NativeDllTargetPath>..\runtimes\win-x64\native</NativeDllTargetPath>
 	</PropertyGroup>

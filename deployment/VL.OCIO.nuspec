@@ -31,8 +31,8 @@
     <file src="..\*.vl" target="" exclude="" />
     <file src="..\help\**" target="help\" exclude="" />
     <file src="..\shaders\**" target="shaders\" exclude="" />
-    <!-- UI is now embedded in VL.OCIO.dll as resources, no need to ship separately -->
-    <file src="..\presets\**" target="presets\" exclude="..\presets\_lastsession.json;..\presets\instances\**" />
+    <!-- UI is embedded in VL.OCIO.dll as resources, no need to ship separately -->
+    <!-- Presets are per-document (ocio_presets/ next to user's .vl file), not shipped in package -->
     <file src="nugeticon.png" target="icon\" />
     <file src="..\README.md" target="docs\" />
   </files>

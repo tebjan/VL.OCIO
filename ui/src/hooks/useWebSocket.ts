@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import type { ProjectSettings, ColorCorrectionSettings, TonemapSettings, InstanceInfo, InstanceState, ServerInfo } from '../types/settings'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { ProjectSettings, ColorCorrectionSettings, TonemapSettings, InstanceInfo, InstanceState, ServerInfo, DiscoveredServer } from '../types/settings'
 import { createDefaultProject } from '../types/settings'
 
 interface WebSocketState {
@@ -11,13 +11,12 @@ interface WebSocketState {
   selectedInstanceId: string | null
   instanceStates: Record<string, InstanceState>
   serverInfo: ServerInfo | null
+  knownServers: DiscoveredServer[]
 }
 
 interface WebSocketActions {
   updateColorCorrection: (params: Partial<ColorCorrectionSettings>) => void
   updateTonemap: (params: Partial<TonemapSettings>) => void
-  setInputFile: (path: string) => void
-  browseFile: () => void
   loadPreset: (name: string) => void
   savePreset: (name: string) => void
   listPresets: () => void
@@ -26,8 +25,8 @@ interface WebSocketActions {
   selectInstance: (instanceId: string) => void
 }
 
-// Default fallback port for Vite dev mode
-const DEFAULT_PORT = 9999
+// Base URL path — used for fallback and directory links
+export const URL_PATH = 'grade'
 const RECONNECT_DELAY_MIN = 500
 const RECONNECT_DELAY_MAX = 5000
 const PING_INTERVAL = 3000
@@ -35,8 +34,8 @@ const PONG_TIMEOUT = 5000
 
 /**
  * Get the WebSocket URL based on how the UI is being served.
- * - Production (embedded in C# server): use same origin as the page (works on any machine/IP)
- * - Dev mode (Vite on port 5173/3000): connect directly to C# server on DEFAULT_PORT
+ * - Production: derive from window.location.pathname (matches the HTTP prefix)
+ * - Dev mode (Vite on port 5173/3000): connect to C# server, use ?path= query param
  */
 function getWebSocketUrl(): string {
   const loc = window.location
@@ -45,23 +44,42 @@ function getWebSocketUrl(): string {
 
   // Vite dev mode: dev server runs on 5173 (default) or 3000
   if (port === '5173' || port === '3000') {
-    return `ws://${host}:${DEFAULT_PORT}`
+    const devPath = new URLSearchParams(loc.search).get('path') || URL_PATH
+    return `ws://${host}:80/${devPath}/`
   }
 
-  // Production: UI is served by the C# server, so same origin works.
-  // This handles localhost, LAN IPs, hostnames — whatever the browser used to reach us.
-  return `ws://${host}:${port}`
+  // Production: derive WebSocket path from current page URL
+  // Page at /grade/machine/app/ → ws://host/grade/machine/app/
+  const basePath = loc.pathname.replace(/^\/+|\/+$/g, '') || URL_PATH
+  const wsProtocol = loc.protocol === 'https:' ? 'wss:' : 'ws:'
+  const wsPort = (port === '443' || port === '80') ? '' : `:${port}`
+  return `${wsProtocol}//${loc.host}${wsPort}/${basePath}/`
 }
 
 export function useWebSocket(): WebSocketState & WebSocketActions {
   const [isConnected, setIsConnected] = useState(false)
-  const [settings, setSettings] = useState<ProjectSettings>(createDefaultProject())
   const [presets, setPresets] = useState<string[]>([])
-  // Multi-instance state
+  // Multi-instance state — single source of truth, one complete state per instance
   const [instances, setInstances] = useState<InstanceInfo[]>([])
   const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null)
   const [instanceStates, setInstanceStates] = useState<Record<string, InstanceState>>({})
   const [serverInfo, setServerInfo] = useState<ServerInfo | null>(null)
+  const [knownServers, setKnownServers] = useState<DiscoveredServer[]>([])
+
+  // Derive settings for the selected instance — no separate settings state
+  const settings: ProjectSettings = useMemo(() => {
+    if (selectedInstanceId && instanceStates[selectedInstanceId]) {
+      const state = instanceStates[selectedInstanceId]
+      return {
+        colorCorrection: state.colorCorrection,
+        tonemap: state.tonemap,
+        inputFilePath: state.inputFilePath,
+        presetName: state.presetName || '',
+        isPresetDirty: state.isPresetDirty ?? false,
+      }
+    }
+    return createDefaultProject()
+  }, [selectedInstanceId, instanceStates])
 
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimeoutRef = useRef<number | null>(null)
@@ -72,15 +90,8 @@ export function useWebSocket(): WebSocketState & WebSocketActions {
   const mountedRef = useRef(true)
   // Track if we've received initial state from server - don't send updates until then
   const hasReceivedInitialStateRef = useRef(false)
-  // Track selected instance for including in messages
+  // Track selected instance for including in messages (ref to avoid stale closures)
   const selectedInstanceIdRef = useRef<string | null>(null)
-  // Ref mirror of instanceStates to avoid stale closures in message handlers
-  const instanceStatesRef = useRef<Record<string, InstanceState>>({})
-
-  // Keep ref in sync with state
-  useEffect(() => {
-    instanceStatesRef.current = instanceStates
-  }, [instanceStates])
 
   // Clear all timers
   const clearTimers = useCallback(() => {
@@ -143,19 +154,6 @@ export function useWebSocket(): WebSocketState & WebSocketActions {
     }, PING_INTERVAL)
   }, [])
 
-  /**
-   * Apply settings from an instance state to the UI.
-   * Used when switching instances or when server pushes a new selection.
-   */
-  const applyInstanceSettings = useCallback((state: InstanceState) => {
-    setSettings({
-      colorCorrection: state.colorCorrection,
-      tonemap: state.tonemap,
-      inputFilePath: state.inputFilePath,
-      presetName: state.presetName || ''
-    })
-  }, [])
-
   const connect = useCallback(() => {
     // Prevent multiple simultaneous connection attempts
     if (isConnectingRef.current) return
@@ -176,7 +174,6 @@ export function useWebSocket(): WebSocketState & WebSocketActions {
       }
 
       const wsUrl = getWebSocketUrl()
-      console.log(`[WebSocket] Connecting to ${wsUrl}`)
       const ws = new WebSocket(wsUrl)
 
       ws.onopen = () => {
@@ -234,48 +231,31 @@ export function useWebSocket(): WebSocketState & WebSocketActions {
               setServerInfo(msg.serverInfo)
             }
 
-            // Handle multi-instance state
+            // Update all instance states from server (authoritative)
             if (msg.instances) {
               setInstanceStates(msg.instances)
-              instanceStatesRef.current = msg.instances
-              if (msg.selectedInstanceId) {
-                setSelectedInstanceId(msg.selectedInstanceId)
-                selectedInstanceIdRef.current = msg.selectedInstanceId
-              }
-              // Update settings from selected instance
-              const selectedId = msg.selectedInstanceId || Object.keys(msg.instances)[0]
-              const selectedState = msg.instances[selectedId]
-              if (selectedState) {
-                applyInstanceSettings(selectedState)
-              }
-            } else if (msg.data) {
-              // Legacy single-instance mode
-              setSettings(msg.data)
             }
-            hasReceivedInitialStateRef.current = true // Now safe to send updates
+
+            // Update selected instance ID
+            if (msg.selectedInstanceId) {
+              setSelectedInstanceId(msg.selectedInstanceId)
+              selectedInstanceIdRef.current = msg.selectedInstanceId
+            }
+
+            // Update known servers (mDNS discovery)
+            if (msg.knownServers) {
+              setKnownServers(msg.knownServers)
+            }
+
+            hasReceivedInitialStateRef.current = true
           } else if (msg.type === 'instancesChanged') {
             // Handle instance list changes (e.g. instance added/removed)
             if (msg.instances) {
               setInstances(msg.instances)
             }
             if (msg.selectedInstanceId) {
-              const newId = msg.selectedInstanceId
-              const oldId = selectedInstanceIdRef.current
-
-              setSelectedInstanceId(newId)
-              selectedInstanceIdRef.current = newId
-
-              // If selection changed, load the new instance's settings from cache
-              if (newId !== oldId) {
-                const cachedState = instanceStatesRef.current[newId]
-                if (cachedState) {
-                  applyInstanceSettings(cachedState)
-                }
-                // Also request fresh state from server to ensure cache is up-to-date
-                if (wsRef.current?.readyState === WebSocket.OPEN) {
-                  wsRef.current.send(JSON.stringify({ type: 'getState' }))
-                }
-              }
+              setSelectedInstanceId(msg.selectedInstanceId)
+              selectedInstanceIdRef.current = msg.selectedInstanceId
             }
           } else if (msg.type === 'presets' && msg.list) {
             setPresets(msg.list)
@@ -291,7 +271,7 @@ export function useWebSocket(): WebSocketState & WebSocketActions {
       isConnectingRef.current = false
       scheduleReconnect()
     }
-  }, [clearTimers, scheduleReconnect, startHeartbeat, applyInstanceSettings])
+  }, [clearTimers, scheduleReconnect, startHeartbeat])
 
   useEffect(() => {
     mountedRef.current = true
@@ -321,34 +301,42 @@ export function useWebSocket(): WebSocketState & WebSocketActions {
     }
   }, [])
 
+  // Update color correction — modifies the selected instance's state directly
   const updateColorCorrection = useCallback(
     (params: Partial<ColorCorrectionSettings>) => {
       send({ type: 'update', section: 'colorCorrection', params })
-      // Optimistic update
-      setSettings((prev) => ({
-        ...prev,
-        colorCorrection: { ...prev.colorCorrection, ...params },
-      }))
+      setInstanceStates((prev) => {
+        const id = selectedInstanceIdRef.current
+        if (!id || !prev[id]) return prev
+        return {
+          ...prev,
+          [id]: {
+            ...prev[id],
+            colorCorrection: { ...prev[id].colorCorrection, ...params },
+            isPresetDirty: prev[id].presetName ? true : prev[id].isPresetDirty,
+          },
+        }
+      })
     },
     [send]
   )
 
+  // Update tonemap — modifies the selected instance's state directly
   const updateTonemap = useCallback(
     (params: Partial<TonemapSettings>) => {
       send({ type: 'update', section: 'tonemap', params })
-      // Optimistic update
-      setSettings((prev) => ({
-        ...prev,
-        tonemap: { ...prev.tonemap, ...params },
-      }))
-    },
-    [send]
-  )
-
-  const setInputFile = useCallback(
-    (path: string) => {
-      send({ type: 'setInputFile', path })
-      setSettings((prev) => ({ ...prev, inputFilePath: path }))
+      setInstanceStates((prev) => {
+        const id = selectedInstanceIdRef.current
+        if (!id || !prev[id]) return prev
+        return {
+          ...prev,
+          [id]: {
+            ...prev[id],
+            tonemap: { ...prev[id].tonemap, ...params },
+            isPresetDirty: prev[id].presetName ? true : prev[id].isPresetDirty,
+          },
+        }
+      })
     },
     [send]
   )
@@ -363,7 +351,6 @@ export function useWebSocket(): WebSocketState & WebSocketActions {
   const savePreset = useCallback(
     (name: string) => {
       send({ type: 'savePreset', name })
-      setSettings((prev) => ({ ...prev, presetName: name }))
     },
     [send]
   )
@@ -376,23 +363,15 @@ export function useWebSocket(): WebSocketState & WebSocketActions {
     send({ type: 'reset' })
   }, [send])
 
-  const browseFile = useCallback(() => {
-    send({ type: 'browseFile' })
-  }, [send])
-
+  // Select instance — just change the ID, state is already in instanceStates
   const selectInstance = useCallback((instanceId: string) => {
     setSelectedInstanceId(instanceId)
     selectedInstanceIdRef.current = instanceId
-    // Update settings from the cached instance state
-    const cachedState = instanceStatesRef.current[instanceId]
-    if (cachedState) {
-      applyInstanceSettings(cachedState)
-    }
     // Notify server of selection change
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'selectInstance', instanceId }))
     }
-  }, [applyInstanceSettings])
+  }, [])
 
   return {
     isConnected,
@@ -402,10 +381,9 @@ export function useWebSocket(): WebSocketState & WebSocketActions {
     selectedInstanceId,
     instanceStates,
     serverInfo,
+    knownServers,
     updateColorCorrection,
     updateTonemap,
-    setInputFile,
-    browseFile,
     loadPreset,
     savePreset,
     listPresets,

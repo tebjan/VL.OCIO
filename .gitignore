@@ -20,7 +20,6 @@ launchSettings.json
 
 # Node.js (web UI)
 node_modules/
-ui/dist/
 ui/.vite/
 
 # OCIO help assets (large files)
@@ -40,6 +39,4 @@ Desktop.ini
 nul
 
 # Color grading runtime files
-presets/_lastsession.json
-presets/instances/
-ui/dist/discovery.json
+ocio_presets/

@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Stride.Graphics;
 
 namespace VL.OCIO;
 
@@ -18,7 +19,8 @@ public class TonemapSettings
 
     /// <summary>
     /// Split settings into individual out parameters matching shader input order.
-    /// Use directly with vvvv nodes for HDRTonemap_TextureFX.
+    /// Outputs a Stride PixelFormat for the render target (default: R8G8B8A8_UNorm_SRgb).
+    /// Wire a non-None PixelFormat into renderFormatOverride to use a custom format instead.
     /// </summary>
     public void Split(
         out HDRColorSpace inputSpace,
@@ -27,7 +29,9 @@ public class TonemapSettings
         out float paperWhite,
         out float peakBrightness,
         out float exposure,
-        out float whitePoint)
+        out float whitePoint,
+        out PixelFormat renderFormat,
+        PixelFormat renderFormatOverride = PixelFormat.None)
     {
         inputSpace = InputSpace;
         outputSpace = OutputSpace;
@@ -36,6 +40,9 @@ public class TonemapSettings
         peakBrightness = PeakBrightness;
         exposure = Exposure;
         whitePoint = WhitePoint;
+        renderFormat = renderFormatOverride != PixelFormat.None
+            ? renderFormatOverride
+            : PixelFormat.R8G8B8A8_UNorm_SRgb;
     }
 
     /// <summary>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useWebSocket } from './hooks/useWebSocket'
+import { useWebSocket, URL_PATH } from './hooks/useWebSocket'
 import { LiftGammaGain } from './components/LiftGammaGain'
 import { Slider } from './components/Slider'
 import { Select } from './components/Select'
@@ -10,9 +10,11 @@ import { cn } from './lib/utils'
 import {
   COLOR_SPACE_LABELS,
   DISPLAY_FORMAT_LABELS,
+  GRADING_SPACE_LABELS,
   TONEMAP_LABELS,
   type ColorSpace,
   type DisplayFormat,
+  type GradingSpace,
   type TonemapOperator,
   type Vector3,
 } from './types/settings'
@@ -24,6 +26,11 @@ const COLOR_SPACE_OPTIONS = Object.entries(COLOR_SPACE_LABELS).map(([value, labe
 
 const DISPLAY_FORMAT_OPTIONS = Object.entries(DISPLAY_FORMAT_LABELS).map(([value, label]) => ({
   value: value as DisplayFormat,
+  label,
+}))
+
+const GRADING_SPACE_OPTIONS = Object.entries(GRADING_SPACE_LABELS).map(([value, label]) => ({
+  value: value as GradingSpace,
   label,
 }))
 
@@ -40,10 +47,9 @@ function App() {
     instances,
     selectedInstanceId,
     serverInfo,
+    knownServers,
     updateColorCorrection,
     updateTonemap,
-    setInputFile,
-    browseFile,
     loadPreset,
     savePreset,
     reset,
@@ -52,11 +58,6 @@ function App() {
 
   const cc = settings.colorCorrection
   const tm = settings.tonemap
-
-  // File browser handler - calls server to open native Windows dialog
-  const handleBrowseClick = useCallback(() => {
-    browseFile()
-  }, [browseFile])
 
   // Color correction handlers
   const handleLiftChange = useCallback(
@@ -131,18 +132,30 @@ function App() {
     [updateColorCorrection, updateTonemap]
   )
 
-  // Build network URL for display
-  const networkUrl = serverInfo
-    ? `http://${serverInfo.hostname}:${serverInfo.port}/`
-    : null
+  // Build display URL: prefer mDNS, fall back to ip:port (for network access)
+  const displayUrl = (() => {
+    if (!serverInfo) return null
+    if (serverInfo.mdnsUrl) return serverInfo.mdnsUrl
+    // Use IP for network URL (hostname may not resolve on other machines)
+    const host = serverInfo.ip && serverInfo.ip !== '127.0.0.1'
+      ? serverInfo.ip
+      : serverInfo.hostname
+    // Suppress :80 since it's the HTTP default
+    const portSuffix = serverInfo.port === 80 ? '' : `:${serverInfo.port}`
+    const path = serverInfo.path || URL_PATH
+    return `http://${host}${portSuffix}/${path}/`
+  })()
+
+  const hasSidebar = instances.length > 1
+  const hasNetworkPeers = knownServers.length > 1
 
   return (
-    <div className="min-h-screen bg-surface-950 p-4 relative">
+    <div className="min-h-screen bg-surface-950">
       {/* Disconnection overlay */}
       {!isConnected && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-surface-950/80 backdrop-blur-sm">
           <div className="bg-surface-900 rounded-xl p-8 max-w-sm mx-4 text-center border border-surface-700">
-            <div className="w-10 h-10 mx-auto mb-4 rounded-full border-2 border-surface-500 border-t-surface-200 animate-spin" />
+            <div className="w-10 h-10 mx-auto mb-4 rounded-full border-2 border-surface-500 border-t-surface-200 animate-spin" style={{ animationDuration: '2.5s' }} />
             <h2 className="text-lg font-semibold text-surface-100 mb-2">
               Connecting to server...
             </h2>
@@ -153,90 +166,124 @@ function App() {
         </div>
       )}
 
-      <div className="max-w-2xl mx-auto">
-        {/* Header Row - Title, Status, Preset */}
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-3">
-            <h1 className="text-lg font-semibold text-surface-100">
-              HDR Color Grading
-            </h1>
-            <div
-              className={cn(
-                'w-2 h-2 rounded-full',
-                isConnected ? 'bg-green-500' : 'bg-red-500'
-              )}
-              title={isConnected ? 'Connected' : 'Disconnected'}
-            />
-            {/* Show network URL so users on other machines know where to connect */}
-            {isConnected && networkUrl && (
-              <span className="text-xs text-surface-500" title="Access from any device on the network">
-                {networkUrl}
-              </span>
+      <div className="max-w-2xl mx-auto p-4 relative">
+        {/* Left sidebar — instances + network peers, anchored to left edge of center block */}
+        {(hasSidebar || hasNetworkPeers) && (
+          <div className="absolute right-full top-0 w-52 h-screen overflow-y-auto mr-2">
+            {hasSidebar && (
+              <InstanceSelector
+                instances={instances}
+                selectedInstanceId={selectedInstanceId}
+                onSelectInstance={selectInstance}
+                serverInfo={serverInfo}
+              />
+            )}
+            {/* Network peers discovered via mDNS */}
+            {hasNetworkPeers && (
+              <div className="px-4 pt-4">
+                <h2 className="text-[10px] font-semibold tracking-wider uppercase text-surface-500 mb-2">
+                  Network
+                </h2>
+                <div className="space-y-1">
+                  {knownServers.map((server) => {
+                    const isSelf = server.ip === serverInfo?.ip && server.path === serverInfo?.path
+                    const portSuffix = server.port === 80 ? '' : `:${server.port}`
+                    const serverPath = server.path || URL_PATH
+                    const serverUrl = `http://${server.ip}${portSuffix}/${serverPath}/`
+                    return (
+                      <div
+                        key={`${server.ip}:${server.port}`}
+                        className={cn(
+                          'px-3 py-2 rounded-lg border text-xs',
+                          isSelf
+                            ? 'bg-surface-800 border-surface-600 text-surface-200'
+                            : 'bg-surface-900/50 border-surface-800/50 text-surface-400'
+                        )}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span className={cn(
+                            'w-1.5 h-1.5 rounded-full flex-shrink-0',
+                            server.isLeader ? 'bg-green-500' : 'bg-surface-500'
+                          )} />
+                          <span className="font-medium truncate">
+                            {server.appName || server.hostname}
+                          </span>
+                          {isSelf && (
+                            <span className="text-[9px] text-surface-500">(you)</span>
+                          )}
+                        </div>
+                        {server.instanceCount > 0 && (
+                          <div className="text-[10px] text-surface-500 ml-3 mt-0.5">
+                            {server.instanceCount} instance{server.instanceCount !== 1 ? 's' : ''}
+                          </div>
+                        )}
+                        {!isSelf && (
+                          <a
+                            href={serverUrl}
+                            className="text-[10px] text-surface-500 hover:text-surface-300 ml-3 mt-0.5 block transition-colors"
+                          >
+                            Open →
+                          </a>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
             )}
           </div>
+        )}
+        {/* Right sidebar — snapshots/presets */}
+        <div className="absolute left-full top-0 w-48 h-screen overflow-y-auto ml-2">
           <PresetManager
-            currentPreset={settings.presetName}
+            activePresetName={settings.presetName}
+            isPresetDirty={settings.isPresetDirty}
             presets={presets}
             onLoad={loadPreset}
             onSave={savePreset}
             onReset={reset}
-            compact
           />
         </div>
-        {/* Instance tabs - own row for breathing room */}
-        <div className="mb-3">
-          <InstanceSelector
-            instances={instances}
-            selectedInstanceId={selectedInstanceId}
-            onSelectInstance={selectInstance}
+        {/* Header Row - Title, Status */}
+        <div className="flex items-center gap-3 mb-2">
+          <h1 className="text-lg font-semibold text-surface-100">
+            HDR Color Grading
+          </h1>
+          <div
+            className={cn(
+              'w-2 h-2 rounded-full',
+              isConnected ? 'bg-green-500' : 'bg-red-500'
+            )}
+            title={isConnected ? 'Connected' : 'Disconnected'}
           />
-        </div>
-
-        {/* ========== INPUT ========== */}
-        <div className="bg-surface-900 rounded-lg p-4 mb-4">
-          <Section title="Input">
-            <div className="space-y-3">
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={settings.inputFilePath}
-                  onChange={(e) => setInputFile(e.target.value)}
-                  placeholder="C:\path\to\texture.dds"
-                  className={cn(
-                    'flex-1 px-3 py-1.5 text-sm',
-                    'bg-surface-800 border border-surface-700 rounded',
-                    'text-surface-200 placeholder-surface-500',
-                    'focus:outline-none focus:border-surface-500'
-                  )}
-                />
-                <button
-                  onClick={handleBrowseClick}
-                  className={cn(
-                    'px-3 py-1.5 text-sm',
-                    'bg-surface-700 hover:bg-surface-600 rounded',
-                    'text-surface-200 transition-colors'
-                  )}
-                  title="Browse for file"
-                >
-                  Browse
-                </button>
-              </div>
-              <Select
-                label="Color Space"
-                value={cc.inputSpace}
-                options={COLOR_SPACE_OPTIONS}
-                onChange={(v) => updateColorCorrection({ inputSpace: v })}
-              />
-            </div>
-          </Section>
+          {/* Show network URL so users on other machines know where to connect */}
+          {isConnected && displayUrl && serverInfo?.networkEnabled && (
+            <span className="text-xs text-surface-500" title="Access from any device on the network">
+              {displayUrl}
+            </span>
+          )}
         </div>
 
         {/* Main Content */}
         <div className="space-y-4">
-
           {/* ========== COLOR GRADING ========== */}
           <div className="bg-surface-900 rounded-lg p-4">
             <Section title="Color Grading">
+              {/* Input Color Space & Grading Space */}
+              <div className="mb-4 space-y-3">
+                <Select
+                  label="Input Space"
+                  value={cc.inputSpace}
+                  options={COLOR_SPACE_OPTIONS}
+                  onChange={(v) => updateColorCorrection({ inputSpace: v })}
+                />
+                <Select
+                  label="Grading Space"
+                  value={cc.gradingSpace}
+                  options={GRADING_SPACE_OPTIONS}
+                  onChange={(v) => updateColorCorrection({ gradingSpace: v })}
+                />
+              </div>
               {/* Color Wheels */}
               <div className="mb-4">
                 <LiftGammaGain
@@ -425,7 +472,6 @@ function App() {
             </Section>
           </div>
         </div>
-
       </div>
     </div>
   )

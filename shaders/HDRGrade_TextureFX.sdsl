@@ -72,6 +72,16 @@ shader HDRGrade_TextureFX : FilterBase, ColorSpaceConversion
     float ShadowKnee = 0.1;
 
     // ========================================================================
+    // TONEMAP COMPOSITION (OPTIONAL)
+    // ========================================================================
+
+    // Enable tonemap composition (static for compiler optimization)
+    bool EnableTonemap = false;
+
+    // Tonemap shader composition input (e.g., HDRTonemap_ShaderFX)
+    compose ComputeColor TonemapInput;
+
+    // ========================================================================
     // SHARED UTILITIES
     // ========================================================================
 
@@ -248,6 +258,13 @@ shader HDRGrade_TextureFX : FilterBase, ColorSpaceConversion
         // Step 3: Encode to output space
         float3 result = EncodeOutput(linearAP1);
 
-        return float4(result, tex0col.a);
+        // Step 4: Apply tonemap if enabled (optional composition)
+        float4 finalColor = float4(result, tex0col.a);
+        if (EnableTonemap)
+        {
+            finalColor = TonemapInput.Compute();
+        }
+
+        return finalColor;
     }
 };

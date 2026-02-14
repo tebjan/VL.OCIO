@@ -116,4 +116,52 @@ public class ProjectSettings
         var json = ToJson();
         return FromJson(json) ?? new ProjectSettings();
     }
+
+    /// <summary>
+    /// Deep clone ColorCorrectionSettings to prevent shared references between instances.
+    /// CRITICAL for multi-instance isolation!
+    /// </summary>
+    public static ColorCorrectionSettings CloneColorCorrection(ColorCorrectionSettings source)
+    {
+        return new ColorCorrectionSettings
+        {
+            Exposure = source.Exposure,
+            Contrast = source.Contrast,
+            Saturation = source.Saturation,
+            Temperature = source.Temperature,
+            Tint = source.Tint,
+            Lift = new Vector3Json(source.Lift.X, source.Lift.Y, source.Lift.Z),
+            Gamma = new Vector3Json(source.Gamma.X, source.Gamma.Y, source.Gamma.Z),
+            Gain = new Vector3Json(source.Gain.X, source.Gain.Y, source.Gain.Z),
+            Offset = new Vector3Json(source.Offset.X, source.Offset.Y, source.Offset.Z),
+            ShadowColor = new Vector3Json(source.ShadowColor.X, source.ShadowColor.Y, source.ShadowColor.Z),
+            MidtoneColor = new Vector3Json(source.MidtoneColor.X, source.MidtoneColor.Y, source.MidtoneColor.Z),
+            HighlightColor = new Vector3Json(source.HighlightColor.X, source.HighlightColor.Y, source.HighlightColor.Z),
+            HighlightSoftClip = source.HighlightSoftClip,
+            ShadowSoftClip = source.ShadowSoftClip,
+            HighlightKnee = source.HighlightKnee,
+            ShadowKnee = source.ShadowKnee,
+            InputSpace = source.InputSpace,
+            GradingSpace = source.GradingSpace,
+            OutputSpace = source.OutputSpace
+        };
+    }
+
+    /// <summary>
+    /// Deep clone TonemapSettings to prevent shared references between instances.
+    /// CRITICAL for multi-instance isolation!
+    /// </summary>
+    public static TonemapSettings CloneTonemap(TonemapSettings source)
+    {
+        return new TonemapSettings
+        {
+            InputSpace = source.InputSpace,
+            OutputSpace = source.OutputSpace,
+            Tonemap = source.Tonemap,
+            Exposure = source.Exposure,
+            WhitePoint = source.WhitePoint,
+            PaperWhite = source.PaperWhite,
+            PeakBrightness = source.PeakBrightness
+        };
+    }
 }

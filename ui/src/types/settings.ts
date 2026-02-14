@@ -41,6 +41,7 @@ export interface ProjectSettings {
   colorCorrection: ColorCorrectionSettings
   tonemap: TonemapSettings
   presetName: string
+  isPresetDirty: boolean
 }
 
 // Multi-instance support types
@@ -55,13 +56,28 @@ export interface InstanceState {
   tonemap: TonemapSettings
   inputFilePath: string
   presetName: string
+  isPresetDirty: boolean
 }
 
 export interface ServerInfo {
   hostname: string
   ip: string
   port: number
+  path: string
   networkEnabled: boolean
+  mdnsUrl?: string
+  isHub?: boolean
+  appName?: string
+}
+
+export interface DiscoveredServer {
+  hostname: string
+  ip: string
+  port: number
+  isLeader: boolean
+  instanceCount: number
+  path?: string
+  appName?: string
 }
 
 // Input/working color spaces (for textures and grading)
@@ -83,7 +99,7 @@ export type DisplayFormat = 'sRgb' | 'linear_Rec709' | 'pQ_Rec2020'
 
 export type GradingSpace = 'log' | 'linear'
 
-export type TonemapOperator = 'none' | 'aces' | 'reinhard' | 'reinhardExtended'
+export type TonemapOperator = 'none' | 'aces' | 'agX' | 'granTurismo' | 'uncharted2' | 'khronosPBRNeutral' | 'lottes' | 'reinhard' | 'reinhardExtended' | 'hejlBurgess'
 
 export const COLOR_SPACE_LABELS: Record<ColorSpace, string> = {
   linear_Rec709: 'Linear Rec.709',
@@ -111,8 +127,14 @@ export const GRADING_SPACE_LABELS: Record<GradingSpace, string> = {
 export const TONEMAP_LABELS: Record<TonemapOperator, string> = {
   none: 'None',
   aces: 'ACES',
+  agX: 'AgX',
+  granTurismo: 'Gran Turismo',
+  uncharted2: 'Uncharted 2',
+  khronosPBRNeutral: 'Khronos PBR Neutral',
+  lottes: 'Lottes',
   reinhard: 'Reinhard',
   reinhardExtended: 'Reinhard Extended',
+  hejlBurgess: 'Hejl-Burgess',
 }
 
 export function createDefaultColorCorrection(): ColorCorrectionSettings {
@@ -156,6 +178,7 @@ export function createDefaultProject(): ProjectSettings {
     inputFilePath: '',
     colorCorrection: createDefaultColorCorrection(),
     tonemap: createDefaultTonemap(),
-    presetName: 'Default',
+    presetName: '',
+    isPresetDirty: false,
   }
 }

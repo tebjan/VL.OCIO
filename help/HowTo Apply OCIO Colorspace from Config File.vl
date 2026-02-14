@@ -89,7 +89,7 @@
               <p:stringtype p:Assembly="VL.Core" p:Type="VL.Core.StringType">Comment</p:stringtype>
             </p:ValueBoxSettings>
           </Pad>
-          <Node Bounds="-138,150,425,19" Id="Kk6NkdFd1ySLYqwrevISrD">
+          <Node Bounds="-138,150,465,19" Id="Kk6NkdFd1ySLYqwrevISrD">
             <p:NodeReference LastCategoryFullName="Stride.Textures" LastDependency="VL.OCIO.vl">
               <Choice Kind="NodeFlag" Name="Node" Fixed="true" />
               <Choice Kind="ProcessNode" Name="HDRGrade" />
@@ -115,6 +115,8 @@
             <Pin Id="PULZ6n1i2QpNf16BQOU2iC" Name="Shadow Soft Clip" Kind="InputPin" />
             <Pin Id="LJbYRWFswpwQGvTQc9tm07" Name="Highlight Knee" Kind="InputPin" />
             <Pin Id="TGG3a1fGVkcO2WYdt0Ngg0" Name="Shadow Knee" Kind="InputPin" />
+            <Pin Id="LaWjISXqSCcOQDpdLeiK4c" Name="Enable Tonemap" Kind="InputPin" />
+            <Pin Id="HHmCgC4pDBBNhxdcovC1NQ" Name="Tonemap Input" Kind="InputPin" />
             <Pin Id="OzTfxX5SWQrPTuIGf6UpAG" Name="Control" Kind="InputPin" />
             <Pin Id="RExbntBr8czOUaqISlNuXE" Name="Output Texture" Kind="InputPin" IsHidden="true" />
             <Pin Id="JP2QjNqo5DsP8pdsMfHNN7" Name="Output Size" Kind="InputPin" IsHidden="true" />
@@ -171,7 +173,7 @@
               <p:buttonmode p:Assembly="VL.UI.Forms" p:Type="VL.HDE.PatchEditor.Editors.ButtonModeEnum">Toggle</p:buttonmode>
             </p:ValueBoxSettings>
           </Pad>
-          <Pad Id="Itc7SgxEyrlN3aZEGtC4mo" Comment="Input Space" Bounds="1542,40,299,15" ShowValueBox="true" isIOBox="true" Value="ACES - ACEScg">
+          <Pad Id="Itc7SgxEyrlN3aZEGtC4mo" Comment="Input Space" Bounds="1542,40,299,15" ShowValueBox="true" isIOBox="true" Value="ST2084-P3-D65 - Display">
             <p:TypeAnnotation LastCategoryFullName="VL.OCIO" LastDependency="VL.OCIO.vl">
               <Choice Kind="TypeFlag" Name="OCIOColorSpaceEnum" />
             </p:TypeAnnotation>
@@ -210,7 +212,7 @@
               <Choice Kind="NodeFlag" Name="Node" Fixed="true" />
               <Choice Kind="ProcessAppFlag" Name="SceneWindow" />
             </p:NodeReference>
-            <Pin Id="MOFUjusPzdvMqjV94Hye9o" Name="Bounds" Kind="InputPin" DefaultValue="2898.6667, 64, 1674, 1076.6666" IsHidden="true" />
+            <Pin Id="MOFUjusPzdvMqjV94Hye9o" Name="Bounds" Kind="InputPin" DefaultValue="3090.6667, 39.333332, 1674, 1076.6666" IsHidden="true" />
             <Pin Id="TtE9GUMZwlcOTGXtSFvtbD" Name="Bound to Document" Kind="InputPin" IsHidden="true" />
             <Pin Id="BskAXuN1Ps6PYNhHtU5BM8" Name="Dialog If Document Changed" Kind="InputPin" IsHidden="true" />
             <Pin Id="Me1yWqhSBCOPHxduMxUc3u" Name="Save Bounds" Kind="InputPin" IsHidden="true" />
@@ -437,12 +439,12 @@
               <Choice Kind="TypeFlag" Name="GradingSpace" />
             </p:TypeAnnotation>
           </Pad>
-          <Pad Id="TPQVTfg60gsPt0CRdkYZbf" Comment="Output Space" Bounds="-214,61,76,15" ShowValueBox="true" isIOBox="true" Value="ACEScg">
+          <Pad Id="TPQVTfg60gsPt0CRdkYZbf" Comment="Output Space" Bounds="-214,61,102,15" ShowValueBox="true" isIOBox="true" Value="ACEScg">
             <p:TypeAnnotation LastCategoryFullName="VL.OCIO" LastDependency="VL.OCIO.vl">
               <Choice Kind="TypeFlag" Name="IOColorSpace" />
             </p:TypeAnnotation>
           </Pad>
-          <Pad Id="GKOeAFVS2y7Okz0MRlf9Fp" Comment="Input Space" Bounds="-248,-39,76,15" ShowValueBox="true" isIOBox="true" Value="ACEScg">
+          <Pad Id="GKOeAFVS2y7Okz0MRlf9Fp" Comment="Input Space" Bounds="-248,-39,102,15" ShowValueBox="true" isIOBox="true" Value="ACEScg">
             <p:TypeAnnotation LastCategoryFullName="VL.OCIO" LastDependency="VL.OCIO.vl">
               <Choice Kind="TypeFlag" Name="IOColorSpace" />
             </p:TypeAnnotation>
@@ -456,7 +458,7 @@
               <p:buttonmode p:Assembly="VL.UI.Forms" p:Type="VL.HDE.PatchEditor.Editors.ButtonModeEnum">Toggle</p:buttonmode>
             </p:ValueBoxSettings>
           </Pad>
-          <Node Bounds="798,400,75,19" Id="JSb18UdKFsILuJjoZmZKGc">
+          <Node Bounds="798,530,75,19" Id="JSb18UdKFsILuJjoZmZKGc">
             <p:NodeReference LastCategoryFullName="Stride.Textures.Utils" LastDependency="VL.Stride.vl">
               <Choice Kind="NodeFlag" Name="Node" Fixed="true" />
               <Choice Kind="ProcessNode" Name="PassThrough" />
@@ -528,7 +530,7 @@
               <Choice Kind="TypeFlag" Name="CommonSpace" />
             </p:TypeAnnotation>
           </Pad>
-          <Pad Id="PJnJhqc7sNMPi8km9NZc0M" Comment="Transformation" Bounds="524,841,158,61" ShowValueBox="true" isIOBox="true" Value="1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, -0.48, 0, 1">
+          <Pad Id="PJnJhqc7sNMPi8km9NZc0M" Comment="Transformation" Bounds="367,860,158,61" ShowValueBox="true" isIOBox="true" Value="1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0.73, 0, 1">
             <p:TypeAnnotation LastCategoryFullName="3D" LastDependency="VL.CoreLib.vl">
               <Choice Kind="TypeFlag" Name="Matrix" />
             </p:TypeAnnotation>
@@ -608,7 +610,7 @@
             <Pin Id="HlcJni1clNhPWfSVkrO7eF" Name="Name" Kind="OutputPin" />
             <Pin Id="CbrdXZSAVLEOaU8u41NCp8" Name="Error" Kind="OutputPin" />
           </Node>
-          <Pad Id="TAK5zdTXvzZPZTUCIegv9K" Comment="Config Path" Bounds="451,400,35,15" ShowValueBox="true" isIOBox="true">
+          <Pad Id="TAK5zdTXvzZPZTUCIegv9K" Comment="Config Path" Bounds="451,400,281,15" ShowValueBox="true" isIOBox="true">
             <p:TypeAnnotation LastCategoryFullName="Primitive" LastDependency="VL.CoreLib.vl">
               <Choice Kind="TypeFlag" Name="String" />
             </p:TypeAnnotation>
@@ -843,10 +845,86 @@
               <Choice Kind="TypeFlag" Name="OCIODisplayViewEnum" />
             </p:TypeAnnotation>
           </Pad>
-          <Pad Id="EHa813x2xsfQI6oS8bMPQa" Comment="" Bounds="2922,-260,95,15" ShowValueBox="true" isIOBox="true" Value="Multiply">
+          <Pad Id="EHa813x2xsfQI6oS8bMPQa" Comment="" Bounds="2922,-260,102,15" ShowValueBox="true" isIOBox="true" Value="Multiply">
             <p:TypeAnnotation LastCategoryFullName="Stride.Rendering.ShaderFX" LastDependency="VL.Stride.vl">
               <Choice Kind="TypeFlag" Name="BlendOperator" />
             </p:TypeAnnotation>
+          </Pad>
+          <Node Bounds="798,610,145,19" Id="HgbGh0cegZtPDBZIg7fKNP">
+            <p:NodeReference LastCategoryFullName="OCIO" LastDependency="VL.OCIO.vl">
+              <Choice Kind="NodeFlag" Name="Node" Fixed="true" />
+              <Choice Kind="ProcessAppFlag" Name="ColorGrading" />
+            </p:NodeReference>
+            <Pin Id="SdF2ZjZSoPfMkQxUbpXug6" Name="Node Context" Kind="InputPin" IsHidden="true" />
+            <Pin Id="DMZu6OlKvodPG9oO4dT0Xk" Name="Settings" Kind="InputPin" DefaultValue="{&#xD;&#xA;  &quot;435B3251&quot;: {&#xD;&#xA;    &quot;inputFilePath&quot;: &quot;&quot;,&#xD;&#xA;    &quot;colorCorrection&quot;: {&#xD;&#xA;      &quot;exposure&quot;: 0,&#xD;&#xA;      &quot;contrast&quot;: 1,&#xD;&#xA;      &quot;saturation&quot;: 1,&#xD;&#xA;      &quot;temperature&quot;: 0,&#xD;&#xA;      &quot;tint&quot;: 0,&#xD;&#xA;      &quot;lift&quot;: {&#xD;&#xA;        &quot;x&quot;: 0.028358119,&#xD;&#xA;        &quot;y&quot;: 0.15907525,&#xD;&#xA;        &quot;z&quot;: -0.18739998&#xD;&#xA;      },&#xD;&#xA;      &quot;gamma&quot;: {&#xD;&#xA;        &quot;x&quot;: 1.0213931,&#xD;&#xA;        &quot;y&quot;: 1.0263731,&#xD;&#xA;        &quot;z&quot;: 0.95224905&#xD;&#xA;      },&#xD;&#xA;      &quot;gain&quot;: {&#xD;&#xA;        &quot;x&quot;: 1.0184078,&#xD;&#xA;        &quot;y&quot;: 1.034329,&#xD;&#xA;        &quot;z&quot;: 0.9472774&#xD;&#xA;      },&#xD;&#xA;      &quot;offset&quot;: {&#xD;&#xA;        &quot;x&quot;: 0,&#xD;&#xA;        &quot;y&quot;: 0,&#xD;&#xA;        &quot;z&quot;: 0&#xD;&#xA;      },&#xD;&#xA;      &quot;shadowColor&quot;: {&#xD;&#xA;        &quot;x&quot;: 0,&#xD;&#xA;        &quot;y&quot;: 0,&#xD;&#xA;        &quot;z&quot;: 0&#xD;&#xA;      },&#xD;&#xA;      &quot;midtoneColor&quot;: {&#xD;&#xA;        &quot;x&quot;: 0,&#xD;&#xA;        &quot;y&quot;: 0,&#xD;&#xA;        &quot;z&quot;: 0&#xD;&#xA;      },&#xD;&#xA;      &quot;highlightColor&quot;: {&#xD;&#xA;        &quot;x&quot;: 0,&#xD;&#xA;        &quot;y&quot;: 0,&#xD;&#xA;        &quot;z&quot;: 0&#xD;&#xA;      },&#xD;&#xA;      &quot;highlightSoftClip&quot;: 0,&#xD;&#xA;      &quot;shadowSoftClip&quot;: 0,&#xD;&#xA;      &quot;highlightKnee&quot;: 1,&#xD;&#xA;      &quot;shadowKnee&quot;: 0.1,&#xD;&#xA;      &quot;inputSpace&quot;: &quot;linear_Rec709&quot;,&#xD;&#xA;      &quot;gradingSpace&quot;: &quot;log&quot;,&#xD;&#xA;      &quot;outputSpace&quot;: &quot;linear_Rec709&quot;&#xD;&#xA;    },&#xD;&#xA;    &quot;tonemap&quot;: {&#xD;&#xA;      &quot;inputSpace&quot;: &quot;linear_Rec709&quot;,&#xD;&#xA;      &quot;outputSpace&quot;: &quot;sRGB&quot;,&#xD;&#xA;      &quot;tonemap&quot;: &quot;aces&quot;,&#xD;&#xA;      &quot;exposure&quot;: 0,&#xD;&#xA;      &quot;whitePoint&quot;: 4,&#xD;&#xA;      &quot;paperWhite&quot;: 200,&#xD;&#xA;      &quot;peakBrightness&quot;: 1000&#xD;&#xA;    },&#xD;&#xA;    &quot;presetName&quot;: &quot;Default&quot;&#xD;&#xA;  }&#xD;&#xA;}" IsHidden="true" />
+            <Pin Id="RMIql0wYOdOMQjlcn4Y5EO" Name="Input" Kind="InputPin" />
+            <Pin Id="HVJ4YsRCJ0LNOzfUgFSL1N" Name="Control" Kind="InputPin" />
+            <Pin Id="Cqe2OIdpyCCLva8ecMoLEJ" Name="Enable Tonemap" Kind="InputPin" />
+            <Pin Id="FXgJrrCkDWEPZDc6yXEVYT" Name="Tonemap Input" Kind="InputPin" />
+            <Pin Id="IIhGqZqeNUpPJqbWFagH1l" Name="Custom Instance Id" Kind="InputPin" />
+            <Pin Id="QKmtA5Sl8tULi9uWVNoC85" Name="Publish To Network" Kind="InputPin" />
+            <Pin Id="BSMxy6l7mnHNXoYjlCTZbt" Name="Auto Open Browser" Kind="InputPin" />
+            <Pin Id="OqqFKOgJ6elMul8R5yOF0R" Name="Output Format" Kind="InputPin" IsHidden="true" />
+            <Pin Id="KUSz92yoLqJOBJdWWw6lfx" Name="Apply" Kind="InputPin" />
+            <Pin Id="IL1eJZwlfswQS6RA9tyCRA" Name="Output" Kind="OutputPin" />
+            <Pin Id="BAhryU0vNLmOCQLJvlSHRL" Name="Effective Instance Id" Kind="OutputPin" />
+            <Pin Id="GT0sQrsOKdrMO2erYcxn3H" Name="Ui Url" Kind="OutputPin" />
+            <Pin Id="SGOiDfxZ7ZeQKL3nQl7Cu1" Name="Client Count" Kind="OutputPin" />
+          </Node>
+          <Pad Id="BccjN2gIOJfMoYSTcoUxTL" Comment="" Bounds="800,670,190,132" ShowValueBox="true" isIOBox="true" />
+          <Pad Id="VWCbxcAxCCTPoGjWPyEK3P" Comment="Custom Instance Id" Bounds="513,521,35,15" ShowValueBox="true" isIOBox="true" Value="Test">
+            <p:TypeAnnotation LastCategoryFullName="Primitive" LastDependency="VL.CoreLib.vl">
+              <Choice Kind="TypeFlag" Name="String" />
+            </p:TypeAnnotation>
+          </Pad>
+          <Node Bounds="459,599,169,80" Id="Dy4yHot6bpvOyV0g1pBCuN">
+            <p:NodeReference LastCategoryFullName="Primitive" LastDependency="Builtin">
+              <Choice Kind="StatefulRegion" Name="Region (Stateful)" Fixed="true" />
+              <CategoryReference Kind="Category" Name="Primitive" />
+              <Choice Kind="ApplicationStatefulRegion" Name="Repeat" />
+            </p:NodeReference>
+            <Pin Id="HugM1FmrMixMQ49FwUrUNu" Name="Iteration Count" Kind="InputPin" />
+            <Pin Id="ICqnIhAjSHDOZFDpUOf6BB" Name="Break" Kind="OutputPin" />
+            <Patch Id="A75X6iP0Rk5M2XNoTYHzgZ" ManuallySortedPins="true">
+              <Patch Id="Lmqcn7IoykqOD6xCh9kPJz" Name="Create" ManuallySortedPins="true" />
+              <Patch Id="OdEDYRLArWyNVx0KNEN4B0" Name="Update" ManuallySortedPins="true" />
+              <Patch Id="SZUoS9gFYVaPYzzdSa5YWH" Name="Dispose" ManuallySortedPins="true" />
+              <Node Bounds="471,631,145,19" Id="GTY46QdOMJJMHCcluYu1PT">
+                <p:NodeReference LastCategoryFullName="OCIO" LastDependency="VL.OCIO.vl">
+                  <Choice Kind="NodeFlag" Name="Node" Fixed="true" />
+                  <Choice Kind="ProcessAppFlag" Name="ColorGrading" />
+                </p:NodeReference>
+                <Pin Id="RDhwlpJaYITPcF8XvWa79x" Name="Node Context" Kind="InputPin" IsHidden="true" />
+                <Pin Id="PT8UEQytUqTND51nMYRd6t" Name="Settings" Kind="InputPin" DefaultValue="{&#xD;&#xA;  &quot;65147883&quot;: {&#xD;&#xA;    &quot;inputFilePath&quot;: &quot;&quot;,&#xD;&#xA;    &quot;colorCorrection&quot;: {&#xD;&#xA;      &quot;exposure&quot;: 0,&#xD;&#xA;      &quot;contrast&quot;: 1,&#xD;&#xA;      &quot;saturation&quot;: 1,&#xD;&#xA;      &quot;temperature&quot;: 0,&#xD;&#xA;      &quot;tint&quot;: 0,&#xD;&#xA;      &quot;lift&quot;: {&#xD;&#xA;        &quot;x&quot;: -0.013850838,&#xD;&#xA;        &quot;y&quot;: -0.25266907,&#xD;&#xA;        &quot;z&quot;: 0.2664849&#xD;&#xA;      },&#xD;&#xA;      &quot;gamma&quot;: {&#xD;&#xA;        &quot;x&quot;: 1.0086043,&#xD;&#xA;        &quot;y&quot;: 0.90939975,&#xD;&#xA;        &quot;z&quot;: 1.0819912&#xD;&#xA;      },&#xD;&#xA;      &quot;gain&quot;: {&#xD;&#xA;        &quot;x&quot;: 1.0134026,&#xD;&#xA;        &quot;y&quot;: 0.90746254,&#xD;&#xA;        &quot;z&quot;: 1.0791328&#xD;&#xA;      },&#xD;&#xA;      &quot;offset&quot;: {&#xD;&#xA;        &quot;x&quot;: 0,&#xD;&#xA;        &quot;y&quot;: 0,&#xD;&#xA;        &quot;z&quot;: 0&#xD;&#xA;      },&#xD;&#xA;      &quot;shadowColor&quot;: {&#xD;&#xA;        &quot;x&quot;: 0,&#xD;&#xA;        &quot;y&quot;: 0,&#xD;&#xA;        &quot;z&quot;: 0&#xD;&#xA;      },&#xD;&#xA;      &quot;midtoneColor&quot;: {&#xD;&#xA;        &quot;x&quot;: 0,&#xD;&#xA;        &quot;y&quot;: 0,&#xD;&#xA;        &quot;z&quot;: 0&#xD;&#xA;      },&#xD;&#xA;      &quot;highlightColor&quot;: {&#xD;&#xA;        &quot;x&quot;: 0,&#xD;&#xA;        &quot;y&quot;: 0,&#xD;&#xA;        &quot;z&quot;: 0&#xD;&#xA;      },&#xD;&#xA;      &quot;highlightSoftClip&quot;: 0,&#xD;&#xA;      &quot;shadowSoftClip&quot;: 0,&#xD;&#xA;      &quot;highlightKnee&quot;: 1,&#xD;&#xA;      &quot;shadowKnee&quot;: 0.1,&#xD;&#xA;      &quot;inputSpace&quot;: &quot;linear_Rec709&quot;,&#xD;&#xA;      &quot;gradingSpace&quot;: &quot;log&quot;,&#xD;&#xA;      &quot;outputSpace&quot;: &quot;linear_Rec709&quot;&#xD;&#xA;    },&#xD;&#xA;    &quot;tonemap&quot;: {&#xD;&#xA;      &quot;inputSpace&quot;: &quot;linear_Rec709&quot;,&#xD;&#xA;      &quot;outputSpace&quot;: &quot;sRGB&quot;,&#xD;&#xA;      &quot;tonemap&quot;: &quot;aces&quot;,&#xD;&#xA;      &quot;exposure&quot;: 0,&#xD;&#xA;      &quot;whitePoint&quot;: 4,&#xD;&#xA;      &quot;paperWhite&quot;: 200,&#xD;&#xA;      &quot;peakBrightness&quot;: 1000&#xD;&#xA;    },&#xD;&#xA;    &quot;presetName&quot;: &quot;Default&quot;&#xD;&#xA;  },&#xD;&#xA;  &quot;641476F0&quot;: {&#xD;&#xA;    &quot;inputFilePath&quot;: &quot;&quot;,&#xD;&#xA;    &quot;colorCorrection&quot;: {&#xD;&#xA;      &quot;exposure&quot;: 0,&#xD;&#xA;      &quot;contrast&quot;: 1,&#xD;&#xA;      &quot;saturation&quot;: 1,&#xD;&#xA;      &quot;temperature&quot;: 0,&#xD;&#xA;      &quot;tint&quot;: 0,&#xD;&#xA;      &quot;lift&quot;: {&#xD;&#xA;        &quot;x&quot;: 0,&#xD;&#xA;        &quot;y&quot;: 0,&#xD;&#xA;        &quot;z&quot;: 0&#xD;&#xA;      },&#xD;&#xA;      &quot;gamma&quot;: {&#xD;&#xA;        &quot;x&quot;: 1,&#xD;&#xA;        &quot;y&quot;: 1,&#xD;&#xA;        &quot;z&quot;: 1&#xD;&#xA;      },&#xD;&#xA;      &quot;gain&quot;: {&#xD;&#xA;        &quot;x&quot;: 1,&#xD;&#xA;        &quot;y&quot;: 1,&#xD;&#xA;        &quot;z&quot;: 1&#xD;&#xA;      },&#xD;&#xA;      &quot;offset&quot;: {&#xD;&#xA;        &quot;x&quot;: 0,&#xD;&#xA;        &quot;y&quot;: 0,&#xD;&#xA;        &quot;z&quot;: 0&#xD;&#xA;      },&#xD;&#xA;      &quot;shadowColor&quot;: {&#xD;&#xA;        &quot;x&quot;: 0,&#xD;&#xA;        &quot;y&quot;: 0,&#xD;&#xA;        &quot;z&quot;: 0&#xD;&#xA;      },&#xD;&#xA;      &quot;midtoneColor&quot;: {&#xD;&#xA;        &quot;x&quot;: 0,&#xD;&#xA;        &quot;y&quot;: 0,&#xD;&#xA;        &quot;z&quot;: 0&#xD;&#xA;      },&#xD;&#xA;      &quot;highlightColor&quot;: {&#xD;&#xA;        &quot;x&quot;: 0,&#xD;&#xA;        &quot;y&quot;: 0,&#xD;&#xA;        &quot;z&quot;: 0&#xD;&#xA;      },&#xD;&#xA;      &quot;highlightSoftClip&quot;: 0,&#xD;&#xA;      &quot;shadowSoftClip&quot;: 0,&#xD;&#xA;      &quot;highlightKnee&quot;: 1,&#xD;&#xA;      &quot;shadowKnee&quot;: 0.1,&#xD;&#xA;      &quot;inputSpace&quot;: &quot;linear_Rec709&quot;,&#xD;&#xA;      &quot;gradingSpace&quot;: &quot;log&quot;,&#xD;&#xA;      &quot;outputSpace&quot;: &quot;linear_Rec709&quot;&#xD;&#xA;    },&#xD;&#xA;    &quot;tonemap&quot;: {&#xD;&#xA;      &quot;inputSpace&quot;: &quot;linear_Rec709&quot;,&#xD;&#xA;      &quot;outputSpace&quot;: &quot;sRGB&quot;,&#xD;&#xA;      &quot;tonemap&quot;: &quot;aces&quot;,&#xD;&#xA;      &quot;exposure&quot;: 0,&#xD;&#xA;      &quot;whitePoint&quot;: 4,&#xD;&#xA;      &quot;paperWhite&quot;: 200,&#xD;&#xA;      &quot;peakBrightness&quot;: 1000&#xD;&#xA;    },&#xD;&#xA;    &quot;presetName&quot;: &quot;Default&quot;&#xD;&#xA;  },&#xD;&#xA;  &quot;66147A16&quot;: {&#xD;&#xA;    &quot;inputFilePath&quot;: &quot;&quot;,&#xD;&#xA;    &quot;colorCorrection&quot;: {&#xD;&#xA;      &quot;exposure&quot;: 0,&#xD;&#xA;      &quot;contrast&quot;: 1,&#xD;&#xA;      &quot;saturation&quot;: 1,&#xD;&#xA;      &quot;temperature&quot;: 0,&#xD;&#xA;      &quot;tint&quot;: 0,&#xD;&#xA;      &quot;lift&quot;: {&#xD;&#xA;        &quot;x&quot;: 0.028358119,&#xD;&#xA;        &quot;y&quot;: 0.15907525,&#xD;&#xA;        &quot;z&quot;: -0.18739998&#xD;&#xA;      },&#xD;&#xA;      &quot;gamma&quot;: {&#xD;&#xA;        &quot;x&quot;: 1.0213931,&#xD;&#xA;        &quot;y&quot;: 1.0263731,&#xD;&#xA;        &quot;z&quot;: 0.95224905&#xD;&#xA;      },&#xD;&#xA;      &quot;gain&quot;: {&#xD;&#xA;        &quot;x&quot;: 1.0184078,&#xD;&#xA;        &quot;y&quot;: 1.034329,&#xD;&#xA;        &quot;z&quot;: 0.9472774&#xD;&#xA;      },&#xD;&#xA;      &quot;offset&quot;: {&#xD;&#xA;        &quot;x&quot;: 0,&#xD;&#xA;        &quot;y&quot;: 0,&#xD;&#xA;        &quot;z&quot;: 0&#xD;&#xA;      },&#xD;&#xA;      &quot;shadowColor&quot;: {&#xD;&#xA;        &quot;x&quot;: 0,&#xD;&#xA;        &quot;y&quot;: 0,&#xD;&#xA;        &quot;z&quot;: 0&#xD;&#xA;      },&#xD;&#xA;      &quot;midtoneColor&quot;: {&#xD;&#xA;        &quot;x&quot;: 0,&#xD;&#xA;        &quot;y&quot;: 0,&#xD;&#xA;        &quot;z&quot;: 0&#xD;&#xA;      },&#xD;&#xA;      &quot;highlightColor&quot;: {&#xD;&#xA;        &quot;x&quot;: 0,&#xD;&#xA;        &quot;y&quot;: 0,&#xD;&#xA;        &quot;z&quot;: 0&#xD;&#xA;      },&#xD;&#xA;      &quot;highlightSoftClip&quot;: 0,&#xD;&#xA;      &quot;shadowSoftClip&quot;: 0,&#xD;&#xA;      &quot;highlightKnee&quot;: 1,&#xD;&#xA;      &quot;shadowKnee&quot;: 0.1,&#xD;&#xA;      &quot;inputSpace&quot;: &quot;linear_Rec709&quot;,&#xD;&#xA;      &quot;gradingSpace&quot;: &quot;log&quot;,&#xD;&#xA;      &quot;outputSpace&quot;: &quot;linear_Rec709&quot;&#xD;&#xA;    },&#xD;&#xA;    &quot;tonemap&quot;: {&#xD;&#xA;      &quot;inputSpace&quot;: &quot;linear_Rec709&quot;,&#xD;&#xA;      &quot;outputSpace&quot;: &quot;sRGB&quot;,&#xD;&#xA;      &quot;tonemap&quot;: &quot;aces&quot;,&#xD;&#xA;      &quot;exposure&quot;: 0,&#xD;&#xA;      &quot;whitePoint&quot;: 4,&#xD;&#xA;      &quot;paperWhite&quot;: 200,&#xD;&#xA;      &quot;peakBrightness&quot;: 1000&#xD;&#xA;    },&#xD;&#xA;    &quot;presetName&quot;: &quot;Default&quot;&#xD;&#xA;  }&#xD;&#xA;}" IsHidden="true" />
+                <Pin Id="A2lCG2T9isJLRoKsSqQo7R" Name="Input" Kind="InputPin" />
+                <Pin Id="KNyF4Zz3SEoQPgbOjgk69Q" Name="Control" Kind="InputPin" />
+                <Pin Id="IPHFNagAuIjL1TLHXWNcPr" Name="Enable Tonemap" Kind="InputPin" />
+                <Pin Id="H8Pci6u52MuMnKookUL2zv" Name="Tonemap Input" Kind="InputPin" />
+                <Pin Id="EmZ9mJRDpscNuURVbRg2VO" Name="Custom Instance Id" Kind="InputPin" />
+                <Pin Id="PaJDiWuSBkCOAhcY8PmUNM" Name="Publish To Network" Kind="InputPin" />
+                <Pin Id="PoP2I8DeEvaMFuHEPTYleS" Name="Auto Open Browser" Kind="InputPin" />
+                <Pin Id="T4pwcxBow5PLkSI4NJYSuS" Name="Output Format" Kind="InputPin" IsHidden="true" />
+                <Pin Id="EkRvmWhLvOsOVhDqdEs0fk" Name="Apply" Kind="InputPin" />
+                <Pin Id="CvAPQBbOlEdL14ZaPbhlyS" Name="Output" Kind="OutputPin" />
+                <Pin Id="GF5ntzVycwbOBex4Jt07L8" Name="Effective Instance Id" Kind="OutputPin" />
+                <Pin Id="IkFWQrbaG4ZNGMQFgNtwKo" Name="Ui Url" Kind="OutputPin" />
+                <Pin Id="OZ1iW6yHR1ELqfDt26s44a" Name="Client Count" Kind="OutputPin" />
+              </Node>
+            </Patch>
+          </Node>
+          <Pad Id="JT9RqqxlFCLNwJ14vNJKFL" Comment="Iteration Count" Bounds="461,560,35,15" ShowValueBox="true" isIOBox="true" Value="3">
+            <p:TypeAnnotation LastCategoryFullName="Primitive" LastDependency="VL.CoreLib.vl">
+              <Choice Kind="TypeFlag" Name="Integer32" />
+            </p:TypeAnnotation>
+          </Pad>
+          <Pad Id="GiB0qpnQriXPCtvSwYEoCg" Comment="Ui Url" Bounds="1032,660,222,49" ShowValueBox="true" isIOBox="true" Value="http://127.0.0.1:9000/grade/manta/howto-apply-ocio-colorspace-from-config-file/" />
+          <Pad Id="EMu1ppV70WQORACY6gC9H7" Comment="Publish To Network" Bounds="900,550,35,35" ShowValueBox="true" isIOBox="true" Value="True">
+            <p:TypeAnnotation LastCategoryFullName="Primitive" LastDependency="VL.CoreLib.vl">
+              <Choice Kind="ImmutableTypeFlag" Name="Boolean" />
+            </p:TypeAnnotation>
+            <p:ValueBoxSettings>
+              <p:buttonmode p:Assembly="VL.UI.Forms" p:Type="VL.HDE.PatchEditor.Editors.ButtonModeEnum">Toggle</p:buttonmode>
+            </p:ValueBoxSettings>
           </Pad>
         </Canvas>
         <Patch Id="KquqYjbOowvQbZMkh0kq99" Name="Create" />
@@ -894,8 +972,6 @@
         <Link Id="JLpN3nwBAtJMDralWcHkOK" Ids="VV2paNBLU5KOTLUhbwHISn,LyqmH9Nkx8kOh9j9XYM8c8" />
         <Link Id="MpKUzHPxafUM7RqHqwHrDs" Ids="NGlQAyqJJthNIbHG27I67t,Pqg15dewQraPcX1Thoy489" />
         <Link Id="I93eO4PdAoRLd91VNwVugw" Ids="EjbPRpGMEnnOAQtbYzMfnQ,U5czxlVrtjAPAlkvdpOrIA" />
-        <Link Id="Lws1FVYUakuLLwbJno79AS" Ids="FIZlQUOCoP4QUoD5eSB69X,GqFTh6EUkXLOzpfWb4axr0" />
-        <Link Id="PLKIkgXJvWLOHOsOpOS4kZ" Ids="Q9MJ8CGSAAyL7YnaMgN1gF,M5FJDywS85VLAuvczZ1gEH" />
         <Link Id="PsNnyO6LLjUL9HxzTCQvBe" Ids="UxS62AavVmQP8nGbEjjr6C,HKNcIp23iyUQZSKghwsnEW" />
         <Link Id="VSegjrv5hFBN2pEmugpWrG" Ids="Rx6zh2aqB1iN7yGj6HmBAM,DrJ1qgsn0tPOrnDBPN1krP" />
         <Link Id="MdxZBGqMeW6LOMyqYVmgEQ" Ids="PJnJhqc7sNMPi8km9NZc0M,KhdZhrx0atiPfUCJSgSjiH" />
@@ -939,6 +1015,15 @@
         <Link Id="Vm22IIPVX4ZLjKE2PLzsZB" Ids="QK232B0h2BYOCqZsPJvAVC,AbU0vpGdXT4N8oS1Vx6YtW" />
         <Link Id="QXa63qXFMeFLlnemoATaat" Ids="FG16LUZ2SDqL7YnxRgUmFD,CHKDzwVaNNxLAJDmgrP2qW" />
         <Link Id="KLoMe6YOXntQbds0BeD9LR" Ids="EHa813x2xsfQI6oS8bMPQa,SxoMgdnaHM8MJXcqStU6l8" />
+        <Link Id="TkXupvmq0ITN07NP0TuQq0" Ids="KdDicVhNEI9QBos3fimCJz,RMIql0wYOdOMQjlcn4Y5EO" />
+        <Link Id="DPOqrLfNH60NHPPHPskUQh" Ids="IL1eJZwlfswQS6RA9tyCRA,BccjN2gIOJfMoYSTcoUxTL" />
+        <Link Id="O8EcQBBbT5TMIy654Vkh2y" Ids="IL1eJZwlfswQS6RA9tyCRA,U3Ydo1zEgsyOTNpMXlLh1N" />
+        <Link Id="PLWNPO3uuIgLndJlVwlPPD" Ids="UGpELZOABsiPzi96irFcGm,GqFTh6EUkXLOzpfWb4axr0" />
+        <Link Id="PbD81JrpEG2Pwv2ncLLybV" Ids="UGpELZOABsiPzi96irFcGm,M5FJDywS85VLAuvczZ1gEH" />
+        <Link Id="TuwuRNT4akfPWxwPZanMm3" Ids="VWCbxcAxCCTPoGjWPyEK3P,EmZ9mJRDpscNuURVbRg2VO" />
+        <Link Id="MbubEPrXjpzOGUFU2J9Rtc" Ids="JT9RqqxlFCLNwJ14vNJKFL,HugM1FmrMixMQ49FwUrUNu" />
+        <Link Id="Sz6AktGonRJLlWkxfYs6Cr" Ids="GT0sQrsOKdrMO2erYcxn3H,GiB0qpnQriXPCtvSwYEoCg" />
+        <Link Id="R8lQ8ZmnRtRO4kbSbtcyoX" Ids="EMu1ppV70WQORACY6gC9H7,QKmtA5Sl8tULi9uWVNoC85" />
       </Patch>
     </Node>
   </Patch>

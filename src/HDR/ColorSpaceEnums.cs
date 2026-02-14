@@ -40,18 +40,31 @@ public enum DisplayFormat
 }
 
 /// <summary>
-/// Tonemapping operator selection
+/// Tonemapping operator selection.
+/// All operators expect Linear Rec.709 input (pipeline converts automatically).
 /// </summary>
 public enum TonemapOperator
 {
     /// <summary>No tonemapping (passthrough)</summary>
     None = 0,
-    /// <summary>ACES RRT+ODT approximation</summary>
+    /// <summary>ACES - Stephen Hill RRT+ODT approximation (industry standard)</summary>
     ACES = 1,
-    /// <summary>Simple Reinhard</summary>
-    Reinhard = 2,
-    /// <summary>Extended Reinhard with white point</summary>
-    ReinhardExtended = 3
+    /// <summary>AgX - Troy Sobotka, exact analytical curve (Blender default)</summary>
+    AgX = 2,
+    /// <summary>Gran Turismo V1 / Uchimura (HDR-aware parametric curve)</summary>
+    GranTurismo = 3,
+    /// <summary>Uncharted 2 / Hable filmic curve (game industry)</summary>
+    Uncharted2 = 4,
+    /// <summary>Khronos PBR Neutral (e-commerce, product visualization)</summary>
+    KhronosPBRNeutral = 5,
+    /// <summary>Lottes - luma-based (Epic Games, The Witness)</summary>
+    Lottes = 6,
+    /// <summary>Reinhard simple</summary>
+    Reinhard = 7,
+    /// <summary>Reinhard Extended with white point</summary>
+    ReinhardExtended = 8,
+    /// <summary>Hejl-Burgess fast approximation</summary>
+    HejlBurgess = 9
 }
 
 /// <summary>

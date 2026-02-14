@@ -1,0 +1,74 @@
+// ============================================================================
+// HDRTonemap_ShaderFX.sdsl
+// HDR Tonemapping for vvvv ShaderFX Composition
+// ============================================================================
+//
+// ComputeColor version of HDRTonemap for use in shader composition.
+// Can be wired as input to other shaders (e.g., HDRGrade_TextureFX).
+//
+// This shader provides the same tonemap operators as HDRTonemap_TextureFX
+// but in ComputeColor form for modular composition.
+//
+// Operators:
+// - None (0) - Passthrough
+// - ACES (1) - Stephen Hill approximation with AP1 gamut mapping
+// - Reinhard (2) - Simple Reinhard
+// - Reinhard Extended (3) - Adjustable white point
+// - Uncharted 2 (4) - Filmic curve (John Hable)
+// - Khronos PBR Neutral (5) - E-commerce/product visualization
+// - Hejl-Burgess (6) - Fast approximation
+//
+// ============================================================================
+
+shader HDRTonemap_ShaderFX : ComputeColor, TonemapOperators
+{
+    // ========================================================================
+    // COMPOSITION INPUT
+    // ========================================================================
+
+    // Input color from previous shader in the chain
+    compose ComputeColor ColorIn;
+
+    // ========================================================================
+    // INPUT CONFIGURATION
+    // ========================================================================
+
+    // Input color space from the composition chain
+    // 0=Linear709, 1=Linear2020, 2=ACEScg, 3=ACEScc, 4=ACEScct, 5=sRGB, 6=PQ, 7=HLG, 8=scRGB
+    [EnumType("VL.OCIO.HDRColorSpace, VL.OCIO")]
+    int InputSpace = 0;
+
+    // ========================================================================
+    // TONEMAP CONFIGURATION
+    // ========================================================================
+
+    // Tonemapping operator (see TonemapOperator enum)
+    [EnumType("VL.OCIO.TonemapOperator, VL.OCIO")]
+    int Operator = 1;  // Default ACES
+
+    // ========================================================================
+    // TONEMAP PARAMETERS
+    // ========================================================================
+
+    // Pre-tonemap exposure adjustment (in stops)
+    float Exposure = 0.0;
+
+    // Shoulder strength for Reinhard Extended (affects highlight rolloff)
+    // Higher values = brighter white point before compression
+    float WhitePoint = 4.0;
+
+    // ========================================================================
+    // COMPUTE FUNCTION
+    // ========================================================================
+
+    override float4 Compute()
+    {
+        float4 color = ColorIn.Compute();
+
+        // Input-space-aware tonemap: converts to native space, applies exposure
+        // + tonemap, returns Linear Rec.709 (no redundant round-trips)
+        color.rgb = ApplyTonemap(color.rgb, InputSpace, Operator, Exposure, WhitePoint);
+
+        return color;
+    }
+};

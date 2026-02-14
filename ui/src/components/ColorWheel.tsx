@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Vector3 } from '../types/settings'
 import { cn, formatNumber } from '../lib/utils'
+import { wheelPosToChroma, chromaToWheelPos, decomposeRgb } from '../lib/colorWheelMath'
 
 interface ColorWheelProps {
   label: string
@@ -26,70 +27,45 @@ export function ColorWheel({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [isDragging, setIsDragging] = useState(false)
 
-  // Store the wheel position (normalized -1 to 1, clamped to unit circle)
-  // This is the SOURCE OF TRUTH for dot position - sensitivity only scales RGB output
+  // Wheel position (normalized -1 to 1, clamped to unit circle)
+  // SOURCE OF TRUTH for dot position during drag
   const [wheelPos, setWheelPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
   const prevSensitivityRef = useRef(sensitivity)
 
-  // Sensitivity scales the RGB output at wheel edge
   const wheelSensitivity = Math.max(sensitivity, 0.01)
 
-  // Convert wheel position to RGB offset
-  const positionToRgb = useCallback((px: number, py: number, sens: number): Vector3 => {
-    // Clamp to unit circle
-    let dist = Math.sqrt(px * px + py * py)
-    if (dist > 1) {
-      px /= dist
-      py /= dist
-      dist = 1
-    }
+  // Compose final RGB: defaultValue + chromatic (from wheel) + achromatic (from master slider)
+  const composeValue = useCallback(
+    (pos: { x: number; y: number }, sens: number, achromatic: number): Vector3 => {
+      const chroma = wheelPosToChroma(pos, sens)
+      return {
+        x: defaultValue.x + chroma.r + achromatic,
+        y: defaultValue.y + chroma.g + achromatic,
+        z: defaultValue.z + chroma.b + achromatic,
+      }
+    },
+    [defaultValue]
+  )
 
-    // Convert from canvas coordinates back to standard math angle
-    const angle = Math.atan2(-py, px)
-    // Scale by sensitivity (wheel edge = sens RGB offset)
-    const mag = dist * sens
-
-    // Project onto RGB axes: R at 0°, G at 120°, B at 240°
-    const r = mag * Math.cos(angle)
-    const g = mag * Math.cos(angle - 2.094)  // angle - 120°
-    const b = mag * Math.cos(angle - 4.189)  // angle - 240°
-
-    return {
-      x: defaultValue.x + r,
-      y: defaultValue.y + g,
-      z: defaultValue.z + b,
-    }
-  }, [defaultValue])
-
-  // When sensitivity changes, update RGB values but keep dot position
+  // When sensitivity changes, recalculate RGB but preserve achromatic component
   useEffect(() => {
     if (prevSensitivityRef.current !== sensitivity) {
       prevSensitivityRef.current = sensitivity
-      // Recalculate RGB from current wheel position with new sensitivity
-      const newRgb = positionToRgb(wheelPos.x, wheelPos.y, wheelSensitivity)
-      onChange(newRgb)
+      const { achromatic } = decomposeRgb(value, defaultValue)
+      const newValue = composeValue(wheelPos, wheelSensitivity, achromatic)
+      onChange(newValue)
     }
-  }, [sensitivity, wheelPos, wheelSensitivity, positionToRgb, onChange])
+  }, [sensitivity, wheelPos, wheelSensitivity, value, defaultValue, composeValue, onChange])
 
-  // Initialize wheel position from initial RGB value (only once on mount)
+  // Sync wheel position from external RGB changes (instance switch, preset load, master slider).
+  // Skip during drag — the drag handler sets wheelPos directly.
   useEffect(() => {
-    const r = value.x - defaultValue.x
-    const g = value.y - defaultValue.y
-    const b = value.z - defaultValue.z
+    if (isDragging) return
 
-    const angle = Math.atan2(
-      0.866 * (g - b),
-      r - 0.5 * g - 0.5 * b
-    )
-    const rgbMag = Math.sqrt(r * r + g * g + b * b)
-    const normalizedMag = Math.min(rgbMag / wheelSensitivity, 1)
-
-    const x = normalizedMag * Math.cos(angle)
-    const y = -normalizedMag * Math.sin(angle)
-
-    setWheelPos({ x, y })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // Only run once on mount
+    const { chroma } = decomposeRgb(value, defaultValue)
+    const pos = chromaToWheelPos(chroma.r, chroma.g, chroma.b, wheelSensitivity)
+    setWheelPos(pos)
+  }, [value.x, value.y, value.z, defaultValue.x, defaultValue.y, defaultValue.z, wheelSensitivity, isDragging])
 
   const drawWheel = useCallback(() => {
     const canvas = canvasRef.current
@@ -102,22 +78,17 @@ export function ColorWheel({
     const centerY = size / 2
     const radius = size / 2 - 8
 
-    // Clear
     ctx.clearRect(0, 0, size, size)
 
-    // Draw color wheel background
-    // Conic gradient starts at 3 o'clock (0°) and goes clockwise
-    // But canvas Y is inverted, so visually it goes counter-clockwise
-    // Our RGB positions: R at 0° (right), G at 120° (top-left), B at 240° (bottom-left)
-    // In conic gradient with inverted Y: 0=right, 0.33=bottom-left, 0.67=top-left
+    // Color wheel background: R at 0° (right), B at 120° CW, G at 240° CW
     const gradient = ctx.createConicGradient(0, centerX, centerY)
-    gradient.addColorStop(0, '#ff4444')      // Red at 0° (right)
-    gradient.addColorStop(0.167, '#ff44ff')  // Magenta
-    gradient.addColorStop(0.333, '#4444ff')  // Blue at 120° CW = 240° CCW (bottom-left visually)
-    gradient.addColorStop(0.5, '#44ffff')    // Cyan
-    gradient.addColorStop(0.667, '#44ff44')  // Green at 240° CW = 120° CCW (top-left visually)
-    gradient.addColorStop(0.833, '#ffff44')  // Yellow
-    gradient.addColorStop(1, '#ff4444')      // Red
+    gradient.addColorStop(0, '#ff4444')
+    gradient.addColorStop(0.167, '#ff44ff')
+    gradient.addColorStop(0.333, '#4444ff')
+    gradient.addColorStop(0.5, '#44ffff')
+    gradient.addColorStop(0.667, '#44ff44')
+    gradient.addColorStop(0.833, '#ffff44')
+    gradient.addColorStop(1, '#ff4444')
 
     ctx.beginPath()
     ctx.arc(centerX, centerY, radius, 0, Math.PI * 2)
@@ -126,14 +97,14 @@ export function ColorWheel({
     ctx.fill()
     ctx.globalAlpha = 1
 
-    // Draw ring
+    // Ring
     ctx.beginPath()
     ctx.arc(centerX, centerY, radius, 0, Math.PI * 2)
     ctx.strokeStyle = '#71717a'
     ctx.lineWidth = 2
     ctx.stroke()
 
-    // Draw center crosshair
+    // Center crosshair
     ctx.beginPath()
     ctx.moveTo(centerX - 6, centerY)
     ctx.lineTo(centerX + 6, centerY)
@@ -143,17 +114,15 @@ export function ColorWheel({
     ctx.lineWidth = 1
     ctx.stroke()
 
-    // Draw current position (use stored wheel position, not derived from RGB)
+    // Dot at wheel position
     const dotX = centerX + wheelPos.x * radius
     const dotY = centerY + wheelPos.y * radius
 
-    // Outer glow
     ctx.beginPath()
     ctx.arc(dotX, dotY, 8, 0, Math.PI * 2)
     ctx.fillStyle = 'rgba(255, 255, 255, 0.2)'
     ctx.fill()
 
-    // Inner dot
     ctx.beginPath()
     ctx.arc(dotX, dotY, 5, 0, Math.PI * 2)
     ctx.fillStyle = '#ffffff'
@@ -180,21 +149,20 @@ export function ColorWheel({
       let x = (clientX - rect.left - centerX) / radius
       let y = (clientY - rect.top - centerY) / radius
 
-      // Clamp to unit circle
       const dist = Math.sqrt(x * x + y * y)
       if (dist > 1) {
         x /= dist
         y /= dist
       }
 
-      // Update wheel position (dot stays where you put it)
       setWheelPos({ x, y })
 
-      // Calculate RGB from new position
-      const newValue = positionToRgb(x, y, wheelSensitivity)
+      // Preserve any achromatic offset from master slider
+      const { achromatic } = decomposeRgb(value, defaultValue)
+      const newValue = composeValue({ x, y }, wheelSensitivity, achromatic)
       onChange(newValue)
     },
-    [size, positionToRgb, wheelSensitivity, onChange]
+    [size, wheelSensitivity, value, defaultValue, composeValue, onChange]
   )
 
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -203,7 +171,6 @@ export function ColorWheel({
     updateFromMouseEvent(e.clientX, e.clientY)
   }, [updateFromMouseEvent])
 
-  // Global mouse move/up handlers for drag outside canvas
   useEffect(() => {
     if (!isDragging) return
 

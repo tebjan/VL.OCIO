@@ -11,6 +11,7 @@ public class OCIOConfigManager : IDisposable
     private string _cachedSelection;
     private string _cachedConfigList;
     private int _lastConfigVersion = -1;
+    private bool _deferSwitch = true;
 
     public OCIOConfigManager(NodeContext nodeContext)
     {
@@ -24,11 +25,23 @@ public class OCIOConfigManager : IDisposable
     {
         error = null;
 
+        // First frame: skip switch — let all OCIOConfigLoaders register their configs
+        if (_deferSwitch)
+        {
+            _deferSwitch = false;
+            _cachedConfigList = _service.GetConfigList();
+            loadedConfigs = _cachedConfigList;
+            return;
+        }
+
         var selectedName = config?.Value;
         if (selectedName != null && selectedName != _cachedSelection)
         {
-            _cachedSelection = selectedName;
-            error = _service.SwitchConfig(selectedName);
+            var switchError = _service.SwitchConfig(selectedName);
+            if (switchError == null)
+                _cachedSelection = selectedName;
+            else
+                error = switchError;
         }
 
         // Refresh list whenever config version changes (loader added/removed configs)

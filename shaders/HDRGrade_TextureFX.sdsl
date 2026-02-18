@@ -1,36 +1,20 @@
 // ============================================================================
 // HDRGrade_TextureFX.sdsl
-// Professional HDR Color Grading with Transparent 3-Parameter Pipeline
+// Standalone HDR Color Grading (no tonemapping)
 // ============================================================================
 //
-// This shader provides Hollywood-standard color grading with clear pipeline:
-//   InputSpace → Linear AP1 → GradingSpace → Linear AP1 → OutputSpace
+// Grade-only shader for use when tonemapping is handled separately or not needed.
+// Pipeline: InputSpace → Linear AP1 → GradingSpace → Linear AP1 → OutputSpace
 //
-// Two grading workflows:
-//   - Log (ACEScct): Colorist workflow (DaVinci Resolve style)
-//   - Linear (ACEScg): VFX compositing workflow (Nuke style)
-//
-// References:
-//   - ACES S-2016-001 (ACEScct)
-//   - Netflix ACES Guidelines
-//   - ASC CDL (Color Decision List)
+// For combined grade + tonemap, use HDRGrade_Tonemap_TextureFX instead.
 //
 // ============================================================================
 
-shader HDRGrade_TextureFX : FilterBase, ColorSpaceConversion
+shader HDRGrade_TextureFX : FilterBase, HDRGrade
 {
     // ========================================================================
-    // TRANSPARENT PIPELINE SETTINGS
+    // OUTPUT CONFIGURATION
     // ========================================================================
-
-    // What color space is my input?
-    // 0=Linear709, 1=Linear2020, 2=ACEScg, 3=ACEScc, 4=ACEScct, 5=sRGB, 6=PQ2020, 7=HLG2020, 8=scRGB
-    [EnumType("VL.OCIO.HDRColorSpace, VL.OCIO")]
-    int InputSpace = 0;
-
-    // Where should grading math happen?
-    [EnumType("VL.OCIO.GradingSpace, VL.OCIO")]
-    int GradingSpace = 0;  // 0=Log (ACEScct), 1=Linear (ACEScg)
 
     // What color space do I need for output?
     // 0=Linear709, 1=Linear2020, 2=ACEScg, 3=ACEScc, 4=ACEScct, 5=sRGB, 6=PQ2020, 7=HLG2020, 8=scRGB
@@ -38,191 +22,8 @@ shader HDRGrade_TextureFX : FilterBase, ColorSpaceConversion
     int OutputSpace = 0;
 
     // ========================================================================
-    // GRADING PARAMETERS
+    // OUTPUT ENCODING
     // ========================================================================
-
-    // Exposure in stops (-8 to +8 typical range)
-    float Exposure = 0.0;
-
-    // Contrast multiplier (0.5 to 2.0 typical)
-    float Contrast = 1.0;
-
-    // Saturation (0 = grayscale, 1 = normal, 2 = oversaturated)
-    float Saturation = 1.0;
-
-    // White balance adjustments
-    float Temperature = 0.0;  // negative = cooler (blue), positive = warmer (orange)
-    float Tint = 0.0;         // negative = magenta, positive = green
-
-    // ASC-CDL style controls
-    float3 Lift = float3(0, 0, 0);   // Shadow offset
-    float3 Gamma = float3(1, 1, 1);  // Midtone power
-    float3 Gain = float3(1, 1, 1);   // Highlight multiplier
-    float3 Offset = float3(0, 0, 0); // Post-grade offset
-
-    // Color wheels (shadow/midtone/highlight tinting)
-    float3 ShadowColor = float3(0, 0, 0);
-    float3 MidtoneColor = float3(0, 0, 0);
-    float3 HighlightColor = float3(0, 0, 0);
-
-    // Soft clipping
-    float HighlightSoftClip = 0.0;
-    float ShadowSoftClip = 0.0;
-    float HighlightKnee = 1.0;
-    float ShadowKnee = 0.1;
-
-    // ========================================================================
-    // TONEMAP COMPOSITION (OPTIONAL)
-    // ========================================================================
-
-    // Enable tonemap composition (static for compiler optimization)
-    bool EnableTonemap = false;
-
-    // Tonemap shader composition input (e.g., HDRTonemap_ShaderFX)
-    compose ComputeColor TonemapInput;
-
-    // ========================================================================
-    // SHARED UTILITIES
-    // ========================================================================
-
-    // Zone weights for color wheels
-    float3 GetZoneWeights(float luma)
-    {
-        float shadow = 1.0 - smoothstep(0.0, 0.4, luma);
-        float highlight = smoothstep(0.6, 1.0, luma);
-        float mid = 1.0 - shadow - highlight;
-        return float3(shadow, mid, highlight);
-    }
-
-    // Branchless soft clip
-    float3 ApplySoftClip(float3 val, float hKnee, float hStr, float sKnee, float sStr)
-    {
-        // Highlight compression
-        float3 hExcess = max(val - hKnee, 0.0);
-        float3 hComp = hKnee + hExcess / (1.0 + hExcess * hStr);
-        val = lerp(val, hComp, step(hKnee, val) * step(0.001, hStr));
-
-        // Shadow compression
-        float3 sDeficit = max(sKnee - val, 0.0);
-        float3 sComp = sKnee - sDeficit / (1.0 + sDeficit * sStr);
-        val = lerp(val, sComp, step(val, sKnee) * step(0.001, sStr));
-
-        return val;
-    }
-
-    // ========================================================================
-    // LOG GRADING (ACEScct - Colorist Workflow)
-    // ========================================================================
-
-    float3 ApplyGradingLog(float3 linearAP1)
-    {
-        // Convert to ACEScct log space
-        float3 cc = LinearToACEScct(linearAP1);
-
-        // Exposure: additive in log = stops
-        cc += Exposure / 17.52;
-
-        // White Balance: additive offsets (perceptually uniform)
-        cc.r += Temperature * 0.03;
-        cc.b -= Temperature * 0.03;
-        cc.g += Tint * 0.02;
-
-        // Contrast: pivot around mid-gray (0.4135884)
-        cc = (cc - ACESCCT_MIDGRAY) * Contrast + ACESCCT_MIDGRAY;
-
-        // Lift/Gamma/Gain (ASC-CDL style in log)
-        cc += Lift * 0.1;
-        cc *= Gain;
-        float3 norm = saturate((cc - ACESCC_MIN) / ACESCC_RANGE);
-        norm = pow(max(norm, 0.0001), 1.0 / max(Gamma, 0.01));
-        cc = norm * ACESCC_RANGE + ACESCC_MIN;
-
-        // Color Wheels
-        float luma = (cc.r + cc.g + cc.b) / 3.0;
-        float normLuma = saturate((luma - ACESCC_MIN) / ACESCC_RANGE);
-        float3 weights = GetZoneWeights(normLuma);
-        cc += ShadowColor * weights.x * 0.1;
-        cc += MidtoneColor * weights.y * 0.1;
-        cc += HighlightColor * weights.z * 0.1;
-
-        // Post-grade offset
-        cc += Offset * 0.1;
-
-        // Saturation (via linear for accuracy)
-        float3 lin = ACEScctToLinear(cc);
-        float lumaLin = dot(lin, AP1_LUMA);
-        float3 lumaCC = LinearToACEScct(float3(lumaLin, lumaLin, lumaLin));
-        cc = lerp(lumaCC, cc, Saturation);
-
-        // Soft clip
-        cc = ApplySoftClip(cc, HighlightKnee, HighlightSoftClip, ShadowKnee, ShadowSoftClip);
-
-        // Convert back to linear AP1
-        return ACEScctToLinear(cc);
-    }
-
-    // ========================================================================
-    // LINEAR GRADING (ACEScg - VFX Workflow)
-    // ========================================================================
-
-    float3 ApplyGradingLinear(float3 lin)
-    {
-        // Exposure: multiplicative (camera-like)
-        lin *= pow(2.0, Exposure);
-
-        // White Balance: multiplicative gains (physically correct)
-        lin.r *= 1.0 + Temperature * 0.1;
-        lin.b *= 1.0 - Temperature * 0.1;
-        lin.g *= 1.0 + Tint * 0.05;
-
-        // Gain then Offset (Nuke order)
-        lin *= Gain;
-        lin += Offset * 0.1;
-
-        // Gamma: power function
-        lin = pow(max(lin, 0.0), 1.0 / max(Gamma, 0.01));
-
-        // Contrast: power curve around 18% gray
-        lin = LINEAR_MIDGRAY * pow(max(lin / LINEAR_MIDGRAY, 0.0001), Contrast);
-
-        // Color Wheels (based on linear luminance)
-        float luma = dot(lin, AP1_LUMA);
-        float normLuma = saturate(luma / 2.0);  // Normalize for HDR
-        float3 weights = GetZoneWeights(normLuma);
-        lin += ShadowColor * weights.x * 0.1;
-        lin += MidtoneColor * weights.y * 0.1;
-        lin += HighlightColor * weights.z * 0.1;
-
-        // Lift: additive shadow adjustment
-        lin += Lift * 0.1;
-
-        // Saturation (in linear - most accurate)
-        lin = lerp(float3(luma, luma, luma), lin, Saturation);
-
-        // Soft clip (scaled for linear space)
-        lin = ApplySoftClip(lin, HighlightKnee * 2.0, HighlightSoftClip,
-                           ShadowKnee * 0.1, ShadowSoftClip);
-
-        return lin;
-    }
-
-    // ========================================================================
-    // I/O CONVERSION (transparent to user)
-    // ========================================================================
-
-    // Decode any HDRColorSpace to Linear AP1 (the grading hub)
-    // Direct paths for AP1 variants, hub through Linear709 for everything else
-    float3 DecodeInput(float3 color)
-    {
-        if (InputSpace == 2)       // ACEScg - already AP1 linear
-            return color;
-        else if (InputSpace == 3)  // ACEScc - log AP1
-            return ACESccToLinear(color);
-        else if (InputSpace == 4)  // ACEScct - log AP1
-            return ACEScctToLinear(color);
-        else                       // All others → Linear709 → AP1
-            return mul(Rec709_to_AP1, ToLinearRec709(color, InputSpace));
-    }
 
     // Encode Linear AP1 to any HDRColorSpace
     // Direct paths for AP1 variants, hub through Linear709 for everything else
@@ -249,7 +50,7 @@ shader HDRGrade_TextureFX : FilterBase, ColorSpaceConversion
         // Step 1: Decode input to Linear AP1
         float3 linearAP1 = DecodeInput(color);
 
-        // Step 2: Apply grading in chosen space (uniform branch - no perf penalty)
+        // Step 2: Apply grading in chosen space
         if (GradingSpace == 0)
             linearAP1 = ApplyGradingLog(linearAP1);
         else
@@ -258,13 +59,15 @@ shader HDRGrade_TextureFX : FilterBase, ColorSpaceConversion
         // Step 3: Encode to output space
         float3 result = EncodeOutput(linearAP1);
 
-        // Step 4: Apply tonemap if enabled (optional composition)
-        float4 finalColor = float4(result, tex0col.a);
-        if (EnableTonemap)
+        // Step 4: Vignette (screen-space, applied to encoded output)
+        if (VignetteStrength > 0.001)
         {
-            finalColor = TonemapInput.Compute();
+            float2 centered = streams.TexCoord - 0.5;
+            float vigDist = length(centered);
+            float vigMask = smoothstep(VignetteRadius, VignetteRadius - VignetteSoftness, vigDist);
+            result *= lerp(1.0, vigMask, VignetteStrength);
         }
 
-        return finalColor;
+        return float4(result, tex0col.a);
     }
 };

@@ -9,6 +9,7 @@ interface LiftGammaGainProps {
   onLiftChange: (value: Vector3) => void
   onGammaChange: (value: Vector3) => void
   onGainChange: (value: Vector3) => void
+  mobile?: boolean
 }
 
 // Default sensitivities:
@@ -25,19 +26,22 @@ export function LiftGammaGain({
   onLiftChange,
   onGammaChange,
   onGainChange,
+  mobile = false,
 }: LiftGammaGainProps) {
   const [liftSensitivity, setLiftSensitivity] = useState(DEFAULT_LIFT_SENSITIVITY)
   const [gammaSensitivity, setGammaSensitivity] = useState(DEFAULT_GAMMA_SENSITIVITY)
   const [gainSensitivity, setGainSensitivity] = useState(DEFAULT_GAIN_SENSITIVITY)
 
+  const wheelSize = mobile ? 200 : 150
+
   return (
-    <div className="flex justify-center gap-4">
+    <div className={mobile ? 'flex flex-col items-center gap-6' : 'flex justify-center gap-4'}>
       <ColorWheel
         label="Lift"
         value={lift}
         defaultValue={{ x: 0, y: 0, z: 0 }}
         onChange={onLiftChange}
-        size={150}
+        size={wheelSize}
         sensitivity={liftSensitivity}
         defaultSensitivity={DEFAULT_LIFT_SENSITIVITY}
         onSensitivityChange={setLiftSensitivity}
@@ -47,7 +51,7 @@ export function LiftGammaGain({
         value={gamma}
         defaultValue={{ x: 1, y: 1, z: 1 }}
         onChange={onGammaChange}
-        size={150}
+        size={wheelSize}
         sensitivity={gammaSensitivity}
         defaultSensitivity={DEFAULT_GAMMA_SENSITIVITY}
         onSensitivityChange={setGammaSensitivity}
@@ -57,7 +61,7 @@ export function LiftGammaGain({
         value={gain}
         defaultValue={{ x: 1, y: 1, z: 1 }}
         onChange={onGainChange}
-        size={150}
+        size={wheelSize}
         sensitivity={gainSensitivity}
         defaultSensitivity={DEFAULT_GAIN_SENSITIVITY}
         onSensitivityChange={setGainSensitivity}

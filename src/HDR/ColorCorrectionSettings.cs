@@ -10,6 +10,10 @@ namespace VL.OCIO;
 /// </summary>
 public class ColorCorrectionSettings
 {
+    // Color space for this shader stage
+    [JsonInclude] internal HDRColorSpace InputSpace { get; set; } = HDRColorSpace.Linear_Rec709;
+    [JsonInclude] internal GradingSpace GradingSpace { get; set; } = GradingSpace.Log;
+
     // Basic adjustments
     [JsonInclude] internal float Exposure { get; set; } = 0f;
     [JsonInclude] internal float Contrast { get; set; } = 1f;
@@ -19,7 +23,14 @@ public class ColorCorrectionSettings
     [JsonInclude] internal float Temperature { get; set; } = 0f;
     [JsonInclude] internal float Tint { get; set; } = 0f;
 
-    // Lift/Gamma/Gain (color wheels) - stored as RGB vectors
+    // Tonal range (Lightroom-style)
+    [JsonInclude] internal float Highlights { get; set; } = 0f;
+    [JsonInclude] internal float Shadows { get; set; } = 0f;
+
+    // Smart saturation
+    [JsonInclude] internal float Vibrance { get; set; } = 0f;
+
+    // Lift/Gamma/Gain (ASC-CDL style) - stored as RGB vectors
     [JsonInclude] internal Vector3Json Lift { get; set; } = new(0f, 0f, 0f);
     [JsonInclude] internal Vector3Json Gamma { get; set; } = new(1f, 1f, 1f);
     [JsonInclude] internal Vector3Json Gain { get; set; } = new(1f, 1f, 1f);
@@ -36,24 +47,26 @@ public class ColorCorrectionSettings
     [JsonInclude] internal float HighlightKnee { get; set; } = 1f;
     [JsonInclude] internal float ShadowKnee { get; set; } = 0.1f;
 
-    // Color space for this shader stage
-    [JsonInclude] internal HDRColorSpace InputSpace { get; set; } = HDRColorSpace.Linear_Rec709;
-    [JsonInclude] internal GradingSpace GradingSpace { get; set; } = GradingSpace.Log;
-    [JsonInclude] internal HDRColorSpace OutputSpace { get; set; } = HDRColorSpace.Linear_Rec709;
+    // Vignette
+    [JsonInclude] internal float VignetteStrength { get; set; } = 0f;
+    [JsonInclude] internal float VignetteRadius { get; set; } = 0.7f;
+    [JsonInclude] internal float VignetteSoftness { get; set; } = 0.3f;
 
     /// <summary>
     /// Split settings into individual out parameters matching shader input order.
-    /// Use directly with vvvv nodes for HDRGrade_TextureFX.
+    /// Use directly with vvvv nodes for HDRGrade_TextureFX or HDRGrade_Tonemap_TextureFX.
     /// </summary>
     public void Split(
         out HDRColorSpace inputSpace,
         out GradingSpace gradingSpace,
-        out HDRColorSpace outputSpace,
         out float exposure,
         out float contrast,
         out float saturation,
         out float temperature,
         out float tint,
+        out float highlights,
+        out float shadows,
+        out float vibrance,
         out Vector3 lift,
         out Vector3 gamma,
         out Vector3 gain,
@@ -64,16 +77,21 @@ public class ColorCorrectionSettings
         out float highlightSoftClip,
         out float shadowSoftClip,
         out float highlightKnee,
-        out float shadowKnee)
+        out float shadowKnee,
+        out float vignetteStrength,
+        out float vignetteRadius,
+        out float vignetteSoftness)
     {
         inputSpace = InputSpace;
         gradingSpace = GradingSpace;
-        outputSpace = OutputSpace;
         exposure = Exposure;
         contrast = Contrast;
         saturation = Saturation;
         temperature = Temperature;
         tint = Tint;
+        highlights = Highlights;
+        shadows = Shadows;
+        vibrance = Vibrance;
         lift = Lift.ToVector3();
         gamma = Gamma.ToVector3();
         gain = Gain.ToVector3();
@@ -85,6 +103,9 @@ public class ColorCorrectionSettings
         shadowSoftClip = ShadowSoftClip;
         highlightKnee = HighlightKnee;
         shadowKnee = ShadowKnee;
+        vignetteStrength = VignetteStrength;
+        vignetteRadius = VignetteRadius;
+        vignetteSoftness = VignetteSoftness;
     }
 }
 

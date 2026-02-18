@@ -29,6 +29,12 @@ public class ProjectSettings
     public string PresetName { get; set; } = "Default";
 
     /// <summary>
+    /// Settings format version for forward-compatible JSON evolution.
+    /// Bump this when the schema changes; add migration logic in FromJson().
+    /// </summary>
+    public int Version { get; set; } = 1;
+
+    /// <summary>
     /// JSON serialization options for consistent formatting
     /// </summary>
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -125,11 +131,16 @@ public class ProjectSettings
     {
         return new ColorCorrectionSettings
         {
+            InputSpace = source.InputSpace,
+            GradingSpace = source.GradingSpace,
             Exposure = source.Exposure,
             Contrast = source.Contrast,
             Saturation = source.Saturation,
             Temperature = source.Temperature,
             Tint = source.Tint,
+            Highlights = source.Highlights,
+            Shadows = source.Shadows,
+            Vibrance = source.Vibrance,
             Lift = new Vector3Json(source.Lift.X, source.Lift.Y, source.Lift.Z),
             Gamma = new Vector3Json(source.Gamma.X, source.Gamma.Y, source.Gamma.Z),
             Gain = new Vector3Json(source.Gain.X, source.Gain.Y, source.Gain.Z),
@@ -141,9 +152,9 @@ public class ProjectSettings
             ShadowSoftClip = source.ShadowSoftClip,
             HighlightKnee = source.HighlightKnee,
             ShadowKnee = source.ShadowKnee,
-            InputSpace = source.InputSpace,
-            GradingSpace = source.GradingSpace,
-            OutputSpace = source.OutputSpace
+            VignetteStrength = source.VignetteStrength,
+            VignetteRadius = source.VignetteRadius,
+            VignetteSoftness = source.VignetteSoftness
         };
     }
 
@@ -155,13 +166,14 @@ public class ProjectSettings
     {
         return new TonemapSettings
         {
-            InputSpace = source.InputSpace,
             OutputSpace = source.OutputSpace,
             Tonemap = source.Tonemap,
             Exposure = source.Exposure,
             WhitePoint = source.WhitePoint,
             PaperWhite = source.PaperWhite,
-            PeakBrightness = source.PeakBrightness
+            PeakBrightness = source.PeakBrightness,
+            BlackLevel = source.BlackLevel,
+            WhiteLevel = source.WhiteLevel
         };
     }
 }

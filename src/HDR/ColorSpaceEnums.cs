@@ -27,19 +27,6 @@ public enum HDRColorSpace
 }
 
 /// <summary>
-/// Display output formats - what DirectX/Stride can output to displays
-/// </summary>
-public enum DisplayFormat
-{
-    /// <summary>sRGB - Standard SDR output</summary>
-    sRGB = 0,
-    /// <summary>Linear Rec.709 - scRGB HDR (Windows HDR)</summary>
-    Linear_Rec709 = 1,
-    /// <summary>PQ Rec.2020 - HDR10 output</summary>
-    PQ_Rec2020 = 2
-}
-
-/// <summary>
 /// Tonemapping operator selection.
 /// All operators expect Linear Rec.709 input (pipeline converts automatically).
 /// </summary>

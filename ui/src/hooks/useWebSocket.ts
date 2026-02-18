@@ -12,6 +12,7 @@ interface WebSocketState {
   instanceStates: Record<string, InstanceState>
   serverInfo: ServerInfo | null
   knownServers: DiscoveredServer[]
+  stateVersion: number
 }
 
 interface WebSocketActions {
@@ -65,6 +66,7 @@ export function useWebSocket(): WebSocketState & WebSocketActions {
   const [instanceStates, setInstanceStates] = useState<Record<string, InstanceState>>({})
   const [serverInfo, setServerInfo] = useState<ServerInfo | null>(null)
   const [knownServers, setKnownServers] = useState<DiscoveredServer[]>([])
+  const [stateVersion, setStateVersion] = useState(0)
 
   // Derive settings for the selected instance — no separate settings state
   const settings: ProjectSettings = useMemo(() => {
@@ -248,6 +250,7 @@ export function useWebSocket(): WebSocketState & WebSocketActions {
             }
 
             hasReceivedInitialStateRef.current = true
+            setStateVersion(v => v + 1)
           } else if (msg.type === 'instancesChanged') {
             // Handle instance list changes (e.g. instance added/removed)
             if (msg.instances) {
@@ -382,6 +385,7 @@ export function useWebSocket(): WebSocketState & WebSocketActions {
     instanceStates,
     serverInfo,
     knownServers,
+    stateVersion,
     updateColorCorrection,
     updateTonemap,
     loadPreset,

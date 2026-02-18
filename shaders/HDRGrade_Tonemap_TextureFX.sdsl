@@ -1,0 +1,125 @@
+// ============================================================================
+// HDRGrade_Tonemap_TextureFX.sdsl
+// Combined HDR Color Grading + Tonemapping in a Single Shader
+// ============================================================================
+//
+// Merges the grade and tonemap stages into one shader, eliminating the
+// intermediate OutputSpace→InputSpace handoff between separate shaders.
+//
+// Pipeline:
+//   InputSpace → Linear AP1 → Grade → Vignette → Tonemap → OutputSpace
+//
+// Grade always outputs AP1, tonemap always receives AP1 — no manual matching.
+//
+// ============================================================================
+
+shader HDRGrade_Tonemap_TextureFX : FilterBase, HDRGrade, HDRTonemap
+{
+    // ========================================================================
+    // OUTPUT CONFIGURATION (tonemap stage)
+    // ========================================================================
+
+    // Final display output color space
+    // 0=Linear709, 1=Linear2020, 2=ACEScg, 3=ACEScc, 4=ACEScct, 5=sRGB, 6=PQ2020, 7=HLG2020, 8=scRGB
+    [EnumType("VL.OCIO.HDRColorSpace, VL.OCIO")]
+    int OutputSpace = 5;  // Default to sRGB for display
+
+    // Tonemapping operator (see TonemapOperator enum)
+    [EnumType("VL.OCIO.TonemapOperator, VL.OCIO")]
+    int Tonemap = 0;  // Default None
+
+    // ========================================================================
+    // TONEMAP PARAMETERS
+    // ========================================================================
+
+    // Pre-tonemap exposure adjustment (in stops)
+    // Named OutputExposure to avoid conflict with grade's Exposure pin
+    float OutputExposure = 0.0;
+
+    // Shoulder strength for Reinhard Extended (affects highlight rolloff)
+    float WhitePoint = 4.0;
+
+    // ========================================================================
+    // HDR OUTPUT PARAMETERS
+    // ========================================================================
+
+    // Paper white level in nits (cd/m²)
+    float PaperWhite = 200.0;
+
+    // Peak brightness in nits for HDR output
+    float PeakBrightness = 1000.0;
+
+    // ========================================================================
+    // OUTPUT RANGE REMAP
+    // ========================================================================
+
+    // Black level for display hardware compensation (projectors, LED walls)
+    float BlackLevel = 0.0;
+
+    // White level for display hardware compensation
+    float WhiteLevel = 1.0;
+
+    // ========================================================================
+    // OUTPUT ENCODING (used when tonemap is None)
+    // ========================================================================
+
+    // Encode Linear AP1 to any HDRColorSpace
+    float3 EncodeOutput(float3 linearAP1)
+    {
+        if (OutputSpace == 2)       // ACEScg - already AP1 linear
+            return linearAP1;
+        else if (OutputSpace == 3)  // ACEScc - log AP1
+            return LinearToACEScc(linearAP1);
+        else if (OutputSpace == 4)  // ACEScct - log AP1
+            return LinearToACEScct(linearAP1);
+        else                        // AP1 → Linear709 → target space
+            return FromLinearRec709(mul(AP1_to_Rec709, linearAP1), OutputSpace);
+    }
+
+    // ========================================================================
+    // MAIN FILTER
+    // ========================================================================
+
+    float4 Filter(float4 tex0col)
+    {
+        float3 color = tex0col.rgb;
+
+        // Step 1: Decode input to Linear AP1
+        float3 linearAP1 = DecodeInput(color);
+
+        // Step 2: Apply grading in chosen space
+        if (GradingSpace == 0)
+            linearAP1 = ApplyGradingLog(linearAP1);
+        else
+            linearAP1 = ApplyGradingLinear(linearAP1);
+
+        // Step 3: Vignette (in AP1 linear, before tonemap)
+        if (VignetteStrength > 0.001)
+        {
+            float2 centered = streams.TexCoord - 0.5;
+            float vigDist = length(centered);
+            float vigMask = smoothstep(VignetteRadius, VignetteRadius - VignetteSoftness, vigDist);
+            linearAP1 *= lerp(1.0, vigMask, VignetteStrength);
+        }
+
+        // Step 4: Tonemap + output transform (only when operator is not None)
+        float3 result;
+        if (Tonemap != 0)
+        {
+            // Grade outputs AP1 (ACEScg = 2), so inputSpace is always 2
+            result = ApplyTonemapOutput(linearAP1, 2, OutputSpace,
+                                        Tonemap, OutputExposure, WhitePoint,
+                                        PaperWhite, PeakBrightness);
+        }
+        else
+        {
+            // No tonemap: encode AP1 directly to output space
+            result = EncodeOutput(linearAP1);
+        }
+
+        // Step 5: Display range remap (projectors, LED walls)
+        result = RemapDisplayRange(result, BlackLevel, WhiteLevel);
+
+        return float4(result, tex0col.a);
+    }
+};

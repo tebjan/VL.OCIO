@@ -5,11 +5,16 @@ export interface Vector3 {
 }
 
 export interface ColorCorrectionSettings {
+  inputSpace: ColorSpace
+  gradingSpace: GradingSpace
   exposure: number
   contrast: number
   saturation: number
   temperature: number
   tint: number
+  highlights: number
+  shadows: number
+  vibrance: number
   lift: Vector3
   gamma: Vector3
   gain: Vector3
@@ -21,19 +26,20 @@ export interface ColorCorrectionSettings {
   shadowSoftClip: number
   highlightKnee: number
   shadowKnee: number
-  inputSpace: ColorSpace
-  gradingSpace: GradingSpace
-  outputSpace: ColorSpace
+  vignetteStrength: number
+  vignetteRadius: number
+  vignetteSoftness: number
 }
 
 export interface TonemapSettings {
-  inputSpace: ColorSpace
-  outputSpace: DisplayFormat
+  outputSpace: ColorSpace
   tonemap: TonemapOperator
   exposure: number
   whitePoint: number
   paperWhite: number
   peakBrightness: number
+  blackLevel: number
+  whiteLevel: number
 }
 
 export interface ProjectSettings {
@@ -93,10 +99,6 @@ export type ColorSpace =
   | 'hlG_Rec2020'
   | 'scRgb'      // C# scRGB → camelCase → scRgb
 
-// Display output formats (what DX/Stride can output)
-// NOTE: These must match C# enum names after JsonNamingPolicy.CamelCase conversion
-export type DisplayFormat = 'sRgb' | 'linear_Rec709' | 'pQ_Rec2020'
-
 export type GradingSpace = 'log' | 'linear'
 
 export type TonemapOperator = 'none' | 'aces' | 'agX' | 'granTurismo' | 'uncharted2' | 'khronosPBRNeutral' | 'lottes' | 'reinhard' | 'reinhardExtended' | 'hejlBurgess'
@@ -111,12 +113,6 @@ export const COLOR_SPACE_LABELS: Record<ColorSpace, string> = {
   pQ_Rec2020: 'PQ Rec.2020 (HDR10)',
   hlG_Rec2020: 'HLG Rec.2020',
   scRgb: 'scRGB',
-}
-
-export const DISPLAY_FORMAT_LABELS: Record<DisplayFormat, string> = {
-  sRgb: 'sRGB (SDR)',
-  linear_Rec709: 'Linear HDR (scRGB)',
-  pQ_Rec2020: 'PQ HDR (HDR10)',
 }
 
 export const GRADING_SPACE_LABELS: Record<GradingSpace, string> = {
@@ -139,11 +135,16 @@ export const TONEMAP_LABELS: Record<TonemapOperator, string> = {
 
 export function createDefaultColorCorrection(): ColorCorrectionSettings {
   return {
+    inputSpace: 'acesCc',
+    gradingSpace: 'log',
     exposure: 0,
     contrast: 1,
     saturation: 1,
     temperature: 0,
     tint: 0,
+    highlights: 0,
+    shadows: 0,
+    vibrance: 0,
     lift: { x: 0, y: 0, z: 0 },
     gamma: { x: 1, y: 1, z: 1 },
     gain: { x: 1, y: 1, z: 1 },
@@ -155,21 +156,22 @@ export function createDefaultColorCorrection(): ColorCorrectionSettings {
     shadowSoftClip: 0,
     highlightKnee: 1,
     shadowKnee: 0.1,
-    inputSpace: 'acesCc',
-    gradingSpace: 'log',
-    outputSpace: 'linear_Rec709',
+    vignetteStrength: 0,
+    vignetteRadius: 0.7,
+    vignetteSoftness: 0.3,
   }
 }
 
 export function createDefaultTonemap(): TonemapSettings {
   return {
-    inputSpace: 'linear_Rec709',
     outputSpace: 'sRgb',
-    tonemap: 'aces',
+    tonemap: 'none',
     exposure: 0,
     whitePoint: 4,
     paperWhite: 200,
     peakBrightness: 1000,
+    blackLevel: 0,
+    whiteLevel: 1,
   }
 }
 

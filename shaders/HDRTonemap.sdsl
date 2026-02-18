@@ -1,0 +1,74 @@
+// ============================================================================
+// HDRTonemap.sdsl
+// Base mixin: tonemapping + output transform utility methods
+// ============================================================================
+//
+// Provides the tonemap+output pipeline used by both:
+// - HDRTonemap_TextureFX (standalone tonemap)
+// - HDRGrade_Tonemap_TextureFX (combined grade + tonemap)
+//
+// No pin declarations — all parameters are passed to the utility method.
+// Each consumer declares its own pins (avoiding name conflicts).
+//
+// Operators:
+// - None (0) - Passthrough
+// - ACES (1) - Stephen Hill approximation with AP1 gamut mapping
+// - AgX (2) - Troy Sobotka, exact analytical curve (Blender default)
+// - Gran Turismo (3) - Uchimura (HDR-aware parametric curve)
+// - Uncharted 2 (4) - Filmic curve (John Hable)
+// - Khronos PBR Neutral (5) - E-commerce/product visualization
+// - Lottes (6) - Luma-based (Epic Games)
+// - Reinhard (7) - Simple Reinhard
+// - Reinhard Extended (8) - Adjustable white point
+// - Hejl-Burgess (9) - Fast approximation
+//
+// ============================================================================
+
+shader HDRTonemap : TonemapOperators
+{
+    // ========================================================================
+    // UTILITY METHOD
+    // ========================================================================
+
+    // Full tonemap + output transform pipeline.
+    // Takes any input color space, applies tonemap, converts to output space.
+    // Does NOT apply display range remap — caller applies RemapDisplayRange() at the end.
+    float3 ApplyTonemapOutput(float3 color, int inputSpace, int outputSpace,
+                              int tonemap, float exposure, float whitePoint,
+                              float paperWhite, float peakBrightness)
+    {
+        // Input-space-aware tonemap: converts to native space, applies exposure
+        // + tonemap, returns Linear Rec.709 (no redundant round-trips)
+        float3 linear709 = ApplyTonemap(color, inputSpace, tonemap, exposure, whitePoint);
+
+        // Convert to output color space
+        // HDR outputs handle gamut + PaperWhite + transfer function directly
+        if (outputSpace == 6)       // PQ Rec.2020
+        {
+            float3 rec2020 = mul(Rec709_to_Rec2020, linear709);
+            return LinearToPQ(rec2020 * paperWhite / PQ_MAX_NITS);
+        }
+        else if (outputSpace == 7)  // HLG Rec.2020
+        {
+            float3 rec2020 = mul(Rec709_to_Rec2020, linear709);
+            float peak = max(peakBrightness, 1.0);
+            return LinearToHLG(clamp(rec2020 * paperWhite / peak, 0.0, 1.0));
+        }
+        else if (outputSpace == 8)  // scRGB
+        {
+            return linear709 * (paperWhite / 80.0);
+        }
+        else                        // Non-HDR outputs (0-5): use standard conversion
+        {
+            return FromLinearRec709(linear709, outputSpace);
+        }
+    }
+
+    // Display range remap: map [0,1] to [blackLevel, whiteLevel].
+    // Compensates for display hardware (projectors, LED walls).
+    // Apply as the very last step before output.
+    float3 RemapDisplayRange(float3 color, float blackLevel, float whiteLevel)
+    {
+        return blackLevel + color * (whiteLevel - blackLevel);
+    }
+};

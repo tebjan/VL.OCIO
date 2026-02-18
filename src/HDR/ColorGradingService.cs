@@ -24,6 +24,8 @@ namespace VL.OCIO;
 /// </summary>
 public class ColorGradingService : IDisposable
 {
+    private const string Tag = "ColorGradingService";
+
     // Server state
     private HttpListener? _listener;
     private CancellationTokenSource? _cts;
@@ -112,21 +114,7 @@ public class ColorGradingService : IDisposable
         public bool IsActive => InstanceNode != null;
     }
 
-    /// <summary>
-    /// Get or create the singleton ColorGradingService for this app.
-    /// </summary>
-    public static ColorGradingService GetOrCreate(AppHost appHost)
-    {
-        var existing = appHost.Services.GetService(typeof(ColorGradingService)) as ColorGradingService;
-        if (existing != null)
-            return existing;
-
-        var service = new ColorGradingService(appHost);
-        appHost.Services.RegisterService(service);
-        return service;
-    }
-
-    private ColorGradingService(AppHost appHost)
+    internal ColorGradingService(AppHost appHost)
     {
         _basePath = appHost.AppBasePath;
         _appHostName = appHost.AppName ?? "app";
@@ -142,7 +130,7 @@ public class ColorGradingService : IDisposable
         // Register for process exit to ensure cleanup even on force close
         AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
 
-        Console.WriteLine($"[ColorGradingService] Created (base: {_basePath})");
+        GradeLog.Info(Tag, $"Created (base: {_basePath})");
     }
 
     private void OnProcessExit(object? sender, EventArgs e)
@@ -231,7 +219,7 @@ public class ColorGradingService : IDisposable
                 appName = _appHostName
             };
 
-            Console.WriteLine($"[ColorGradingService] {_uiUrl} (localhost only)");
+            GradeLog.Info(Tag, $"{_uiUrl} (localhost only)");
 
             // Browser auto-open is triggered by ColorGradingInstance via RequestBrowserOpen()
             _browserOpenRequested = false;
@@ -239,7 +227,7 @@ public class ColorGradingService : IDisposable
         catch (Exception ex)
         {
             _lastError = $"Failed to start server: {ex.Message}";
-            Console.WriteLine($"[ColorGradingService] {_lastError}");
+            GradeLog.Error(Tag, _lastError);
             StopServer();
         }
     }
@@ -275,10 +263,10 @@ public class ColorGradingService : IDisposable
             _listener?.Close();
             _listener = null;
 
-            Console.WriteLine("[ColorGradingService] Requesting network access (one-time setup)...");
+            GradeLog.Info(Tag, "Requesting network access (one-time setup)...");
             if (!TrySetUrlAcl())
             {
-                Console.WriteLine("[ColorGradingService] Network access declined. Staying localhost.");
+                GradeLog.Warn(Tag, "Network access declined. Staying localhost.");
                 RebindLocalhost();
                 return false;
             }
@@ -294,7 +282,7 @@ public class ColorGradingService : IDisposable
             {
                 _listener?.Close();
                 _listener = null;
-                Console.WriteLine($"[ColorGradingService] Failed to bind after ACL: {retryEx.Message}");
+                GradeLog.Error(Tag, $"Failed to bind after ACL: {retryEx.Message}");
                 RebindLocalhost();
                 return false;
             }
@@ -303,7 +291,7 @@ public class ColorGradingService : IDisposable
         {
             _listener?.Close();
             _listener = null;
-            Console.WriteLine($"[ColorGradingService] Failed to enable network: {ex.Message}");
+            GradeLog.Error(Tag, $"Failed to enable network: {ex.Message}");
             RebindLocalhost();
             return false;
         }
@@ -326,7 +314,7 @@ public class ColorGradingService : IDisposable
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[ColorGradingService] mDNS unavailable: {ex.Message}");
+            GradeLog.Warn(Tag, $"mDNS unavailable: {ex.Message}");
             _mdns = null;
         }
 
@@ -337,7 +325,7 @@ public class ColorGradingService : IDisposable
         if (Port != 443)
         {
             try { StartHttpsRedirect(); }
-            catch (Exception ex) { Console.WriteLine($"[ColorGradingService] HTTPS redirect unavailable: {ex.Message}"); }
+            catch (Exception ex) { GradeLog.Warn(Tag, $"HTTPS redirect unavailable: {ex.Message}"); }
         }
 
         // Update URL and server info
@@ -355,9 +343,9 @@ public class ColorGradingService : IDisposable
             appName = _appHostName
         };
 
-        Console.WriteLine($"[ColorGradingService] Network enabled: {_uiUrl}");
+        GradeLog.Info(Tag, $"Network enabled: {_uiUrl}");
         if (_ownsDirectory)
-            Console.WriteLine($"[ColorGradingService] Directory: http://{(_lanIp ?? "127.0.0.1")}/{BaseUrlPath}/");
+            GradeLog.Info(Tag, $"Directory: http://{(_lanIp ?? "127.0.0.1")}/{BaseUrlPath}/");
 
         // Notify connected clients of the upgraded server info
         _ = BroadcastState();
@@ -378,11 +366,11 @@ public class ColorGradingService : IDisposable
             _listener.Start();
             _actualPort = _localhostPort;
             _serverTask = Task.Run(() => AcceptConnectionsAsync(_listener!, _cts!.Token));
-            Console.WriteLine($"[ColorGradingService] Reverted to localhost on port {_localhostPort}");
+            GradeLog.Info(Tag, $"Reverted to localhost on port {_localhostPort}");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[ColorGradingService] Failed to rebind localhost: {ex.Message}");
+            GradeLog.Error(Tag, $"Failed to rebind localhost: {ex.Message}");
             _lastError = $"Failed to rebind: {ex.Message}";
         }
     }
@@ -567,7 +555,7 @@ public class ColorGradingService : IDisposable
                 return; // Rule already exists
 
             // Rule missing — add it via elevated command
-            Console.WriteLine("[ColorGradingService] Adding firewall rule for network access...");
+            GradeLog.Info(Tag, "Adding firewall rule for network access...");
             var add = Process.Start(new ProcessStartInfo
             {
                 FileName = "cmd.exe",
@@ -581,7 +569,7 @@ public class ColorGradingService : IDisposable
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[ColorGradingService] Firewall rule check failed: {ex.Message}");
+            GradeLog.Warn(Tag, $"Firewall rule check failed: {ex.Message}");
         }
     }
 
@@ -600,7 +588,7 @@ public class ColorGradingService : IDisposable
             _directoryListener.Start();
             _ownsDirectory = true;
             _ = Task.Run(() => AcceptDirectoryConnectionsAsync(_directoryListener, _cts!.Token));
-            Console.WriteLine($"[ColorGradingService] Claimed directory page at /{BaseUrlPath}/");
+            GradeLog.Info(Tag, $"Claimed directory page at /{BaseUrlPath}/");
         }
         catch (HttpListenerException)
         {
@@ -625,7 +613,7 @@ public class ColorGradingService : IDisposable
             catch (Exception ex)
             {
                 if (!ct.IsCancellationRequested)
-                    Console.WriteLine($"[ColorGradingService] Directory accept error: {ex.Message}");
+                    GradeLog.Error(Tag, $"Directory accept error: {ex.Message}");
             }
         }
     }
@@ -782,7 +770,7 @@ h2{font-size:.625rem;font-weight:600;text-transform:uppercase;letter-spacing:.1e
             }
         }, ct);
 
-        Console.WriteLine("[ColorGradingService]   HTTPS redirect active on :443");
+        GradeLog.Info(Tag, "HTTPS redirect active on :443");
     }
 
     private async Task HandleHttpsRedirectAsync(TcpClient client, X509Certificate2 cert, CancellationToken ct)
@@ -822,17 +810,17 @@ h2{font-size:.625rem;font-weight:600;text-transform:uppercase;letter-spacing:.1e
         try
         {
             var httpUrl = UiUrl;
-            Console.WriteLine($"[ColorGradingService] Opening browser: {httpUrl}");
+            GradeLog.Debug(Tag, $"Opening browser: {httpUrl}");
             Process.Start(new ProcessStartInfo { FileName = httpUrl, UseShellExecute = true });
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[ColorGradingService] Failed to open browser: {ex.Message}");
+            GradeLog.Warn(Tag, $"Failed to open browser: {ex.Message}");
         }
     }
 
     /// <summary>
-    /// Request a browser open with a short delay. Checks for existing clients first.
+    /// Request a browser open with a short delay.
     /// Called by ColorGradingInstance when autoOpenBrowser is true.
     /// Safe to call multiple times — only the first call triggers.
     /// </summary>
@@ -841,29 +829,18 @@ h2{font-size:.625rem;font-weight:600;text-transform:uppercase;letter-spacing:.1e
         if (_browserOpenRequested || !_serverStarted || _actualPort == 0)
             return;
 
-        if (_clients.Count > 0)
-        {
-            Console.WriteLine($"[ColorGradingService] UI already connected ({_clients.Count} clients), skipping browser open");
-            _browserOpenRequested = true;
-            return;
-        }
-
         _browserOpenRequested = true;
         var token = _cts?.Token ?? CancellationToken.None;
         _ = Task.Run(async () =>
         {
             try
             {
-                // Short delay to allow already-open tabs to reconnect
+                // Short delay to let the server settle
                 await Task.Delay(3000, token);
-                if (!token.IsCancellationRequested && _clients.Count == 0)
+                if (!token.IsCancellationRequested)
                 {
-                    Console.WriteLine("[ColorGradingService] No clients after 3s, opening browser...");
+                    GradeLog.Debug(Tag, "Opening browser...");
                     OpenBrowser();
-                }
-                else if (_clients.Count > 0)
-                {
-                    Console.WriteLine($"[ColorGradingService] Client connected during wait ({_clients.Count}), skipping browser open");
                 }
             }
             catch (OperationCanceledException) { }
@@ -942,7 +919,7 @@ h2{font-size:.625rem;font-weight:600;text-transform:uppercase;letter-spacing:.1e
                 _selectedInstanceId = stableId;
             }
 
-            Console.WriteLine($"[ColorGradingService] Registered '{uniqueDisplayName}' ({stableId}) pinKey={pinKey} (total: {_instances.Count})");
+            GradeLog.Debug(Tag, $"Registered '{uniqueDisplayName}' ({stableId}) pinKey={pinKey} (total: {_instances.Count})");
         }
 
         _ = BroadcastInstanceList();
@@ -958,7 +935,7 @@ h2{font-size:.625rem;font-weight:600;text-transform:uppercase;letter-spacing:.1e
         {
             if (_instances.TryRemove(instanceGuid, out var removed))
             {
-                Console.WriteLine($"[ColorGradingService] Unregistered '{removed.DisplayName}' ({instanceGuid}) (remaining: {_instances.Count})");
+                GradeLog.Debug(Tag, $"Unregistered '{removed.DisplayName}' ({instanceGuid}) (remaining: {_instances.Count})");
 
                 // If we removed the selected instance, select another
                 if (_selectedInstanceId == instanceGuid)
@@ -1120,7 +1097,7 @@ h2{font-size:.625rem;font-weight:600;text-transform:uppercase;letter-spacing:.1e
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[ColorGradingService] Failed to save instance '{instanceId}': {ex.Message}");
+            GradeLog.Error(Tag, $"Failed to save instance '{instanceId}': {ex.Message}");
         }
     }
 
@@ -1142,7 +1119,7 @@ h2{font-size:.625rem;font-weight:600;text-transform:uppercase;letter-spacing:.1e
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[ColorGradingService] Failed to load instance '{instanceId}': {ex.Message}");
+            GradeLog.Error(Tag, $"Failed to load instance '{instanceId}': {ex.Message}");
             return null;
         }
     }
@@ -1186,6 +1163,45 @@ h2{font-size:.625rem;font-weight:600;text-transform:uppercase;letter-spacing:.1e
     }
 
     /// <summary>
+    /// Apply a complete ProjectSettings to an instance from external JSON input.
+    /// Used by ColorGradingInstance for manual JSON I/O pins.
+    /// Atomic: deep copies all fields, sets runtime state, and persists in a single operation.
+    /// </summary>
+    internal void ApplySettingsFromJson(string instanceId, ProjectSettings settings)
+    {
+        lock (_instancesLock)
+        {
+            if (!_instances.TryGetValue(instanceId, out var instance))
+                return;
+
+            // Deep copy all fields at once
+            instance.ColorCorrection = ProjectSettings.CloneColorCorrection(settings.ColorCorrection);
+            instance.Tonemap = ProjectSettings.CloneTonemap(settings.Tonemap);
+            if (!string.IsNullOrEmpty(settings.InputFilePath))
+                instance.InputFilePath = settings.InputFilePath;
+
+            // Single runtime state update with complete data
+            instance.InstanceNode?.SetRuntimeState(
+                instance.ColorCorrection,
+                instance.Tonemap,
+                instance.InputFilePath);
+
+            // Single persist
+            if (instance.IsExported)
+            {
+                SaveInstanceToJson(instanceId, instance.ColorCorrection, instance.Tonemap, instance.InputFilePath);
+            }
+            else
+            {
+                PersistInstanceToPin(instance);
+            }
+        }
+
+        // Broadcast to web UI clients so they see the change
+        _ = BroadcastState();
+    }
+
+    /// <summary>
     /// Persist instance state to the "Settings" Create pin on the parent node via SetPinValue.
     /// Writes a dictionary of ALL instances sharing the same physical pin (same PinKey),
     /// keyed by stable instance ID. This supports multiple runtime instances from a looped node.
@@ -1226,7 +1242,7 @@ h2{font-size:.625rem;font-weight:600;text-transform:uppercase;letter-spacing:.1e
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[ColorGradingService] SetPinValue failed for '{instance.InstanceId}': {ex.Message}");
+            GradeLog.Error(Tag, $"SetPinValue failed for '{instance.InstanceId}': {ex.Message}");
         }
     }
 
@@ -1349,7 +1365,7 @@ h2{font-size:.625rem;font-weight:600;text-transform:uppercase;letter-spacing:.1e
 
     private void StopServer()
     {
-        Console.WriteLine("[ColorGradingService] Stopping server...");
+        GradeLog.Info(Tag, "Stopping server...");
 
         // Stop mDNS first (sends goodbye announcements)
         try { _mdns?.Dispose(); } catch { }
@@ -1386,7 +1402,7 @@ h2{font-size:.625rem;font-weight:600;text-transform:uppercase;letter-spacing:.1e
         try { _cts?.Dispose(); } catch { }
         _cts = null;
 
-        Console.WriteLine("[ColorGradingService] Server stopped.");
+        GradeLog.Info(Tag, "Server stopped.");
     }
 
     #endregion
@@ -1416,13 +1432,13 @@ h2{font-size:.625rem;font-weight:600;text-transform:uppercase;letter-spacing:.1e
                     HandleHttpRequest(context);
                 }
             }
-            catch (HttpListenerException) when (ct.IsCancellationRequested) { break; }
+            catch (HttpListenerException) { break; } // Listener stopped (restart or dispose)
             catch (ObjectDisposedException) { break; } // Listener swapped or disposed
             catch (OperationCanceledException) { break; }
             catch (Exception ex)
             {
-                if (!ct.IsCancellationRequested)
-                    Console.WriteLine($"[ColorGradingService] Accept error: {ex.Message}");
+                if (!ct.IsCancellationRequested && listener.IsListening)
+                    GradeLog.Error(Tag, $"Accept error: {ex.Message}");
             }
         }
     }
@@ -1456,7 +1472,7 @@ h2{font-size:.625rem;font-weight:600;text-transform:uppercase;letter-spacing:.1e
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[ColorGradingService] HTTP error: {ex.Message}");
+            GradeLog.Error(Tag, $"HTTP error: {ex.Message}");
             response.StatusCode = 500;
             response.Close();
         }
@@ -1546,12 +1562,12 @@ h2{font-size:.625rem;font-weight:600;text-transform:uppercase;letter-spacing:.1e
         }
         catch (WebSocketException ex)
         {
-            Console.WriteLine($"[ColorGradingService] Client {clientId} WebSocket error: {ex.WebSocketErrorCode}");
+            GradeLog.Warn(Tag, $"Client {clientId} WebSocket error: {ex.WebSocketErrorCode}");
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            Console.WriteLine($"[ColorGradingService] Client {clientId} unexpected error: {ex.Message}");
+            GradeLog.Error(Tag, $"Client {clientId} unexpected error: {ex.Message}");
         }
         finally
         {
@@ -1681,7 +1697,7 @@ h2{font-size:.625rem;font-weight:600;text-transform:uppercase;letter-spacing:.1e
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[ColorGradingService] Message error: {ex.Message}");
+            GradeLog.Error(Tag, $"Message error: {ex.Message}");
         }
     }
 
@@ -1729,11 +1745,16 @@ h2{font-size:.625rem;font-weight:600;text-transform:uppercase;letter-spacing:.1e
     {
         var cc = new ColorCorrectionSettings
         {
+            InputSpace = current.InputSpace,
+            GradingSpace = current.GradingSpace,
             Exposure = current.Exposure,
             Contrast = current.Contrast,
             Saturation = current.Saturation,
             Temperature = current.Temperature,
             Tint = current.Tint,
+            Highlights = current.Highlights,
+            Shadows = current.Shadows,
+            Vibrance = current.Vibrance,
             Lift = current.Lift,
             Gamma = current.Gamma,
             Gain = current.Gain,
@@ -1745,16 +1766,23 @@ h2{font-size:.625rem;font-weight:600;text-transform:uppercase;letter-spacing:.1e
             ShadowSoftClip = current.ShadowSoftClip,
             HighlightKnee = current.HighlightKnee,
             ShadowKnee = current.ShadowKnee,
-            InputSpace = current.InputSpace,
-            GradingSpace = current.GradingSpace,
-            OutputSpace = current.OutputSpace
+            VignetteStrength = current.VignetteStrength,
+            VignetteRadius = current.VignetteRadius,
+            VignetteSoftness = current.VignetteSoftness
         };
+
+        if (p.TryGetProperty("inputSpace", out var inSpace)) cc.InputSpace = Enum.Parse<HDRColorSpace>(inSpace.GetString() ?? "Linear_Rec709", true);
+        if (p.TryGetProperty("gradingSpace", out var gs)) cc.GradingSpace = Enum.Parse<GradingSpace>(gs.GetString() ?? "Log", true);
 
         if (p.TryGetProperty("exposure", out var exp)) cc.Exposure = exp.GetSingle();
         if (p.TryGetProperty("contrast", out var con)) cc.Contrast = con.GetSingle();
         if (p.TryGetProperty("saturation", out var sat)) cc.Saturation = sat.GetSingle();
         if (p.TryGetProperty("temperature", out var temp)) cc.Temperature = temp.GetSingle();
         if (p.TryGetProperty("tint", out var tint)) cc.Tint = tint.GetSingle();
+
+        if (p.TryGetProperty("highlights", out var hl)) cc.Highlights = hl.GetSingle();
+        if (p.TryGetProperty("shadows", out var sh)) cc.Shadows = sh.GetSingle();
+        if (p.TryGetProperty("vibrance", out var vib)) cc.Vibrance = vib.GetSingle();
 
         if (p.TryGetProperty("lift", out var lift)) cc.Lift = ParseVector3(lift);
         if (p.TryGetProperty("gamma", out var gamma)) cc.Gamma = ParseVector3(gamma);
@@ -1770,9 +1798,9 @@ h2{font-size:.625rem;font-weight:600;text-transform:uppercase;letter-spacing:.1e
         if (p.TryGetProperty("highlightKnee", out var hk)) cc.HighlightKnee = hk.GetSingle();
         if (p.TryGetProperty("shadowKnee", out var sk)) cc.ShadowKnee = sk.GetSingle();
 
-        if (p.TryGetProperty("inputSpace", out var inSpace)) cc.InputSpace = Enum.Parse<HDRColorSpace>(inSpace.GetString() ?? "Linear_Rec709", true);
-        if (p.TryGetProperty("gradingSpace", out var gs)) cc.GradingSpace = Enum.Parse<GradingSpace>(gs.GetString() ?? "Log", true);
-        if (p.TryGetProperty("outputSpace", out var outSpace)) cc.OutputSpace = Enum.Parse<HDRColorSpace>(outSpace.GetString() ?? "Linear_Rec709", true);
+        if (p.TryGetProperty("vignetteStrength", out var vs)) cc.VignetteStrength = vs.GetSingle();
+        if (p.TryGetProperty("vignetteRadius", out var vr)) cc.VignetteRadius = vr.GetSingle();
+        if (p.TryGetProperty("vignetteSoftness", out var vso)) cc.VignetteSoftness = vso.GetSingle();
 
         return cc;
     }
@@ -1781,22 +1809,24 @@ h2{font-size:.625rem;font-weight:600;text-transform:uppercase;letter-spacing:.1e
     {
         var tm = new TonemapSettings
         {
-            InputSpace = current.InputSpace,
             OutputSpace = current.OutputSpace,
             Tonemap = current.Tonemap,
             Exposure = current.Exposure,
             WhitePoint = current.WhitePoint,
             PaperWhite = current.PaperWhite,
-            PeakBrightness = current.PeakBrightness
+            PeakBrightness = current.PeakBrightness,
+            BlackLevel = current.BlackLevel,
+            WhiteLevel = current.WhiteLevel
         };
 
-        if (p.TryGetProperty("inputSpace", out var inSpace)) tm.InputSpace = Enum.Parse<HDRColorSpace>(inSpace.GetString() ?? "Linear_Rec709", true);
         if (p.TryGetProperty("outputSpace", out var outSpace)) tm.OutputSpace = Enum.Parse<HDRColorSpace>(outSpace.GetString() ?? "sRGB", true);
         if (p.TryGetProperty("tonemap", out var op)) tm.Tonemap = Enum.Parse<TonemapOperator>(op.GetString() ?? "ACES", true);
         if (p.TryGetProperty("exposure", out var exp)) tm.Exposure = exp.GetSingle();
         if (p.TryGetProperty("whitePoint", out var wp)) tm.WhitePoint = wp.GetSingle();
         if (p.TryGetProperty("paperWhite", out var pw)) tm.PaperWhite = pw.GetSingle();
         if (p.TryGetProperty("peakBrightness", out var pb)) tm.PeakBrightness = pb.GetSingle();
+        if (p.TryGetProperty("blackLevel", out var bl)) tm.BlackLevel = bl.GetSingle();
+        if (p.TryGetProperty("whiteLevel", out var wl)) tm.WhiteLevel = wl.GetSingle();
 
         return tm;
     }
@@ -1963,7 +1993,7 @@ h2{font-size:.625rem;font-weight:600;text-transform:uppercase;letter-spacing:.1e
             ApplyInstanceState(instanceId, "inputFilePath", null, null, loaded.InputFilePath);
             inst.ActivePresetName = name;
             inst.IsPresetDirty = false;
-            Console.WriteLine($"[ColorGradingService] Loaded preset '{name}' to instance '{instanceId}'");
+            GradeLog.Debug(Tag, $"Loaded preset '{name}' to instance '{instanceId}'");
         }
     }
 
@@ -1986,7 +2016,7 @@ h2{font-size:.625rem;font-weight:600;text-transform:uppercase;letter-spacing:.1e
             settings.SaveToFile(filePath);
             instance.ActivePresetName = name;
             instance.IsPresetDirty = false;
-            Console.WriteLine($"[ColorGradingService] Saved preset '{name}' from instance '{instanceId}'");
+            GradeLog.Debug(Tag, $"Saved preset '{name}' from instance '{instanceId}'");
         }
     }
 

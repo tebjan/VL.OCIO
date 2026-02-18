@@ -136,7 +136,7 @@ export function ColorWheel({
     drawWheel()
   }, [drawWheel])
 
-  const updateFromMouseEvent = useCallback(
+  const updateFromPointerEvent = useCallback(
     (clientX: number, clientY: number) => {
       const canvas = canvasRef.current
       if (!canvas) return
@@ -165,31 +165,21 @@ export function ColorWheel({
     [size, wheelSensitivity, value, defaultValue, composeValue, onChange]
   )
 
-  const handleMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+  const handlePointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     e.preventDefault()
+    e.currentTarget.setPointerCapture(e.pointerId)
     setIsDragging(true)
-    updateFromMouseEvent(e.clientX, e.clientY)
-  }, [updateFromMouseEvent])
+    updateFromPointerEvent(e.clientX, e.clientY)
+  }, [updateFromPointerEvent])
 
-  useEffect(() => {
+  const handlePointerMove = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!isDragging) return
+    updateFromPointerEvent(e.clientX, e.clientY)
+  }, [isDragging, updateFromPointerEvent])
 
-    const handleGlobalMouseMove = (e: MouseEvent) => {
-      updateFromMouseEvent(e.clientX, e.clientY)
-    }
-
-    const handleGlobalMouseUp = () => {
-      setIsDragging(false)
-    }
-
-    window.addEventListener('mousemove', handleGlobalMouseMove)
-    window.addEventListener('mouseup', handleGlobalMouseUp)
-
-    return () => {
-      window.removeEventListener('mousemove', handleGlobalMouseMove)
-      window.removeEventListener('mouseup', handleGlobalMouseUp)
-    }
-  }, [isDragging, updateFromMouseEvent])
+  const handlePointerUp = useCallback(() => {
+    setIsDragging(false)
+  }, [])
 
   const handleReset = useCallback(() => {
     setWheelPos({ x: 0, y: 0 })
@@ -209,7 +199,11 @@ export function ColorWheel({
           'cursor-crosshair rounded-full',
           isDragging && 'cursor-grabbing'
         )}
-        onMouseDown={handleMouseDown}
+        style={{ touchAction: 'none' }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
         onDoubleClick={handleReset}
       />
       <div className="flex text-[10px] font-mono">

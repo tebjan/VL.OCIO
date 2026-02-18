@@ -1,23 +1,16 @@
 // ============================================================================
 // HDRTonemap_TextureFX.sdsl
-// HDR Output Transforms and Tonemapping for VVVV
+// Standalone HDR Tonemapping + Output Transform
 // ============================================================================
 //
-// This shader handles the final stage of the HDR pipeline:
-// - ACES Tonemapping (RRT+ODT approximation)
-// - HDR10 output (PQ/ST.2084 + Rec.2020)
-// - HLG output (Hybrid Log-Gamma + Rec.2020)
-// - SDR output (sRGB)
+// Final stage of the HDR pipeline when used separately from grading.
+// Applies tonemapping operator + HDR/SDR output transform.
 //
-// References:
-// - SMPTE ST 2084:2014 (PQ transfer function)
-// - ARIB STD-B67 (HLG transfer function)
-// - ITU-R BT.2100 (HDR Television)
-// - ACES Reference Rendering Transform
+// For combined grade + tonemap, use HDRGrade_Tonemap_TextureFX instead.
 //
 // ============================================================================
 
-shader HDRTonemap_TextureFX : FilterBase, TonemapOperators
+shader HDRTonemap_TextureFX : FilterBase, HDRTonemap
 {
     // ========================================================================
     // INPUT CONFIGURATION
@@ -37,76 +30,50 @@ shader HDRTonemap_TextureFX : FilterBase, TonemapOperators
     int OutputSpace = 5;  // Default to sRGB for display
 
     // Tonemapping operator (see TonemapOperator enum)
-    // 0=None, 1=ACES, 2=Reinhard, 3=ReinhardExtended
     [EnumType("VL.OCIO.TonemapOperator, VL.OCIO")]
-    int Tonemap = 1;  // Default ACES
+    int Tonemap = 0;  // Default None
 
     // ========================================================================
-    // HDR OUTPUT PARAMETERS
-    // ========================================================================
-
-    // Paper white level in nits (cd/m²)
-    // This is the brightness of "diffuse white" (e.g., white paper under normal lighting)
-    // SDR content typically assumes 80-100 nits
-    // HDR paper white is typically 200-400 nits
-    float PaperWhite = 200.0;
-
-    // Peak brightness in nits for HDR output
-    // Common values: 400, 600, 1000, 2000, 4000, 10000
-    // Set this to match your display's peak luminance
-    float PeakBrightness = 1000.0;
-
-    // ========================================================================
-    // TONEMAPPING PARAMETERS
+    // TONEMAP PARAMETERS
     // ========================================================================
 
     // Pre-tonemap exposure adjustment (in stops)
     float Exposure = 0.0;
 
     // Shoulder strength for Reinhard Extended (affects highlight rolloff)
-    // Higher values = brighter white point before compression
     float WhitePoint = 4.0;
 
     // ========================================================================
-    // TONEMAPPING OPERATORS
-    // Note: All tonemap operators inherited from TonemapOperators base shader
+    // HDR OUTPUT PARAMETERS
     // ========================================================================
 
+    // Paper white level in nits (cd/m²)
+    float PaperWhite = 200.0;
+
+    // Peak brightness in nits for HDR output
+    float PeakBrightness = 1000.0;
+
     // ========================================================================
-    // MAIN FILTER FUNCTION
+    // OUTPUT RANGE REMAP
+    // ========================================================================
+
+    // Black level for display hardware compensation (projectors, LED walls)
+    float BlackLevel = 0.0;
+
+    // White level for display hardware compensation
+    float WhiteLevel = 1.0;
+
+    // ========================================================================
+    // MAIN FILTER
     // ========================================================================
 
     float4 Filter(float4 tex0col)
     {
-        float3 color = tex0col.rgb;
+        float3 result = ApplyTonemapOutput(tex0col.rgb, InputSpace, OutputSpace,
+                                           Tonemap, Exposure, WhitePoint,
+                                           PaperWhite, PeakBrightness);
 
-        // Input-space-aware tonemap: converts to native space, applies exposure
-        // + tonemap, returns Linear Rec.709 (no redundant round-trips)
-        float3 linear709 = ApplyTonemap(color, InputSpace, Tonemap, Exposure, WhitePoint);
-
-        // Convert to output color space
-        // HDR outputs handle gamut + PaperWhite + transfer function directly
-        // to give user explicit control (FromLinearRec709 has hardcoded nit values)
-        float3 result;
-        if (OutputSpace == 6)       // PQ Rec.2020
-        {
-            float3 rec2020 = mul(Rec709_to_Rec2020, linear709);
-            result = LinearToPQ(rec2020 * PaperWhite / PQ_MAX_NITS);
-        }
-        else if (OutputSpace == 7)  // HLG Rec.2020
-        {
-            float3 rec2020 = mul(Rec709_to_Rec2020, linear709);
-            float peak = max(PeakBrightness, 1.0);
-            result = LinearToHLG(clamp(rec2020 * PaperWhite / peak, 0.0, 1.0));
-        }
-        else if (OutputSpace == 8)  // scRGB
-        {
-            result = linear709 * (PaperWhite / 80.0);
-        }
-        else                        // Non-HDR outputs (0-5): use standard conversion
-        {
-            result = FromLinearRec709(linear709, OutputSpace);
-        }
+        result = RemapDisplayRange(result, BlackLevel, WhiteLevel);
 
         return float4(result, tex0col.a);
     }

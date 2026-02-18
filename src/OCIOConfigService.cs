@@ -32,6 +32,7 @@ public class OCIOConfigService : IDisposable
 
         var service = new OCIOConfigService();
         appHost.Services.RegisterService(service);
+        service.EnsureDefaultLoaded();
         return service;
     }
 
@@ -105,9 +106,22 @@ public class OCIOConfigService : IDisposable
             }
         }
 
+        var enumDef = OCIOConfigEnumDefinition.Instance;
+
+        // Dedup against static enum entries (survives service recreation on hot-reload)
+        foreach (var kvp in enumDef.GetAllEntries())
+        {
+            if (kvp.Value is OCIOConfigTag existingTag && !existingTag.IsBuiltin &&
+                string.Equals(existingTag.FilePath, normalizedPath, StringComparison.OrdinalIgnoreCase))
+            {
+                _loadedFilePaths[kvp.Key] = normalizedPath;
+                error = null;
+                return kvp.Key;
+            }
+        }
+
         // Derive display name from filename
         var baseName = Path.GetFileNameWithoutExtension(filePath);
-        var enumDef = OCIOConfigEnumDefinition.Instance;
         var name = baseName;
 
         // Handle name collisions with #N suffix

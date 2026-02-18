@@ -6,6 +6,7 @@ interface SelectProps<T extends string> {
   options: { value: T; label: string }[]
   onChange: (value: T) => void
   compact?: boolean
+  mobile?: boolean
 }
 
 export function Select<T extends string>({
@@ -14,6 +15,7 @@ export function Select<T extends string>({
   options,
   onChange,
   compact = false,
+  mobile = false,
 }: SelectProps<T>) {
   if (compact) {
     return (
@@ -34,6 +36,31 @@ export function Select<T extends string>({
           </option>
         ))}
       </select>
+    )
+  }
+
+  if (mobile) {
+    return (
+      <div className="flex flex-col gap-1">
+        <div className="text-sm text-surface-300">{label}</div>
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value as T)}
+          className={cn(
+            'w-full px-3 py-2 text-sm',
+            'bg-surface-800 border border-surface-700 rounded',
+            'text-surface-200',
+            'focus:outline-none focus:border-surface-500',
+            'cursor-pointer'
+          )}
+        >
+          {options.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      </div>
     )
   }
 

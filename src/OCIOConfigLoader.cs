@@ -1,3 +1,5 @@
+using Path = VL.Lib.IO.Path;
+
 namespace VL.OCIO;
 
 /// <summary>
@@ -8,7 +10,7 @@ namespace VL.OCIO;
 public class OCIOConfigLoader : IDisposable
 {
     private readonly OCIOConfigService _service;
-    private string _cachedPath;
+    private Path _cachedPath;
     private string _loadedName;
     private int _lastConfigVersion = -1;
 
@@ -20,44 +22,45 @@ public class OCIOConfigLoader : IDisposable
     public void Update(
         out string name,
         out string error,
-        string configPath = null)
+        Path configPath = default)
     {
         error = null;
 
-        if (string.IsNullOrWhiteSpace(configPath))
+        // No path provided
+        if (configPath == default)
         {
+            name = _loadedName;
+            return;
+        }
+
+        // Path unchanged — check version or retry, no ToString allocation
+        if (configPath == _cachedPath)
+        {
+            // Previous load failed → retry
+            if (_loadedName == null)
+            {
+                _loadedName = _service.LoadConfigFromFile(configPath.ToString(), out error);
+                _lastConfigVersion = _service.ConfigVersion;
+                name = _loadedName;
+                return;
+            }
+
+            // Config version changed → re-ensure our entry is still registered
+            var currentVersion = _service.ConfigVersion;
+            if (currentVersion != _lastConfigVersion)
+            {
+                _lastConfigVersion = currentVersion;
+                _loadedName = _service.LoadConfigFromFile(configPath.ToString(), out error);
+            }
+
             name = _loadedName;
             return;
         }
 
         // Path changed → load new config
-        if (configPath != _cachedPath)
-        {
-            _cachedPath = configPath;
-            _loadedName = _service.LoadConfigFromFile(configPath, out error);
-            _lastConfigVersion = _service.ConfigVersion;
-            name = _loadedName;
-            return;
-        }
-
-        // Previous load failed → retry
-        if (_loadedName == null)
-        {
-            _loadedName = _service.LoadConfigFromFile(configPath, out error);
-            _lastConfigVersion = _service.ConfigVersion;
-            name = _loadedName;
-            return;
-        }
-
-        // Config version changed → re-ensure our entry is still registered
-        var currentVersion = _service.ConfigVersion;
-        if (currentVersion != _lastConfigVersion)
-        {
-            _lastConfigVersion = currentVersion;
-            // LoadConfigFromFile handles dedup + re-adds enum entry if missing
-            _loadedName = _service.LoadConfigFromFile(_cachedPath, out error);
-        }
-
+        _cachedPath = configPath;
+        _loadedName = _service.LoadConfigFromFile(configPath.ToString(), out error);
+        _lastConfigVersion = _service.ConfigVersion;
         name = _loadedName;
     }
 

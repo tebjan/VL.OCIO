@@ -8,7 +8,7 @@
   <metadata>
     <id>VL.OCIO</id>
     <!-- For more about versions see: https://thegraybook.vvvv.org/reference/extending/publishing.html#version -->
-    <version>1.4.0-pre1</version>
+    <version>1.4.0-pre2</version>
     <title>VL.OCIO</title>
     <!-- Provide authors and projectUrl --> 
     <authors>Tebjan Halm</authors>

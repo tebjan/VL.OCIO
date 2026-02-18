@@ -25,6 +25,7 @@ public record DiscoveredServer(
 /// </summary>
 public class MdnsDiscovery : IDisposable
 {
+    private const string Tag = "MdnsDiscovery";
     private const string ServiceType = "_colorgrading._tcp";
     private const string LeaderInstanceName = "hdr";
     private const string LeaderHostName = "hdr.local";
@@ -127,13 +128,13 @@ public class MdnsDiscovery : IDisposable
             _knownServers[selfKey] = new DiscoveredServer(
                 _hostname, _lanIp, _port, IsLeader, 0, DateTime.UtcNow, _appSubPath, _appName);
 
-            Console.WriteLine($"[MdnsDiscovery] Started (leader={IsLeader}, hostname={_hostname})");
+            GradeLog.Info(Tag, $"Started (leader={IsLeader}, hostname={_hostname})");
             if (IsLeader)
-                Console.WriteLine($"[MdnsDiscovery] Hub: {HubUrl}");
+                GradeLog.Info(Tag, $"Hub: {HubUrl}");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[MdnsDiscovery] Failed to start (mDNS unavailable, using IP): {ex.Message}");
+            GradeLog.Warn(Tag, $"Failed to start (mDNS unavailable, using IP): {ex.Message}");
             // Server continues without mDNS — IP-based access still works
         }
     }
@@ -160,7 +161,7 @@ public class MdnsDiscovery : IDisposable
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[MdnsDiscovery] Failed to register service: {ex.Message}");
+            GradeLog.Warn(Tag, $"Failed to register service: {ex.Message}");
         }
     }
 
@@ -214,13 +215,13 @@ public class MdnsDiscovery : IDisposable
             }
             else
             {
-                Console.WriteLine("[MdnsDiscovery] Another leader exists, running as follower");
+                GradeLog.Info(Tag, "Another leader exists, running as follower");
                 IsLeader = false;
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[MdnsDiscovery] Leader election failed: {ex.Message}");
+            GradeLog.Warn(Tag, $"Leader election failed: {ex.Message}");
             IsLeader = false;
         }
     }
@@ -248,7 +249,7 @@ public class MdnsDiscovery : IDisposable
             // If the leader service shut down, try to claim leadership
             if (name.Contains(LeaderInstanceName) && !IsLeader)
             {
-                Console.WriteLine("[MdnsDiscovery] Leader departed, attempting to claim leadership...");
+                GradeLog.Info(Tag, "Leader departed, attempting to claim leadership...");
                 // Random jitter to avoid simultaneous probe storms
                 var jitter = Random.Shared.Next(100, 600);
                 Task.Delay(jitter).ContinueWith(_ =>
@@ -258,7 +259,7 @@ public class MdnsDiscovery : IDisposable
                         TryClaimLeadership();
                         if (IsLeader)
                         {
-                            Console.WriteLine($"[MdnsDiscovery] Claimed leadership! Hub: {HubUrl}");
+                            GradeLog.Info(Tag, $"Claimed leadership! Hub: {HubUrl}");
                             // Update self in known servers
                             var selfKey = string.IsNullOrEmpty(_appSubPath) ? _hostname : $"{_hostname}:{_appSubPath}";
                             _knownServers[selfKey] = _knownServers.TryGetValue(selfKey, out var self)
@@ -410,7 +411,7 @@ public class MdnsDiscovery : IDisposable
         }
         catch { }
 
-        Console.WriteLine("[MdnsDiscovery] Stopped");
+        GradeLog.Info(Tag, "Stopped");
     }
 
     private static string? GetLanIPAddress()

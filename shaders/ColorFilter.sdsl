@@ -1,0 +1,19 @@
+// ============================================================================
+// ColorFilter.sdsl
+// Base for shader composition with Filter(float4) pattern
+// ============================================================================
+//
+// Usage:
+//   Parent declares: compose ColorFilter Tonemap;
+//   Parent calls:    result = Tonemap.Filter(gradedColor);
+//   Child implements: override float4 Filter(float4 inputColor) { ... }
+//
+// ============================================================================
+
+shader ColorFilter
+{
+    float4 Filter(float4 inputColor)
+    {
+        return inputColor;
+    }
+};

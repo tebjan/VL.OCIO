@@ -12,6 +12,7 @@ interface SliderProps {
   unit?: string
   onChange: (value: number) => void
   gradient?: string
+  mobile?: boolean
 }
 
 export function Slider({
@@ -25,6 +26,7 @@ export function Slider({
   unit = '',
   onChange,
   gradient,
+  mobile = false,
 }: SliderProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [inputValue, setInputValue] = useState('')
@@ -44,9 +46,9 @@ export function Slider({
     setIsEditing(false)
     const parsed = parseFloat(inputValue)
     if (!isNaN(parsed)) {
-      onChange(Math.min(Math.max(parsed, min), max))
+      onChange(parsed)
     }
-  }, [inputValue, onChange, min, max])
+  }, [inputValue, onChange])
 
   const handleInputKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -70,7 +72,59 @@ export function Slider({
     }
   }, [defaultValue, onChange])
 
-  const percentage = ((value - min) / (max - min)) * 100
+  const percentage = Math.min(100, Math.max(0, ((value - min) / (max - min)) * 100))
+  const sliderStyle = gradient
+    ? { '--slider-gradient': gradient } as React.CSSProperties
+    : { '--slider-gradient': `linear-gradient(to right, #71717a ${percentage}%, #3f3f46 ${percentage}%)` } as React.CSSProperties
+
+  const valueDisplay = isEditing ? (
+    <input
+      type="number"
+      value={inputValue}
+      onChange={handleInputChange}
+      onBlur={handleInputBlur}
+      onKeyDown={handleInputKeyDown}
+      autoFocus
+      className={cn(
+        'w-20 px-2 py-0.5 text-sm font-mono text-right',
+        'bg-surface-800 border border-surface-600 rounded',
+        'focus:outline-none focus:border-surface-400'
+      )}
+    />
+  ) : (
+    <div
+      onClick={handleValueClick}
+      className={cn(
+        'px-2 py-0.5 text-sm font-mono text-right text-surface-300',
+        'rounded cursor-text hover:bg-surface-800 transition-colors',
+        mobile ? 'min-w-[3rem]' : 'w-20'
+      )}
+    >
+      {formatNumber(value, decimals)}{unit}
+    </div>
+  )
+
+  if (mobile) {
+    return (
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center justify-between">
+          <div className="text-sm text-surface-300">{label}</div>
+          {valueDisplay}
+        </div>
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={value}
+          onChange={handleSliderChange}
+          onDoubleClick={handleDoubleClick}
+          className={cn('w-full h-6', gradient && 'gradient-track')}
+          style={sliderStyle}
+        />
+      </div>
+    )
+  }
 
   return (
     <div className="flex items-center gap-3 group">
@@ -85,38 +139,10 @@ export function Slider({
           onChange={handleSliderChange}
           onDoubleClick={handleDoubleClick}
           className={cn('w-full h-4', gradient && 'gradient-track')}
-          style={
-            gradient
-              ? { '--slider-gradient': gradient } as React.CSSProperties
-              : { '--slider-gradient': `linear-gradient(to right, #71717a ${percentage}%, #3f3f46 ${percentage}%)` } as React.CSSProperties
-          }
+          style={sliderStyle}
         />
       </div>
-      {isEditing ? (
-        <input
-          type="number"
-          value={inputValue}
-          onChange={handleInputChange}
-          onBlur={handleInputBlur}
-          onKeyDown={handleInputKeyDown}
-          autoFocus
-          className={cn(
-            'w-20 px-2 py-0.5 text-sm font-mono text-right',
-            'bg-surface-800 border border-surface-600 rounded',
-            'focus:outline-none focus:border-surface-400'
-          )}
-        />
-      ) : (
-        <div
-          onClick={handleValueClick}
-          className={cn(
-            'w-20 px-2 py-0.5 text-sm font-mono text-right text-surface-300',
-            'rounded cursor-text hover:bg-surface-800 transition-colors'
-          )}
-        >
-          {formatNumber(value, decimals)}{unit}
-        </div>
-      )}
+      {valueDisplay}
     </div>
   )
 }

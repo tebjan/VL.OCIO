@@ -8,11 +8,11 @@
   <metadata>
     <id>VL.OCIO</id>
     <!-- For more about versions see: https://thegraybook.vvvv.org/reference/extending/publishing.html#version -->
-    <version>1.4.0</version>
+    <version>1.4.1</version>
     <title>VL.OCIO</title>
     <!-- Provide authors and projectUrl --> 
     <authors>Tebjan Halm</authors>
-    <projectUrl>https://github.com/tebjan/VL.OCIO</projectUrl>
+    <projectUrl>https://forum.vvvv.org/t/vl-ocio-for-aces-color-management-and-hdr-color-grading/25012</projectUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <!-- Provide description and tags-->
     <description>OpenColorIO (OCIO) 2.5 integration for vvvv with built-in ACES 2.0 color space support. Includes HDRGrade (color grading) and HDRTonemap (tonemapping) TextureFX shaders with web-based UI.</description>
@@ -27,7 +27,6 @@
   </metadata>
   <files>
     <file src="..\lib\**\*.dll" target="lib\" exclude="" />
-    <file src="..\runtimes\**\*.dll" target="runtimes\" exclude="" />
     <file src="..\*.vl" target="" exclude="" />
     <file src="..\help\**" target="help\" exclude="" />
     <file src="..\shaders\**" target="shaders\" exclude="" />

@@ -183,7 +183,11 @@ shader TonemapOperators : ColorSpaceConversion
     float3 HejlBurgessTonemap(float3 color)
     {
         color = max(0.0, color - 0.004);
-        return (color * (6.2 * color + 0.5)) / (color * (6.2 * color + 1.7) + 0.06);
+        float3 display = (color * (6.2 * color + 0.5)) / (color * (6.2 * color + 1.7) + 0.06);
+
+        // Linearize: Hejl-Burgess bakes ~gamma 2.2 into its output (Hable:
+        // "you don't need pow(1/2.2) for this one"). Decode with pure pow(2.2).
+        return pow(display, 2.2);
     }
 
     // ========================================================================
@@ -310,7 +314,10 @@ shader TonemapOperators : ColorSpaceConversion
         // Apply outset matrix (expand chromaticity back out)
         color = mul(agx_mat_inv, color);
 
-        return saturate(color);
+        // Linearize: sigmoid outputs display-referred values (gamma 2.2 encoded).
+        // Sobotka's OCIO config uses pure ExponentTransform {2.2}, not piecewise sRGB.
+        // All reference implementations (IOLITE, three.js, Unreal) use pow(2.2).
+        return pow(max(color, 0.0), 2.2);
     }
 
     // ========================================================================

@@ -12,6 +12,7 @@ launchSettings.json
 
 # .NET
 *.pdb
+runtimes/
 
 # vvvv
 .vl/

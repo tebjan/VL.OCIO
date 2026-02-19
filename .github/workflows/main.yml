@@ -32,9 +32,7 @@ jobs:
         csproj: src\VL.OCIO.csproj
         nuspec: deployment\VL.OCIO.nuspec
 
-        # Fill the Icon file
-        icon-src: https://raw.githubusercontent.com/vvvv/PublicContent/master/nugeticon.png
-        icon-dst: ./deployment/nugeticon.png
-        
+        # Icon file is committed at deployment/nugeticon.png (no download needed)
+
         # Provide the nuget key. See: https://thegraybook.vvvv.org/reference/extending/publishing.html#getting-a-nugetorg-api-key
         nuget-key: ${{ secrets.NUGET_KEY }}

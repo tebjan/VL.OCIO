@@ -51,10 +51,10 @@ function getWebSocketUrl(): string {
 
   // Production: derive WebSocket path from current page URL
   // Page at /grade/machine/app/ → ws://host/grade/machine/app/
+  // loc.host already includes port when non-standard (e.g. "127.0.0.1:9000")
   const basePath = loc.pathname.replace(/^\/+|\/+$/g, '') || URL_PATH
   const wsProtocol = loc.protocol === 'https:' ? 'wss:' : 'ws:'
-  const wsPort = (port === '443' || port === '80') ? '' : `:${port}`
-  return `${wsProtocol}//${loc.host}${wsPort}/${basePath}/`
+  return `${wsProtocol}//${loc.host}/${basePath}/`
 }
 
 export function useWebSocket(): WebSocketState & WebSocketActions {
@@ -227,6 +227,20 @@ export function useWebSocket(): WebSocketState & WebSocketActions {
             return
           }
 
+          // Handle redirect — server is switching network mode, navigate to new URL
+          if (msg.type === 'redirect' && msg.url) {
+            console.log('Server redirect:', msg.url)
+            // Prevent reconnect attempts on the old URL
+            mountedRef.current = false
+            clearTimers()
+            if (wsRef.current) {
+              wsRef.current.onclose = null
+              try { wsRef.current.close() } catch { /* ignore */ }
+            }
+            window.location.href = msg.url
+            return
+          }
+
           if (msg.type === 'state') {
             // Extract server info if present
             if (msg.serverInfo) {
@@ -282,9 +296,31 @@ export function useWebSocket(): WebSocketState & WebSocketActions {
     // Start connection
     connect()
 
+    // Reconnect immediately when tab becomes visible or regains focus.
+    // Background tabs get their timers throttled by the browser (Chrome: once/min),
+    // so the normal reconnect loop may be too slow when the server restarts.
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && mountedRef.current) {
+        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+          reconnectDelayRef.current = RECONNECT_DELAY_MIN
+          connect()
+        }
+      }
+    }
+    const handleFocus = () => {
+      if (mountedRef.current && (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN)) {
+        reconnectDelayRef.current = RECONNECT_DELAY_MIN
+        connect()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+    window.addEventListener('focus', handleFocus)
+
     return () => {
       mountedRef.current = false
       clearTimers()
+      document.removeEventListener('visibilitychange', handleVisibility)
+      window.removeEventListener('focus', handleFocus)
       if (wsRef.current) {
         wsRef.current.onclose = null // Prevent reconnect on unmount
         wsRef.current.close()

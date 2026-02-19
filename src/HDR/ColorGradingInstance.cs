@@ -168,10 +168,14 @@ public class ColorGradingInstance : IDisposable
 
         effectiveInstanceId = displayName;
 
-        // Publish to network: when toggled on, upgrade the server to LAN-accessible
+        // Publish to network: toggle server between localhost-only and LAN-accessible
         if (publishToNetwork && !_lastPublishToNetwork)
         {
             _service.EnableNetworkAccess();
+        }
+        else if (!publishToNetwork && _lastPublishToNetwork)
+        {
+            _service.DisableNetworkAccess();
         }
         _lastPublishToNetwork = publishToNetwork;
 
@@ -197,7 +201,7 @@ public class ColorGradingInstance : IDisposable
             }
         }
 
-        // Auto-open browser if requested
+        // Auto-open browser if requested (service checks for existing clients before opening)
         if (autoOpenBrowser && _registered)
             _service.RequestBrowserOpen();
 

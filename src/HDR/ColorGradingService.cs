@@ -243,6 +243,15 @@ public class ColorGradingService : IDisposable
         if (_networkEnabled) return true;
         if (!_serverStarted || _cts == null) return false;
 
+        // Compute the new network URL and redirect connected clients before swapping listeners.
+        // This lets the browser navigate to the LAN URL seamlessly.
+        _lanIp ??= GetLanIPAddress();
+        if (_lanIp != null)
+        {
+            var newUrl = $"http://{_lanIp}/{_appSubPath}/";
+            BroadcastRedirect(newUrl);
+        }
+
         // Stop current localhost listener — network listener will cover all interfaces
         var oldPort = _actualPort;
         try { _listener?.Stop(); } catch { }
@@ -354,13 +363,70 @@ public class ColorGradingService : IDisposable
     }
 
     /// <summary>
-    /// Rebind the localhost listener after a failed network upgrade attempt.
+    /// Downgrade the server from all-interfaces back to localhost-only.
+    /// Stops mDNS, HTTPS redirect, directory listener, and rebinds to localhost.
+    /// The browser tab on http://localhost/... keeps working across the switch.
+    /// Safe to call when already in localhost mode (no-op).
+    /// </summary>
+    public void DisableNetworkAccess()
+    {
+        if (!_networkEnabled) return;
+
+        // Redirect connected clients to localhost URL before stopping the network listener
+        var portSuffix = _localhostPort == 80 ? "" : $":{_localhostPort}";
+        var newUrl = $"http://localhost{portSuffix}/{_appSubPath}/";
+        BroadcastRedirect(newUrl);
+
+        // Stop mDNS discovery
+        try { _mdns?.Dispose(); } catch { }
+        _mdns = null;
+
+        // Stop HTTPS redirect
+        StopHttpsRedirect();
+
+        // Stop directory listener
+        try { _directoryListener?.Stop(); } catch { }
+        try { _directoryListener?.Close(); } catch { }
+        _directoryListener = null;
+        _ownsDirectory = false;
+
+        // Stop network listener
+        try { _listener?.Stop(); } catch { }
+        try { _listener?.Close(); } catch { }
+        _listener = null;
+
+        _networkEnabled = false;
+
+        // Rebind localhost — existing browser tabs on localhost URL reconnect automatically
+        RebindLocalhost();
+        UpdateCachedUrl();
+
+        _serverInfo = new
+        {
+            hostname = System.Net.Dns.GetHostName(),
+            ip = _lanIp ?? "127.0.0.1",
+            port = _actualPort,
+            path = _appSubPath,
+            networkEnabled = false,
+            mdnsUrl = (string?)null,
+            isHub = false,
+            appName = _appHostName
+        };
+
+        GradeLog.Info(Tag, $"Network disabled, reverted to {_uiUrl}");
+
+        // Notify reconnected clients of the downgraded server info
+        _ = BroadcastState();
+    }
+
+    /// <summary>
+    /// Rebind the localhost listener (after network upgrade failure or disable).
     /// </summary>
     private void RebindLocalhost()
     {
         try
         {
-            var prefix = $"http://127.0.0.1:{_localhostPort}/{_appSubPath}/";
+            var prefix = $"http://localhost:{_localhostPort}/{_appSubPath}/";
             _listener = new HttpListener();
             _listener.Prefixes.Add(prefix);
             _listener.Start();
@@ -417,16 +483,18 @@ public class ColorGradingService : IDisposable
     }
 
     /// <summary>
-    /// Bind a localhost-only HTTP prefix on a high port (no URL ACL / UAC required).
+    /// Bind a localhost-only HTTP prefix.
+    /// Uses "localhost" hostname which has a built-in HTTP.sys reservation on modern Windows
+    /// (no URL ACL / UAC required, even on port 80).
     /// Path: /grade/{machine}/{app}/ — auto-suffixes with -2, -3... if prefix is already taken.
-    /// Tries port 80 first (works if ACL exists from prior network mode), then falls back to 9000+.
     /// </summary>
     private void BindLocalhostPrefix()
     {
         _machineName = System.Net.Dns.GetHostName().ToLowerInvariant();
         string baseSlug = Slugify(_appHostName);
 
-        // Try port 80 first (works if ACL already exists), then high ports (no ACL needed)
+        // "localhost" has a built-in HTTP.sys reservation — port 80 works without ACL.
+        // Fall back to high ports only if port 80 is genuinely unavailable (another process).
         int[] portsToTry = { Port, 9000, 9001, 9002, 9003, 9004, 9005 };
 
         foreach (int port in portsToTry)
@@ -436,7 +504,7 @@ public class ColorGradingService : IDisposable
             {
                 _appSlug = suffix == 1 ? baseSlug : $"{baseSlug}-{suffix}";
                 _appSubPath = $"{BaseUrlPath}/{_machineName}/{_appSlug}";
-                var prefix = $"http://127.0.0.1:{port}/{_appSubPath}/";
+                var prefix = $"http://localhost:{port}/{_appSubPath}/";
 
                 var listener = new HttpListener();
                 listener.Prefixes.Add(prefix);
@@ -455,7 +523,7 @@ public class ColorGradingService : IDisposable
                 }
                 catch (HttpListenerException)
                 {
-                    // Port issue (access denied for port 80, etc.) — try next port
+                    // Port genuinely in use — try next port
                     listener.Close();
                     break;
                 }
@@ -475,9 +543,9 @@ public class ColorGradingService : IDisposable
         }
         else
         {
-            // Localhost mode
+            // Localhost mode — use "localhost" (matches the HttpListener prefix)
             var portSuffix = _actualPort == 80 ? "" : $":{_actualPort}";
-            _uiUrl = $"http://127.0.0.1{portSuffix}/{_appSubPath}/";
+            _uiUrl = $"http://localhost{portSuffix}/{_appSubPath}/";
         }
     }
 
@@ -607,12 +675,12 @@ public class ColorGradingService : IDisposable
                 var context = await listener.GetContextAsync();
                 HandleDirectoryRequest(context);
             }
-            catch (HttpListenerException) when (ct.IsCancellationRequested) { break; }
+            catch (HttpListenerException) { break; } // Listener stopped (restart or dispose)
             catch (ObjectDisposedException) { break; }
             catch (OperationCanceledException) { break; }
             catch (Exception ex)
             {
-                if (!ct.IsCancellationRequested)
+                if (!ct.IsCancellationRequested && listener.IsListening)
                     GradeLog.Error(Tag, $"Directory accept error: {ex.Message}");
             }
         }
@@ -835,12 +903,18 @@ h2{font-size:.625rem;font-weight:600;text-transform:uppercase;letter-spacing:.1e
         {
             try
             {
-                // Short delay to let the server settle
-                await Task.Delay(3000, token);
-                if (!token.IsCancellationRequested)
+                // Wait for existing tabs to reconnect.
+                // Must exceed browser's max reconnect interval (5s) plus margin
+                // for background-tab timer throttling and visibility-triggered reconnect.
+                await Task.Delay(8000, token);
+                if (!token.IsCancellationRequested && ClientCount == 0)
                 {
-                    GradeLog.Debug(Tag, "Opening browser...");
+                    GradeLog.Debug(Tag, "No connected clients, opening browser...");
                     OpenBrowser();
+                }
+                else if (ClientCount > 0)
+                {
+                    GradeLog.Debug(Tag, $"Skipping browser open — {ClientCount} client(s) already connected");
                 }
             }
             catch (OperationCanceledException) { }
@@ -1560,6 +1634,10 @@ h2{font-size:.625rem;font-weight:600;text-transform:uppercase;letter-spacing:.1e
                 }
             }
         }
+        catch (WebSocketException ex) when (ex.WebSocketErrorCode == System.Net.WebSockets.WebSocketError.Success)
+        {
+            // Normal close — not an error
+        }
         catch (WebSocketException ex)
         {
             GradeLog.Warn(Tag, $"Client {clientId} WebSocket error: {ex.WebSocketErrorCode}");
@@ -1915,6 +1993,43 @@ h2{font-size:.625rem;font-weight:600;text-transform:uppercase;letter-spacing:.1e
                 await SendStateToClient(client);
             }
         }
+    }
+
+    /// <summary>
+    /// Send a redirect message to all connected clients, telling them to navigate to a new URL.
+    /// Blocks until all messages are sent (synchronous wait) so the caller can safely
+    /// stop the current listener immediately after.
+    /// </summary>
+    private void BroadcastRedirect(string newUrl)
+    {
+        if (_clients.IsEmpty) return;
+
+        GradeLog.Info(Tag, $"Redirecting {_clients.Count} client(s) to {newUrl}");
+
+        var json = JsonSerializer.Serialize(new { type = "redirect", url = newUrl }, JsonOptions);
+        var bytes = Encoding.UTF8.GetBytes(json);
+
+        var tasks = new List<Task>();
+        foreach (var client in _clients.Values)
+        {
+            if (client.State == WebSocketState.Open)
+            {
+                tasks.Add(Task.Run(async () =>
+                {
+                    try
+                    {
+                        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                        await client.SendAsync(new ArraySegment<byte>(bytes),
+                            WebSocketMessageType.Text, true, cts.Token);
+                    }
+                    catch { }
+                }));
+            }
+        }
+
+        // Wait for all sends to complete (with overall timeout)
+        if (tasks.Count > 0)
+            Task.WaitAll(tasks.ToArray(), TimeSpan.FromSeconds(3));
     }
 
     private static async Task SendPong(WebSocket client)

@@ -392,6 +392,6 @@ shader TonemapOperators : ColorSpaceConversion
         else if (op == 6)
             return LottesTonemap(lin709);                   // Lottes (BT.709 luma)
         else
-            return lin709;                                  // Fallback
+            return lin709;                                   // Fallback
     }
 };

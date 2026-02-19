@@ -3246,12 +3246,10 @@
       </Patch>
     </Node>
   </Patch>
-  <PlatformDependency Id="BVC662kU0VIQFiYBCEvxlE" Location="./lib/net8.0-windows7.0/win-x64/OCIOSharpCLI.dll" />
-  <PlatformDependency Id="QlYEkLKxsHxMHWX9fZ5GF0" Location="./lib/net8.0-windows7.0/win-x64/VL.OCIO.dll" IsForward="true" />
+  <PlatformDependency Id="QlYEkLKxsHxMHWX9fZ5GF0" Location="VL.OCIO.dll" IsForward="true" />
   <NugetDependency Id="Ft83XaSjWUMMmTaRzfG7kv" Location="VL.Stride" Version="2025.7.1-0144-g5b48859314" />
-  <PlatformDependency Id="QyWR1PdMpFkMhrRVQLqTON" Location="C:/Program Files/vvvv/vvvv_gamma_6.6/packs/VL.Stride.Runtime/src/bin/Debug/netstandard2.0/VL.Stride.Runtime.dll" />
+  <PlatformDependency Id="QyWR1PdMpFkMhrRVQLqTON" Location="VL.Stride.Runtime.dll" />
   <PlatformDependency Id="FjRJIMGiOwZOR0RVaCORmN" Location="mscorlib" />
-  <NugetDependency Id="RhHz3tFu7w1LTnXq30hSvN" Location="VL.OCIO" Version="0.0.0" />
   <PlatformDependency Id="Op4ZNcvcevcOBImoLtRVoG" Location="SharpDX.dll" />
   <PlatformDependency Id="Oo2WulFyZBIMk0C6PIRms1" Location="Stride.Graphics.dll" />
 </Document>

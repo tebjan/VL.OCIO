@@ -20,6 +20,7 @@
     <license type="expression">BSD-3-Clause</license>
     <icon>icon\nugeticon.png</icon>
     <readme>docs\README.md</readme>
+    <repository type="git" url="https://github.com/tebjan/VL.OCIO" />
     <dependencies>
       <group targetFramework="net8.0-windows7.0">
       </group>

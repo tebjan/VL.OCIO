@@ -1457,7 +1457,7 @@
                       <ControlPoint Id="MaIMvATyTKoLLqqhr4xj0H" Bounds="922,894" Alignment="Top" />
                     </Node>
                     <ControlPoint Id="BVgWUPqdqkINsbCB81qjYM" Bounds="551,-58" />
-                    <Pad Id="PeeysGiAn7EL06cte7aZEu" Comment="" Bounds="1020,234,167,15" ShowValueBox="true" isIOBox="true" Value="R32G32B32A32_Float">
+                    <Pad Id="PeeysGiAn7EL06cte7aZEu" Comment="" Bounds="1020,234,174,15" ShowValueBox="true" isIOBox="true" Value="R32G32B32A32_Float">
                       <p:TypeAnnotation LastCategoryFullName="Stride.API.Graphics" LastDependency="VL.Stride.vl">
                         <Choice Kind="TypeFlag" Name="PixelFormat" />
                       </p:TypeAnnotation>
@@ -1558,7 +1558,7 @@
                       <Pin Id="At0jvpjJZ5LOxUdRBM8vhm" Name="Reset" Kind="InputPin" IsHidden="true" />
                       <ControlPoint Id="ReGyPXi6hS4LZusLAarVZV" Bounds="1545,740" Alignment="Bottom" />
                     </Node>
-                    <Pad Id="NiNm2oOqpnlNzTXWCWtQp5" Comment="Lifespan" Bounds="1700,585,47,15" ShowValueBox="true" isIOBox="true" Value="Short">
+                    <Pad Id="NiNm2oOqpnlNzTXWCWtQp5" Comment="Lifespan" Bounds="1700,585,54,15" ShowValueBox="true" isIOBox="true" Value="Short">
                       <p:TypeAnnotation LastCategoryFullName="Primitive" LastDependency="VL.CoreLib.vl">
                         <Choice Kind="TypeFlag" Name="ProcessLifespan" />
                       </p:TypeAnnotation>
@@ -1595,7 +1595,7 @@
                       <Pin Id="IefaVQuugleMf3wuNVPzuc" Name="Reset" Kind="InputPin" IsHidden="true" />
                       <ControlPoint Id="TgR9kDWZfATM3xFEh971bP" Bounds="1868,727" Alignment="Bottom" />
                     </Node>
-                    <Pad Id="RBiwdsEMwL8O7OVfpqXEHw" Comment="Lifespan" Bounds="1984,583,47,15" ShowValueBox="true" isIOBox="true" Value="Short">
+                    <Pad Id="RBiwdsEMwL8O7OVfpqXEHw" Comment="Lifespan" Bounds="1984,583,54,15" ShowValueBox="true" isIOBox="true" Value="Short">
                       <p:TypeAnnotation LastCategoryFullName="Primitive" LastDependency="VL.CoreLib.vl">
                         <Choice Kind="TypeFlag" Name="ProcessLifespan" />
                       </p:TypeAnnotation>
@@ -1686,7 +1686,7 @@
                       <Pin Id="HgMitvQGWsVOXECkbvQLzr" Name="Z" Kind="InputPin" />
                       <Pin Id="VyAjrWsiD17OVlOrTCgX51" Name="Output" Kind="StateOutputPin" />
                     </Node>
-                    <Pad Id="DElDZmoqsJyNwdoYpfQAEY" Comment="Filter" Bounds="1280,543,209,15" ShowValueBox="true" isIOBox="true" Value="Point">
+                    <Pad Id="DElDZmoqsJyNwdoYpfQAEY" Comment="Filter" Bounds="1280,543,216,15" ShowValueBox="true" isIOBox="true" Value="Point">
                       <p:TypeAnnotation LastCategoryFullName="Stride.Graphics" LastDependency="VL.Stride.vl">
                         <Choice Kind="TypeFlag" Name="TextureFilter" />
                       </p:TypeAnnotation>
@@ -3152,8 +3152,8 @@
               <Pin Id="BHbvHigxgeRP8hpUfUyEvx" Name="Peak Brightness" Kind="OutputPin" />
               <Pin Id="QOW2PeYxWMPNOPyfsGmwWg" Name="Black Level" Kind="OutputPin" />
               <Pin Id="JrwKmrUC1ZdOXopou5J73h" Name="White Level" Kind="OutputPin" />
-              <Pin Id="EzzA7ils9YXNOv9rugqLUR" Name="Render Format" Kind="OutputPin" />
               <Pin Id="BOw8jkHrn27OvvRKxttPOl" Name="View Format" Kind="OutputPin" />
+              <Pin Id="EzzA7ils9YXNOv9rugqLUR" Name="Render Format" Kind="OutputPin" />
             </Node>
           </Canvas>
           <Patch Id="RQxbuKEP5caO8COdhbK7k3" Name="Create">
@@ -3246,10 +3246,11 @@
       </Patch>
     </Node>
   </Patch>
-  <PlatformDependency Id="QlYEkLKxsHxMHWX9fZ5GF0" Location="VL.OCIO.dll" IsForward="true" />
   <NugetDependency Id="Ft83XaSjWUMMmTaRzfG7kv" Location="VL.Stride" Version="2025.7.1-0144-g5b48859314" />
   <PlatformDependency Id="QyWR1PdMpFkMhrRVQLqTON" Location="VL.Stride.Runtime.dll" />
   <PlatformDependency Id="FjRJIMGiOwZOR0RVaCORmN" Location="mscorlib" />
   <PlatformDependency Id="Op4ZNcvcevcOBImoLtRVoG" Location="SharpDX.dll" />
   <PlatformDependency Id="Oo2WulFyZBIMk0C6PIRms1" Location="Stride.Graphics.dll" />
+  <PlatformDependency Id="Hdj3pwJptnYNCRPf2SJWLZ" Location="./lib/net8.0-windows7.0/OCIOSharpCLI.dll" />
+  <PlatformDependency Id="DkUOI2FJ46QN5M0CS3Av2v" Location="./lib/net8.0-windows7.0/VL.OCIO.dll" IsForward="true" />
 </Document>

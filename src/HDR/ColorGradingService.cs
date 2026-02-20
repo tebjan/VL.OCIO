@@ -82,7 +82,7 @@ public class ColorGradingService : IDisposable
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
+        Converters = { new JsonStringEnumConverter() }
     };
 
     /// <summary>
@@ -1327,7 +1327,7 @@ h2{font-size:.625rem;font-weight:600;text-transform:uppercase;letter-spacing:.1e
     {
         WriteIndented = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
+        Converters = { new JsonStringEnumConverter() }
     };
 
     /// <summary>

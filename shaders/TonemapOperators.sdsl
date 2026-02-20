@@ -155,6 +155,10 @@ shader TonemapOperators : ColorSpaceConversion
 
     float3 KhronosPBRTonemap(float3 color)
     {
+        // Spec requires non-negative input (Linear Rec.709).
+        // Clamp negatives that arise from wide-gamut → Rec.709 conversion.
+        color = max(color, 0.0);
+
         const float startCompression = 0.8 - 0.04;
         const float desaturation = 0.15;
 

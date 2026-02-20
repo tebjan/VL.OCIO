@@ -29,7 +29,7 @@ public class ColorGradingInstance : IDisposable
     {
         WriteIndented = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
+        Converters = { new JsonStringEnumConverter() }
     };
 
     // --- Static per-path slice index tracking ---

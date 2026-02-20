@@ -87,56 +87,56 @@ export interface DiscoveredServer {
 }
 
 // Input/working color spaces (for textures and grading)
-// NOTE: These must match C# enum names after JsonNamingPolicy.CamelCase conversion
+// NOTE: These match exact C# enum names (JsonStringEnumConverter without naming policy)
 export type ColorSpace =
-  | 'linear_Rec709'
-  | 'linear_Rec2020'
-  | 'acesCg'
-  | 'acesCc'
-  | 'acesCct'
-  | 'sRgb'       // C# sRGB → camelCase → sRgb
-  | 'pQ_Rec2020'
-  | 'hlG_Rec2020'
-  | 'scRgb'      // C# scRGB → camelCase → scRgb
+  | 'Linear_Rec709'
+  | 'Linear_Rec2020'
+  | 'ACEScg'
+  | 'ACEScc'
+  | 'ACEScct'
+  | 'sRGB'
+  | 'PQ_Rec2020'
+  | 'HLG_Rec2020'
+  | 'scRGB'
 
-export type GradingSpace = 'log' | 'linear'
+export type GradingSpace = 'Log' | 'Linear'
 
-export type TonemapOperator = 'none' | 'aces' | 'agX' | 'granTurismo' | 'uncharted2' | 'khronosPBRNeutral' | 'lottes' | 'reinhard' | 'reinhardExtended' | 'hejlBurgess'
+export type TonemapOperator = 'None' | 'ACES' | 'AgX' | 'GranTurismo' | 'Uncharted2' | 'KhronosPBRNeutral' | 'Lottes' | 'Reinhard' | 'ReinhardExtended' | 'HejlBurgess'
 
 export const COLOR_SPACE_LABELS: Record<ColorSpace, string> = {
-  linear_Rec709: 'Linear Rec.709',
-  linear_Rec2020: 'Linear Rec.2020',
-  acesCg: 'ACEScg',
-  acesCc: 'ACEScc',
-  acesCct: 'ACEScct',
-  sRgb: 'sRGB',
-  pQ_Rec2020: 'PQ Rec.2020 (HDR10)',
-  hlG_Rec2020: 'HLG Rec.2020',
-  scRgb: 'scRGB',
+  Linear_Rec709: 'Linear Rec.709',
+  Linear_Rec2020: 'Linear Rec.2020',
+  ACEScg: 'ACEScg',
+  ACEScc: 'ACEScc',
+  ACEScct: 'ACEScct',
+  sRGB: 'sRGB',
+  PQ_Rec2020: 'PQ Rec.2020 (HDR10)',
+  HLG_Rec2020: 'HLG Rec.2020',
+  scRGB: 'scRGB',
 }
 
 export const GRADING_SPACE_LABELS: Record<GradingSpace, string> = {
-  log: 'Log (ACEScct)',
-  linear: 'Linear (ACEScg)',
+  Log: 'Log (ACEScct)',
+  Linear: 'Linear (ACEScg)',
 }
 
 export const TONEMAP_LABELS: Record<TonemapOperator, string> = {
-  none: 'None',
-  aces: 'ACES',
-  agX: 'AgX',
-  granTurismo: 'Gran Turismo',
-  uncharted2: 'Uncharted 2',
-  khronosPBRNeutral: 'Khronos PBR Neutral',
-  lottes: 'Lottes',
-  reinhard: 'Reinhard',
-  reinhardExtended: 'Reinhard Extended',
-  hejlBurgess: 'Hejl-Burgess',
+  None: 'None',
+  ACES: 'ACES',
+  AgX: 'AgX',
+  GranTurismo: 'Gran Turismo',
+  Uncharted2: 'Uncharted 2',
+  KhronosPBRNeutral: 'Khronos PBR Neutral',
+  Lottes: 'Lottes',
+  Reinhard: 'Reinhard',
+  ReinhardExtended: 'Reinhard Extended',
+  HejlBurgess: 'Hejl-Burgess',
 }
 
 export function createDefaultColorCorrection(): ColorCorrectionSettings {
   return {
-    inputSpace: 'acesCc',
-    gradingSpace: 'log',
+    inputSpace: 'Linear_Rec709',
+    gradingSpace: 'Log',
     exposure: 0,
     contrast: 1,
     saturation: 1,
@@ -164,8 +164,8 @@ export function createDefaultColorCorrection(): ColorCorrectionSettings {
 
 export function createDefaultTonemap(): TonemapSettings {
   return {
-    outputSpace: 'sRgb',
-    tonemap: 'none',
+    outputSpace: 'sRGB',
+    tonemap: 'None',
     exposure: 0,
     whitePoint: 4,
     paperWhite: 200,

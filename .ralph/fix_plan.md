@@ -60,7 +60,7 @@ Each phase file references a detailed section file in `specs-pipeline-checker/se
 - [x] 6.1 `BCCompressStage` — compute stage dispatching encoder
 - [x] 6.2 `BCDecompressStage` — upload BC blocks, hardware decode via texture-compression-bc
 - [x] 6.3 BC metrics display in stage card
-- [ ] 6.4 Delta overlay (abs difference × 10 as heat map)
+- [x] 6.4 Delta overlay (abs difference × 10 as heat map)
 - [ ] 6.5 Graceful fallback when texture-compression-bc unavailable
 - [ ] 6.6 Verify: `npm run build` passes
 

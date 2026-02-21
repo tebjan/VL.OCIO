@@ -146,3 +146,9 @@
 - Files changed: pipeline-checker/src/pipeline/types/BCMetrics.ts (new), pipeline-checker/src/pipeline/utils/computeBCMetrics.ts (new)
 - Learnings: BCMetricsComputer already has device internally, so computeBCMetrics doesn't need a device param. The encoder's BCMetrics uses flat naming (psnrR, mseG) while the pipeline's PipelineBCMetrics uses nested objects (psnr.r, mse.g) — the utility bridges the two.
 - Validation: npx tsc --noEmit (clean), npm run build (297.86 KB)
+
+### Iteration 24 — 2026-02-21 — 6.4: Delta overlay WGSL shader
+- Implemented: Created src/pipeline/shaders/bc-delta.wgsl — fragment shader computing abs(original - decompressed) * amplification for BC compression artifact visualization. Binds two texture_2d<f32> inputs (original + decompressed), a sampler, and a DeltaParams uniform with amplification factor (16-byte aligned). Default amplification 10.0. Alpha forced to 1.0. Fullscreen triangle vertex shader included. UI toggle/slider wiring deferred to Phase 7.
+- Files changed: pipeline-checker/src/pipeline/shaders/bc-delta.wgsl (new)
+- Learnings: Delta shader needs two input textures bound simultaneously (originalTex and decompressedTex), unlike the single-input color stages. The DeltaParams struct is padded to 16 bytes (1 f32 + 3 padding). The delta pipeline in BCDecompressStage will need a separate render pipeline with auto layout since the bind group layout differs from the decompress path.
+- Validation: npx tsc --noEmit (clean), npm run build (297.86 KB)

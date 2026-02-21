@@ -104,3 +104,9 @@
 - Files changed: None (verification only; checkboxes updated)
 - Learnings: Phase 5 complete. Wave 2 fully done. Next is Wave 3: Phase 4 (Color Pipeline WGSL Shaders) — requires reading phase-04-color-shaders.md and its section file for tonemap algorithm constants.
 - Validation: npx tsc --noEmit (clean), npm run build (296 KB)
+
+### Iteration 17 — 2026-02-21 — 4.1: input-convert.wgsl (Stage 4 — Input Interpretation)
+- Implemented: Created src/shaders/generated/input-convert.wgsl with complete color space conversion library. All 6 gamut matrices transposed for WGSL column-major (Rec709↔Rec2020, Rec709↔AP1, Rec2020↔AP1). All 10 transfer functions (sRGB IEC 61966-2-1 piecewise, ACEScc branchless log2, ACEScct branchless with step(), PQ ST.2084, HLG ARIB STD-B67 branchless). ToLinearRec709() + FromLinearRec709() + ConvertColorSpace() hub functions. Fragment shader reads inputSpace uniform (i32 at offset 0) and converts input to Linear Rec.709. Vertex shader is prepended by FragmentStage — shader only declares bindings 0/1/2 and fs entrypoint.
+- Files changed: pipeline-checker/src/shaders/generated/input-convert.wgsl (new)
+- Learnings: FragmentStage prepends VertexOutput struct + vs entrypoint. Fragment shader must NOT redeclare these. Uniform struct can be minimal — only declare fields this stage reads (inputSpace at offset 0). WGSL step() takes vec3 args when operating on vec3 (e.g., step(vec3<f32>(0.5), V) not step(0.5, V)).
+- Validation: npx tsc --noEmit (clean), npm run build (296 KB)

@@ -116,3 +116,9 @@
 - Files changed: pipeline-checker/src/shaders/generated/color-grade.wgsl (new)
 - Learnings: WGSL `step(scalar, vec3)` doesn't auto-broadcast — use `step(vec3<f32>(scalar), vec3)` for vec3 comparisons. In ApplySoftClip, the `step(0.001, hStr)` is scalar×scalar producing scalar, which then multiplies vec3 — this works in WGSL. The `offset` WGSL keyword issue was avoided by naming the field `offset_val`. WGSL pow() requires vec3 args for vec3 results: `pow(vec3, vec3<f32>(scalar))`.
 - Validation: npx tsc --noEmit (clean), npm run build (298 KB)
+
+### Iteration 19 — 2026-02-21 — 4.8: Wire all stages into PipelineRenderer
+- Implemented: Created 6 stage wrapper files in src/pipeline/stages/ (InputConvertStage.ts, ColorGradeStage.ts, RRTStage.ts, ODTStage.ts, OutputEncodeStage.ts, DisplayRemapStage.ts). Each is a factory function that imports the WGSL shader via ?raw and returns a FragmentStage instance. Created index.ts barrel with createColorPipelineStages() that returns all 6 stages in order (Stages 4-9). Also includes 4.6 (display-remap.wgsl) and 4.7 (fullscreen-vert.wgsl extraction from FragmentStage.ts inline to ?raw import).
+- Files changed: pipeline-checker/src/pipeline/stages/{InputConvertStage,ColorGradeStage,RRTStage,ODTStage,OutputEncodeStage,DisplayRemapStage,index}.ts (new), pipeline-checker/src/shaders/generated/{display-remap,fullscreen-vert}.wgsl (new), pipeline-checker/src/pipeline/FragmentStage.ts (refactored inline vertex to ?raw import)
+- Learnings: Stage files are tree-shaken until a consumer (usePipeline hook or App) imports createColorPipelineStages(). The 38-module count stays stable because Vite only includes reachable modules.
+- Validation: npx tsc --noEmit (clean), npm run build (297.86 KB)

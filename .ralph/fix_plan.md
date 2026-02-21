@@ -57,7 +57,7 @@ Each phase file references a detailed section file in `specs-pipeline-checker/se
 - [x] 4.9 Verify: `npm run build` + visual test with sample EXR
 
 ### Phase 6: BC Pipeline Stages
-- [ ] 6.1 `BCCompressStage` — compute stage dispatching encoder
+- [x] 6.1 `BCCompressStage` — compute stage dispatching encoder
 - [ ] 6.2 `BCDecompressStage` — upload BC blocks, hardware decode via texture-compression-bc
 - [ ] 6.3 BC metrics display in stage card
 - [ ] 6.4 Delta overlay (abs difference × 10 as heat map)

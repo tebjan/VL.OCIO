@@ -16,7 +16,10 @@
     "resolveJsonModule": true,
     "allowImportingTsExtensions": true,
     "noEmit": true,
-    "types": ["@webgpu/types"]
+    "types": ["@webgpu/types"],
+    "paths": {
+      "@vl-ocio/webgpu-bc-encoder": ["./packages/webgpu-bc-encoder/src/index.ts"]
+    }
   },
-  "include": ["src"]
+  "include": ["src", "packages/webgpu-bc-encoder/src"]
 }

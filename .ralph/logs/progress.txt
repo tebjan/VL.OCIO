@@ -128,3 +128,9 @@
 - Files changed: .ralph/fix_plan.md, .ralph/specs/phase-04-color-shaders.md (checkboxes only)
 - Learnings: Visual EXR test requires browser+WebGPU — deferred to manual testing. All static verification passes. Phase 4 is the completion gate for all 6 color pipeline shaders.
 - Validation: npx tsc --noEmit (clean), npm run build (297.86 KB), all WGSL files verified
+
+### Iteration 21 — 2026-02-21 — 6.1: BCCompressStage compute stage
+- Implemented: Created src/pipeline/stages/BCCompressStage.ts implementing PipelineStage interface. Compute stage (not fragment) that wraps the @vl-ocio/webgpu-bc-encoder BCEncoder. Sync encode() passes through input as output (BC data not displayable). Async runEncode() dispatches the encoder and caches results by format+quality+dimensions key. Supports format/quality setters, cache invalidation, and guards against duplicate concurrent encodes. Added tsconfig.json paths mapping and Vite resolve.alias for @vl-ocio/webgpu-bc-encoder package, plus included packages/webgpu-bc-encoder/src in tsconfig include array.
+- Files changed: pipeline-checker/src/pipeline/stages/BCCompressStage.ts (new), pipeline-checker/tsconfig.json (paths + include), pipeline-checker/vite.config.ts (resolve.alias)
+- Learnings: The BC encoder package wasn't wired as a dependency — needed tsconfig paths + Vite alias for both tsc and bundler resolution. BCEncoder creates its own command encoder internally (not using the shared one), so BCCompressStage.encode() doesn't record GPU commands. The PipelineStage interface is synchronous, so async encoding happens via a separate runEncode() method called before the render loop. noUnusedParameters catches stored-but-never-read private fields.
+- Validation: npx tsc --noEmit (clean), npm run build (297.86 KB)

@@ -15,7 +15,7 @@
 - [x] 9.4 7 height modes (all GPU-side)
 - [x] 9.5 HeightmapControls component
 - [x] 9.6 Wireframe bounding box
-- [ ] 9.7 MainPreview tab toggle (2D/3D)
+- [x] 9.7 MainPreview tab toggle (2D/3D)
 - [x] 9.8 Camera keyboard shortcuts
 - [ ] 9.9 Verify: `npm run build` passes
 

@@ -242,3 +242,9 @@
 - Files changed: src/components/HeightmapView.tsx (new)
 - Learnings: Three.js WebGPU types: import from 'three/webgpu' (not 'three'). The package exports map is: three/webgpu → build/three.webgpu.js, three/tsl → build/three.tsl.js, three/addons/* → examples/jsm/*. WebGPURenderer.init() is async — must await before rendering. renderer.setSize with updateStyle=false for manual canvas sizing. Component is tree-shaken until wired into MainPreview.
 - Validation: npx tsc --noEmit (clean), npm run build (299.58 KB, gzip 94.30 KB)
+
+### Iteration 40 — 2026-02-22 — 9.7: MainPreview.tsx — [2D] / [3D] tab toggle
+- Implemented: Created MainPreview.tsx with 2D/3D tab toggle. Tab bar uses project CSS vars (--surface-600/800, --color-text/text-muted). 2D mode shows Preview2D, 3D mode shows HeightmapView + HeightmapControls. Both views stay mounted (visibility toggled) to preserve state across switches. HeightmapSettings state managed at MainPreview level with createDefaultHeightmapSettings initializer.
+- Files changed: src/components/MainPreview.tsx (new)
+- Learnings: Preview2D needs device, format, stageTexture, viewExposure props. HeightmapView uses active prop to control render loop. Both components tree-shaken until MainPreview is wired into App.tsx (Phase 10+ integration).
+- Validation: npx tsc --noEmit (clean), npm run build (299.58 KB, gzip 94.30 KB)

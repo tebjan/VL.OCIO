@@ -12,7 +12,7 @@
 - [x] 3.3 PipelineRenderer orchestrator
 - [x] 3.4 Render target management
 - [x] 3.5 Uniform buffer layout
-- [ ] 3.6 Pixel readback utility
+- [x] 3.6 Pixel readback utility
 - [ ] 3.7 Verify: `npm run build` passes
 
 ## Task 3.1: PipelineStage interface

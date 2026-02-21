@@ -57,3 +57,9 @@
 - Files changed: pipeline-checker/src/pipeline/PipelineUniforms.ts (new)
 - Learnings: serializeUniforms returns Float32Array<ArrayBuffer> (matching PipelineRenderer.updateUniforms signature). The _pad0 at offset 40 is vec2<f32> (8 bytes) to align the first vec3 (lift) to 16-byte boundary at offset 48. All subsequent vec3s naturally align because each is 12+4=16 bytes.
 - Validation: npx tsc --noEmit (clean), npm run build (296 KB)
+
+### Iteration 11 — 2026-02-21 — 3.6: PixelReadback utility
+- Implemented: Created src/pipeline/PixelReadback.ts with async readPixel(texture, x, y) method. Uses pending flag for debounce (returns null if previous read in-flight). Creates 256-byte staging buffer per read (minimum for bytesPerRow alignment), copyTextureToBuffer for single pixel, mapAsync + getMappedRange to extract [R,G,B,A] Float32Array(4). Buffer destroyed after each read.
+- Files changed: pipeline-checker/src/pipeline/PixelReadback.ts (new)
+- Learnings: Even single-pixel readback requires 256-byte bytesPerRow alignment. Throttling to 30Hz is handled by the caller (Phase 8 UI), not by this class. try/finally ensures pending flag is always reset even on error.
+- Validation: npx tsc --noEmit (clean), npm run build (296 KB)

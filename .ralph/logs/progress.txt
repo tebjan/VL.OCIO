@@ -63,3 +63,9 @@
 - Files changed: pipeline-checker/src/pipeline/PixelReadback.ts (new)
 - Learnings: Even single-pixel readback requires 256-byte bytesPerRow alignment. Throttling to 30Hz is handled by the caller (Phase 8 UI), not by this class. try/finally ensures pending flag is always reset even on error.
 - Validation: npx tsc --noEmit (clean), npm run build (296 KB)
+
+### Iteration 12 — 2026-02-21 — 3.7: Phase 3 final verification
+- Implemented: Ran full verification suite. All 6 pipeline files present: PipelineStage.ts, FragmentStage.ts, PipelineRenderer.ts, TextureUtils.ts, PipelineUniforms.ts, PixelReadback.ts. npm install (0 vulnerabilities), npx tsc --noEmit (clean), npm run build (296 KB single HTML). Phase 3 is fully complete.
+- Files changed: None (verification only; checkboxes updated)
+- Learnings: Phase 3 complete. Wave 2 Phase 3 done. Next is either Phase 5 (BC Encoder Package) or skip to Wave 3 Phase 4 (Color Pipeline WGSL Shaders) — but Phase 4 requires Phase 3 which is now done. Phase 5 (BC) is optional per dependency rules. Follow fix_plan.md order: Phase 5 next.
+- Validation: npm install (clean), npx tsc --noEmit (clean), npm run build (296 KB)

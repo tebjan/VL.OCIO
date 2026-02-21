@@ -28,7 +28,7 @@ Each phase file references a detailed section file in `specs-pipeline-checker/se
 - [x] 3.4 Render target management — rgba32float, RENDER_ATTACHMENT | TEXTURE_BINDING | COPY_SRC
 - [x] 3.5 `PipelineUniforms` — shared uniform buffer (~240 bytes), all stage params
 - [x] 3.6 `PixelReadback` — single pixel read from any stage texture, 30Hz throttle
-- [ ] 3.7 Verify: `npm run build` passes
+- [x] 3.7 Verify: `npm run build` passes
 
 ### Phase 5: BC Encoder Package
 - [ ] 5.1 Scaffold `packages/webgpu-bc-encoder/` with TypeScript

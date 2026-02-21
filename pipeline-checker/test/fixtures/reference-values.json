@@ -1,0 +1,242 @@
+{
+  "testPoints": {
+    "midgray": {
+      "R": 0.18,
+      "G": 0.18,
+      "B": 0.18,
+      "A": 1.0
+    },
+    "white": {
+      "R": 1.0,
+      "G": 1.0,
+      "B": 1.0,
+      "A": 1.0
+    },
+    "bright_hdr": {
+      "R": 5.0,
+      "G": 3.0,
+      "B": 1.0,
+      "A": 1.0
+    },
+    "near_black": {
+      "R": 0.01,
+      "G": 0.005,
+      "B": 0.008,
+      "A": 1.0
+    }
+  },
+  "stageExpected": {
+    "stage4_inputConvert_ACEScg": {
+      "settings": {
+        "inputSpace": 2
+      },
+      "description": "ACEScg (AP1) -> Linear Rec.709 via AP1_to_Rec709 matrix",
+      "tolerance": 0.0001,
+      "results": {
+        "midgray": {
+          "R": 0.18,
+          "G": 0.18,
+          "B": 0.18
+        },
+        "white": {
+          "R": 1.0,
+          "G": 1.0,
+          "B": 1.0
+        },
+        "bright_hdr": {
+          "R": 6.5760024,
+          "G": 2.7611642,
+          "B": 0.646193
+        },
+        "near_black": {
+          "R": 0.0132748652,
+          "G": 0.0043176393,
+          "B": 0.0083389985
+        }
+      }
+    },
+    "stage5_colorGrade_defaults": {
+      "settings": {
+        "gradingSpace": 0,
+        "exposure": 0.0,
+        "contrast": 1.0,
+        "saturation": 1.0
+      },
+      "description": "Default grading settings = passthrough",
+      "tolerance": 0.001,
+      "results": {
+        "midgray": {
+          "R": 0.18,
+          "G": 0.18,
+          "B": 0.18
+        },
+        "white": {
+          "R": 1.0,
+          "G": 1.0,
+          "B": 1.0
+        },
+        "bright_hdr": {
+          "R": 5.0,
+          "G": 3.0,
+          "B": 1.0
+        },
+        "near_black": {
+          "R": 0.01,
+          "G": 0.005,
+          "B": 0.008
+        }
+      }
+    },
+    "stage6_rrt_acesFit": {
+      "settings": {
+        "tonemapOp": 1,
+        "tonemapExposure": 0.0,
+        "whitePoint": 4.0
+      },
+      "description": "ACES Fit tonemap (Stephen Hill), BT.709 path",
+      "tolerance": 0.01,
+      "results": {
+        "midgray": {
+          "R": 0.1055912472,
+          "G": 0.1055912472,
+          "B": 0.1055901913
+        },
+        "white": {
+          "R": 0.6191154269,
+          "G": 0.6191154269,
+          "B": 0.6191092358
+        },
+        "bright_hdr": {
+          "R": 0.9434514334,
+          "G": 0.8764010258,
+          "B": 0.7032235443
+        },
+        "near_black": {
+          "R": 0.000957432,
+          "G": 0.0002551907,
+          "B": 0.000671949
+        }
+      }
+    },
+    "stage6_rrt_reinhard": {
+      "settings": {
+        "tonemapOp": 9,
+        "tonemapExposure": 0.0
+      },
+      "description": "Reinhard tonemap: color / (color + 1)",
+      "tolerance": 0.001,
+      "results": {
+        "midgray": {
+          "R": 0.1525423729,
+          "G": 0.1525423729,
+          "B": 0.1525423729
+        },
+        "white": {
+          "R": 0.5,
+          "G": 0.5,
+          "B": 0.5
+        },
+        "bright_hdr": {
+          "R": 0.8333333333,
+          "G": 0.75,
+          "B": 0.5
+        },
+        "near_black": {
+          "R": 0.0099009901,
+          "G": 0.0049751244,
+          "B": 0.0079365079
+        }
+      }
+    },
+    "stage8_outputEncode_srgb": {
+      "settings": {
+        "outputSpace": 5,
+        "tonemapOp": 0
+      },
+      "description": "Linear Rec.709 -> sRGB (IEC 61966-2-1)",
+      "tolerance": 0.001,
+      "results": {
+        "midgray": {
+          "R": 0.4613561295,
+          "G": 0.4613561295,
+          "B": 0.4613561295
+        },
+        "white": {
+          "R": 1.0,
+          "G": 1.0,
+          "B": 1.0
+        },
+        "bright_hdr": {
+          "R": 1.0,
+          "G": 1.0,
+          "B": 1.0
+        },
+        "near_black": {
+          "R": 0.0998528227,
+          "G": 0.0610085401,
+          "B": 0.0861042044
+        }
+      }
+    },
+    "stage9_displayRemap": {
+      "settings": {
+        "blackLevel": 0.05,
+        "whiteLevel": 0.95
+      },
+      "description": "Linear remap: black + color * (white - black)",
+      "tolerance": 0.0001,
+      "results": {
+        "midgray": {
+          "R": 0.212,
+          "G": 0.212,
+          "B": 0.212
+        },
+        "white": {
+          "R": 0.95,
+          "G": 0.95,
+          "B": 0.95
+        },
+        "bright_hdr": {
+          "R": 4.55,
+          "G": 2.75,
+          "B": 0.95
+        },
+        "near_black": {
+          "R": 0.059,
+          "G": 0.0545,
+          "B": 0.0572
+        }
+      }
+    },
+    "stage9_displayRemap_default": {
+      "settings": {
+        "blackLevel": 0.0,
+        "whiteLevel": 1.0
+      },
+      "description": "Default remap = identity passthrough",
+      "tolerance": 0.0001,
+      "results": {
+        "midgray": {
+          "R": 0.18,
+          "G": 0.18,
+          "B": 0.18
+        },
+        "white": {
+          "R": 1.0,
+          "G": 1.0,
+          "B": 1.0
+        },
+        "bright_hdr": {
+          "R": 5.0,
+          "G": 3.0,
+          "B": 1.0
+        },
+        "near_black": {
+          "R": 0.01,
+          "G": 0.005,
+          "B": 0.008
+        }
+      }
+    }
+  }
+}

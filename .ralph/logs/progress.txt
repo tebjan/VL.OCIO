@@ -266,3 +266,9 @@
 - Files changed: fix_plan.md (checkboxes), phase-10-build.md (checkboxes)
 - Learnings: Phase 10 complete. The 299.58 KB size is because HeightmapView/MainPreview/HeightmapControls are tree-shaken (not wired into App.tsx). Full integration would add Three.js (~1.5 MB). Next: Phase 11 (test verification).
 - Validation: npm run build (clean), verified single-file output, size 299.58 KB < 10 MB
+
+### Iteration 44 — 2026-02-22 — 11.1: Test directory scaffolding + reference-values.json
+- Implemented: Created test/ directory with fixtures/ subdirectory, requirements.txt (numpy), compute_reference.py (generates golden values from numpy reimplementation of each stage's math), and fixtures/reference-values.json with 7 test scenarios: stage4 ACEScg→Rec.709 matrix, stage5 passthrough, stage6 ACES Fit + Reinhard tonemaps, stage8 sRGB encoding, stage9 display remap + default. 4 test points: midgray(0.18), white(1.0), bright_hdr(5,3,1), near_black(0.01,0.005,0.008).
+- Files changed: test/requirements.txt, test/compute_reference.py, test/fixtures/reference-values.json (all new)
+- Learnings: Matrices in WGSL are column-major but Python/numpy is row-major. When extracting matrices from WGSL for verification, transpose the columns back to rows: WGSL col0/col1/col2 → numpy row0=col0_elements. Sanity checks: achromatic through color matrix stays achromatic, Reinhard(1.0)=0.5, sRGB(0.18)≈0.461.
+- Validation: npx tsc --noEmit (clean), npm run build (299.58 KB)

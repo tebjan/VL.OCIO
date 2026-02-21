@@ -112,7 +112,7 @@ Each phase file references a detailed section file in `specs-pipeline-checker/se
 - [x] 10.3 Verify: file size < 10 MB
 
 ### Phase 11: Test Verification
-- [ ] 11.1 Create `test/fixtures/reference-values.json` with known pixel test points
+- [x] 11.1 Create `test/fixtures/reference-values.json` with known pixel test points
 - [ ] 11.2 Create `test/verify.py` — per-stage math verification, exit code 0/1
 - [ ] 11.3 Verify: `python test/verify.py` passes for all implemented stages
 

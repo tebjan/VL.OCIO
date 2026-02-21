@@ -13,7 +13,12 @@ import {
   SpriteNodeMaterial,
   Mesh,
   PlaneGeometry,
+  BoxGeometry,
+  EdgesGeometry,
+  LineBasicMaterial,
+  LineSegments,
 } from 'three/webgpu';
+import type { Material } from 'three/webgpu';
 import {
   instancedArray,
   Fn,
@@ -71,6 +76,16 @@ class HeightmapScene {
   instanceCount = 0;
   /** Billboard sprite mesh (instanced via .count) */
   private billboardMesh: Mesh | null = null;
+  /** Wireframe bounding box */
+  private wireframeBox: LineSegments | null = null;
+  /** Current aspect ratio (height/width) for camera/wireframe */
+  private currentAspect = 1;
+  /** Current height scale for camera/wireframe */
+  private currentHeightScale = 0.1;
+  /** Bound event handlers for cleanup */
+  private boundDblClick: (() => void) | null = null;
+  private boundKeyDown: ((e: KeyboardEvent) => void) | null = null;
+  private canvasEl: HTMLCanvasElement | null = null;
 
   // Uniforms (updated from HeightmapSettings)
   private uDsWidth: ShaderNodeObject<UniformNode<number>> | null = null;
@@ -97,10 +112,27 @@ class HeightmapScene {
     await this.renderer.init();
     this.renderer.setPixelRatio(window.devicePixelRatio);
 
+    this.canvasEl = canvas;
     this.controls = new OrbitControls(this.camera, canvas);
     this.controls.target.set(0, 0, 0);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.1;
+    this.controls.minDistance = 0.05;
+    this.controls.maxDistance = 10;
+
+    // Double-click to reset camera
+    this.boundDblClick = () => this.resetCamera();
+    canvas.addEventListener('dblclick', this.boundDblClick);
+
+    // F key to frame object
+    this.boundKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'f' || e.key === 'F') {
+        if (document.activeElement === canvas || canvas.contains(document.activeElement)) {
+          this.frameObject();
+        }
+      }
+    };
+    window.addEventListener('keydown', this.boundKeyDown);
 
     this.resetCamera();
   }
@@ -250,6 +282,10 @@ class HeightmapScene {
     }
 
     const aspect = fullHeight / fullWidth;
+    this.currentAspect = aspect;
+
+    // Update wireframe to match new aspect ratio
+    this.updateWireframe(aspect, this.currentHeightScale);
     const cellW = 1.0 / this.dsWidth;
     const cellD = aspect / this.dsHeight;
 
@@ -301,22 +337,76 @@ class HeightmapScene {
     if (this.uRangeMax) this.uRangeMax.value = settings.rangeMax;
     if (this.uStopsMode) this.uStopsMode.value = settings.stopsMode ? 1 : 0;
     if (this.uPerceptualMode) this.uPerceptualMode.value = settings.perceptualMode ? 1 : 0;
+
+    // Update wireframe if height scale changed
+    if (settings.heightScale !== this.currentHeightScale) {
+      this.currentHeightScale = settings.heightScale;
+      this.updateWireframe(this.currentAspect, this.currentHeightScale);
+    }
+  }
+
+  /**
+   * Create or rebuild the wireframe bounding box surrounding the heightmap grid.
+   * Width=1.0, Depth=aspect, Height=heightScale, centered at (0, heightScale*0.5, 0).
+   */
+  updateWireframe(aspect: number, heightScale: number): void {
+    if (this.wireframeBox) {
+      this.scene.remove(this.wireframeBox);
+      this.wireframeBox.geometry.dispose();
+      (this.wireframeBox.material as Material).dispose();
+      this.wireframeBox = null;
+    }
+
+    const geometry = new BoxGeometry(1.0, heightScale, aspect);
+    const edges = new EdgesGeometry(geometry);
+    const material = new LineBasicMaterial({ color: 0x444444 });
+    this.wireframeBox = new LineSegments(edges, material);
+    this.wireframeBox.position.set(0, heightScale * 0.5, 0);
+    this.scene.add(this.wireframeBox);
+    geometry.dispose(); // EdgesGeometry copies the data; original can be freed
+  }
+
+  /**
+   * Compute camera distance to fit the entire bounding box in view with 20% padding.
+   */
+  computeAutoDistance(): number {
+    const diagonal = Math.sqrt(
+      1.0 + this.currentAspect * this.currentAspect +
+      this.currentHeightScale * this.currentHeightScale,
+    );
+    const fov = this.camera.fov * (Math.PI / 180);
+    return (diagonal * 0.5) / Math.tan(fov * 0.5) * 1.2;
   }
 
   resetCamera(): void {
-    const dist = 1.2;
-    const elev = Math.PI / 4;
-    const azim = Math.PI / 6;
+    const elev = Math.PI / 4; // 45 degrees
+    const azim = Math.PI / 6; // 30 degrees
+    const dist = this.computeAutoDistance();
     this.camera.position.set(
       dist * Math.cos(elev) * Math.sin(azim),
       dist * Math.sin(elev),
       dist * Math.cos(elev) * Math.cos(azim),
     );
-    this.camera.lookAt(0, 0, 0);
     if (this.controls) {
-      this.controls.target.set(0, 0, 0);
+      this.controls.target.set(0, this.currentHeightScale * 0.25, 0);
       this.controls.update();
     }
+  }
+
+  /**
+   * Frame the entire object: keep current orbit angles, adjust distance to fit bounding box.
+   */
+  frameObject(): void {
+    const diagonal = Math.sqrt(
+      1.0 + this.currentAspect * this.currentAspect +
+      this.currentHeightScale * this.currentHeightScale,
+    );
+    const fov = this.camera.fov * (Math.PI / 180);
+    const distance = (diagonal * 0.5) / Math.tan(fov * 0.5);
+
+    const dir = this.camera.position.clone().sub(this.controls.target).normalize();
+    this.camera.position.copy(this.controls.target).addScaledVector(dir, distance);
+    this.controls.update();
   }
 
   resize(width: number, height: number): void {
@@ -349,9 +439,22 @@ class HeightmapScene {
   dispose(): void {
     this.disposed = true;
     this.stopRenderLoop();
+
+    // Remove event listeners
+    if (this.canvasEl && this.boundDblClick) {
+      this.canvasEl.removeEventListener('dblclick', this.boundDblClick);
+    }
+    if (this.boundKeyDown) {
+      window.removeEventListener('keydown', this.boundKeyDown);
+    }
+
     if (this.billboardMesh) {
       this.billboardMesh.geometry.dispose();
       (this.billboardMesh.material as SpriteNodeMaterial).dispose();
+    }
+    if (this.wireframeBox) {
+      this.wireframeBox.geometry.dispose();
+      (this.wireframeBox.material as Material).dispose();
     }
     this.controls?.dispose();
     this.sourceTexture?.dispose();

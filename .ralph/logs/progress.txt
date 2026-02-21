@@ -224,3 +224,9 @@
 - Files changed: src/components/MetadataPanel.tsx (new)
 - Learnings: computeChannelStats is exported so it can be called from App.tsx or a data loading hook at EXR load time. The metadata prop is nullable — component renders nothing when no image is loaded. Uses display:contents trick for the channel rows to work within CSS grid.
 - Validation: npx tsc --noEmit (clean), npm run build (299.55 KB, gzip 94.29 KB)
+
+### Iteration 37 — 2026-02-21 — 8.4: "View (non-destructive)" section
+- Implemented: Created ViewExposureHeader.tsx component placed above the preview canvas. Features: italic "View (non-destructive)" header in muted color, dashed separator line, exposure slider (-10 to +10 EV, step 0.1, default 0.0), formatted display value with sign ("+2.0 EV"), double-click to reset to 0.0. Does NOT affect PipelineSettings — value flows into Preview2D's viewExposure uniform only.
+- Files changed: src/components/ViewExposureHeader.tsx (new)
+- Learnings: Component is self-contained — accepts exposure/onChange props. Will be placed in a MainPreview container above Preview2D canvas. The accentColor CSS property controls the native slider thumb color. The component uses surface-950 background matching the controls panel for visual consistency.
+- Validation: npx tsc --noEmit (clean), npm run build (299.58 KB, gzip 94.30 KB)

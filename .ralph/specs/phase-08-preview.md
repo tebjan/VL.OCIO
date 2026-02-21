@@ -10,7 +10,7 @@
 - [x] 8.1 Preview2D component
 - [x] 8.2 PixelReadout overlay
 - [x] 8.3 MetadataPanel component
-- [ ] 8.4 "View (non-destructive)" section
+- [x] 8.4 "View (non-destructive)" section
 - [ ] 8.5 Verify: `npm run build` passes
 
 ## Task 8.1: Preview2D

@@ -83,7 +83,7 @@ Each phase file references a detailed section file in `specs-pipeline-checker/se
 - [x] 8.1 `Preview2D.tsx` — zoom (wheel), pan (drag), fit (double-click), view exposure
 - [x] 8.2 `PixelReadout.tsx` — floating tooltip RGBA 5-decimal, 30Hz throttle
 - [x] 8.3 `MetadataPanel.tsx` — resolution, channels, min/max per channel
-- [ ] 8.4 "View (non-destructive)" section clearly separated from pipeline controls
+- [x] 8.4 "View (non-destructive)" section clearly separated from pipeline controls
 - [ ] 8.5 Verify: `npm run build` passes
 
 ---

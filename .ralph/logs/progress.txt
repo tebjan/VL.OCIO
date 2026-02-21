@@ -170,3 +170,9 @@
 - Files changed: src/components/Filmstrip.tsx (new), src/pipeline/types/StageInfo.ts (new), src/index.css (surface tokens)
 - Learnings: Tailwind 4 has no tailwind.config.js — using CSS custom properties (--surface-*) with inline styles instead of Tailwind utility classes for the surface palette. StageCard will be extracted as a separate component in task 7.2. The `available` field on StageInfo maps to `PipelineStage.available` from Phase 6.
 - Validation: npx tsc --noEmit (clean), npm run build (298.59 KB, gzip 94.12 KB)
+
+### Iteration 28 — 2026-02-21 — 7.2: StageCard component
+- Implemented: Extracted card rendering from Filmstrip.tsx into dedicated StageCard.tsx component. Fixed 160x120px size (160x90 thumbnail + 22px label row). Props: stage, isSelected, onSelect, onToggle. Visual states: normal/selected/disabled/unavailable with opacity transitions. Bypass arrow overlay (↷) on disabled stages, "Not Available" on unavailable stages. Checkbox stops propagation so card selection isn't triggered. Refactored Filmstrip.tsx to import and use StageCard.
+- Files changed: src/components/StageCard.tsx (new), src/components/Filmstrip.tsx (refactored)
+- Learnings: The StageCard is a self-contained component per the spec. Thumbnail area is placeholder text for now — actual GPU thumbnail rendering (160x90 rgba8unorm blit) will be wired when PipelineRenderer is integrated. Tree-shaking keeps build size identical after refactor.
+- Validation: npx tsc --noEmit (clean), npm run build (298.59 KB, gzip 94.12 KB)

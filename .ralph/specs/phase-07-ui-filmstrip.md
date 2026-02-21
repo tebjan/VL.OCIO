@@ -8,7 +8,7 @@
 ## Checklist
 
 - [x] 7.1 Filmstrip component
-- [ ] 7.2 StageCard component
+- [x] 7.2 StageCard component
 - [ ] 7.3 ControlsPanel component
 - [ ] 7.4 Reusable Slider, Select, Section components
 - [ ] 7.5 settings.ts types (mirror C# enums)

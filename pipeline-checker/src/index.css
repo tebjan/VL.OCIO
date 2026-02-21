@@ -1,0 +1,50 @@
+@import "tailwindcss";
+
+/* Color-neutral dark theme custom properties */
+:root {
+  --color-bg: #0d0d0d;
+  --color-surface: #1a1a1a;
+  --color-border: #2a2a2a;
+  --color-text: #e0e0e0;
+  --color-text-muted: #808080;
+  --color-accent: #4a4a4a;
+  --color-accent-hover: #5a5a5a;
+  --color-error: #cc4444;
+}
+
+/*
+ * IMPORTANT: No saturated accent colors anywhere in the theme.
+ * Saturated UI elements would bias the artist's color perception
+ * when evaluating pipeline stage outputs. All interactive elements
+ * use neutral grays.
+ */
+
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  overflow: hidden;
+}
+
+/* Scrollbar styling for dark theme */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-accent);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-accent-hover);
+}

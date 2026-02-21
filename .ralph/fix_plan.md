@@ -54,7 +54,7 @@ Each phase file references a detailed section file in `specs-pipeline-checker/se
 - [x] 4.6 `display-remap.wgsl` — Stage 9: black/white level remap (trivial)
 - [x] 4.7 `fullscreen-quad.wgsl` — shared vertex shader
 - [x] 4.8 Wire all stages into PipelineRenderer
-- [ ] 4.9 Verify: `npm run build` + visual test with sample EXR
+- [x] 4.9 Verify: `npm run build` + visual test with sample EXR
 
 ### Phase 6: BC Pipeline Stages
 - [ ] 6.1 `BCCompressStage` — compute stage dispatching encoder

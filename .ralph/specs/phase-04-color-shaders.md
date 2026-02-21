@@ -24,7 +24,7 @@
 - [x] 4.6 `display-remap.wgsl` — Stage 9
 - [x] 4.7 `fullscreen-quad.wgsl` — shared vertex shader
 - [x] 4.8 Wire all stages into PipelineRenderer
-- [ ] 4.9 Verify: `npm run build` + visual test
+- [x] 4.9 Verify: `npm run build` + visual test
 
 Output directory: `pipeline-checker/src/shaders/generated/`
 

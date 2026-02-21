@@ -122,3 +122,9 @@
 - Files changed: pipeline-checker/src/pipeline/stages/{InputConvertStage,ColorGradeStage,RRTStage,ODTStage,OutputEncodeStage,DisplayRemapStage,index}.ts (new), pipeline-checker/src/shaders/generated/{display-remap,fullscreen-vert}.wgsl (new), pipeline-checker/src/pipeline/FragmentStage.ts (refactored inline vertex to ?raw import)
 - Learnings: Stage files are tree-shaken until a consumer (usePipeline hook or App) imports createColorPipelineStages(). The 38-module count stays stable because Vite only includes reachable modules.
 - Validation: npx tsc --noEmit (clean), npm run build (297.86 KB)
+
+### Iteration 20 — 2026-02-21 — 4.9: Phase 4 verification gate
+- Implemented: Verified all Phase 4 deliverables. tsc --noEmit clean, npm run build 297.86 KB. All 7 WGSL files present (6 fragment shaders + 1 vertex shader). All 6 fragment shaders have @fragment fn fs entry point and @group(0) @binding(2) uniform binding. fullscreen-vert.wgsl has @vertex fn vs. 6 stage factory files create correct stage indices (4-9) with descriptive names. Barrel index.ts creates stages in correct pipeline order. FragmentStage.ts imports fullscreen-vert.wgsl via ?raw (no inline duplication). Phase 4 complete.
+- Files changed: .ralph/fix_plan.md, .ralph/specs/phase-04-color-shaders.md (checkboxes only)
+- Learnings: Visual EXR test requires browser+WebGPU — deferred to manual testing. All static verification passes. Phase 4 is the completion gate for all 6 color pipeline shaders.
+- Validation: npx tsc --noEmit (clean), npm run build (297.86 KB), all WGSL files verified

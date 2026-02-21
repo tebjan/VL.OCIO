@@ -200,3 +200,9 @@
 - Files changed: src/types/pipeline.ts (new), src/hooks/usePipeline.ts (new), src/components/ControlsPanel.tsx (onReset prop + button)
 - Learnings: The hook produces StageInfo[] as a derived value from internal StageState[] — this keeps the Filmstrip's interface clean. Stage availability (GPU feature gating) and thumbnails are left as placeholders (available=true, thumbnail=null) to be wired when PipelineRenderer is integrated. LOCKED_STAGES Set prevents accidental disabling of first/last stages.
 - Validation: npx tsc --noEmit (clean), npm run build (299.22 KB, gzip 94.22 KB)
+
+### Iteration 33 — 2026-02-21 — 7.7: Phase 7 verification gate
+- Implemented: Verification-only task. Confirmed all Phase 7 deliverables: 10 component files (Filmstrip, StageCard, ControlsPanel, 5 ui primitives, WebGPUCanvas, DropZone), 2 type files (settings.ts with 5 enum arrays + PipelineSettings + createDefaultSettings, pipeline.ts with StageState + PipelineState), 1 hook file (usePipeline.ts with full state management). All exports verified. Build stable at 299.22 KB. Phase 7 complete.
+- Files changed: (checkboxes only)
+- Learnings: Phase 7 complete. Wave 3 fully done (Phases 4, 6, 7 all checked). Next is Wave 4: Phase 8 (Preview + Readout) which requires Phases 4 + 6 + 7.
+- Validation: npx tsc --noEmit (clean), npm run build (299.22 KB, gzip 94.22 KB)

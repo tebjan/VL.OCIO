@@ -11,7 +11,7 @@
 - [x] 6.2 BCDecompressStage — hardware decode
 - [x] 6.3 BC metrics display in stage card
 - [x] 6.4 Delta overlay (heat map)
-- [ ] 6.5 Graceful fallback when BC unavailable
+- [x] 6.5 Graceful fallback when BC unavailable
 - [ ] 6.6 Verify: `npm run build` passes
 
 ## Task 6.1: Stage 2 — BC Compress

@@ -16,7 +16,8 @@ import decompressWGSL from '../shaders/bc-decompress.wgsl?raw';
 export class BCDecompressStage implements PipelineStage {
   readonly name = 'BC Decompress';
   readonly index = 2;
-  enabled = true;
+  enabled: boolean;
+  available: boolean;
   output: GPUTexture | null = null;
 
   private device!: GPUDevice;
@@ -25,7 +26,14 @@ export class BCDecompressStage implements PipelineStage {
   private sampler: GPUSampler | null = null;
   private bcTexture: GPUTexture | null = null;
 
+  constructor(hasBC: boolean) {
+    this.available = hasBC;
+    this.enabled = hasBC;
+  }
+
   initialize(device: GPUDevice, width: number, height: number): void {
+    if (!this.available) return;
+
     this.device = device;
 
     this.sampler = device.createSampler({
@@ -38,6 +46,7 @@ export class BCDecompressStage implements PipelineStage {
   }
 
   resize(width: number, height: number): void {
+    if (!this.available) return;
     this.renderTarget?.destroy();
     this.createRenderTarget(width, height);
   }
@@ -84,6 +93,7 @@ export class BCDecompressStage implements PipelineStage {
    * Called by PipelineRenderer when BCCompressStage has a new encodeResult.
    */
   uploadBCData(encodeResult: BCEncodeResult): void {
+    if (!this.available) return;
     this.bcTexture?.destroy();
 
     const gpuFormat = BC_FORMAT_TO_GPU[encodeResult.format];

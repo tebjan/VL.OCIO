@@ -8,6 +8,14 @@ export interface PipelineStage {
   /** Whether this stage is active. When false, the stage is bypassed. */
   enabled: boolean;
 
+  /**
+   * Whether this stage is available on the current hardware.
+   * When false, the stage cannot be enabled (e.g., texture-compression-bc missing).
+   * UI should show a "Not Available" label on the stage card.
+   * Defaults to true if not set.
+   */
+  available?: boolean;
+
   /** This stage's render target. null before initialize(). */
   output: GPUTexture | null;
 

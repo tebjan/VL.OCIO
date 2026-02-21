@@ -16,13 +16,14 @@ import { BCEncoder, type BCFormat, type BCQuality, type BCEncodeResult } from '@
 export class BCCompressStage implements PipelineStage {
   readonly name = 'BC Compress';
   readonly index = 1;
-  enabled = true;
+  enabled: boolean;
+  available: boolean;
   output: GPUTexture | null = null;
 
   /** Cached encode result for BCDecompressStage to consume. */
   encodeResult: BCEncodeResult | null = null;
 
-  private encoder: BCEncoder;
+  private encoder: BCEncoder | null;
   private format: BCFormat = 'bc6h';
   private quality: BCQuality = 'normal';
 
@@ -30,8 +31,10 @@ export class BCCompressStage implements PipelineStage {
   private lastEncodeKey = '';
   private pendingEncode: Promise<BCEncodeResult> | null = null;
 
-  constructor(device: GPUDevice) {
-    this.encoder = new BCEncoder(device);
+  constructor(device: GPUDevice, hasBC: boolean) {
+    this.available = hasBC;
+    this.enabled = hasBC;
+    this.encoder = hasBC ? new BCEncoder(device) : null;
   }
 
   initialize(_device: GPUDevice, _width: number, _height: number): void {
@@ -81,7 +84,7 @@ export class BCCompressStage implements PipelineStage {
    * Call this outside the main render loop (before render()).
    */
   async runEncode(input: GPUTexture): Promise<BCEncodeResult | null> {
-    if (!this.enabled) {
+    if (!this.enabled || !this.encoder) {
       this.encodeResult = null;
       return null;
     }
@@ -113,7 +116,7 @@ export class BCCompressStage implements PipelineStage {
   }
 
   destroy(): void {
-    this.encoder.destroy();
+    this.encoder?.destroy();
     this.encodeResult = null;
     this.output = null;
   }

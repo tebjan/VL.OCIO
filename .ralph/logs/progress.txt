@@ -248,3 +248,9 @@
 - Files changed: src/components/MainPreview.tsx (new)
 - Learnings: Preview2D needs device, format, stageTexture, viewExposure props. HeightmapView uses active prop to control render loop. Both components tree-shaken until MainPreview is wired into App.tsx (Phase 10+ integration).
 - Validation: npx tsc --noEmit (clean), npm run build (299.58 KB, gzip 94.30 KB)
+
+### Iteration 41 — 2026-02-22 — 9.8/9.9: Verify npm run build passes (Phase 9 complete)
+- Implemented: Verification-only task. Ran tsc --noEmit (clean) and npm run build (299.58 KB, gzip 94.30 KB). All Phase 9 tasks complete: HeightmapView with TSL compute, SpriteNodeMaterial billboards, 7 height modes, HeightmapControls, wireframe bounding box, camera shortcuts, and MainPreview 2D/3D tab toggle.
+- Files changed: fix_plan.md (checkbox), phase-09-heightmap.md (checkbox)
+- Learnings: Phase 9 complete. All components tree-shaken (not wired into App.tsx yet). Next: Phase 10 (build & distribution) and Phase 11 (test verification).
+- Validation: npx tsc --noEmit (clean), npm run build (299.58 KB, gzip 94.30 KB)

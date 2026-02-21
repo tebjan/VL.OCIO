@@ -17,7 +17,7 @@
 - [x] 9.6 Wireframe bounding box
 - [x] 9.7 MainPreview tab toggle (2D/3D)
 - [x] 9.8 Camera keyboard shortcuts
-- [ ] 9.9 Verify: `npm run build` passes
+- [x] 9.9 Verify: `npm run build` passes
 
 ## Task 9.1: Three.js WebGPU renderer
 

@@ -100,7 +100,7 @@ Each phase file references a detailed section file in `specs-pipeline-checker/se
 - [x] 9.5 Height scale, exponent, range, downsample controls
 - [x] 9.6 Wireframe bounding box + camera shortcuts (F = frame, dblclick = reset)
 - [x] 9.7 `MainPreview.tsx` — [2D] / [3D] tab toggle
-- [ ] 9.8 Verify: `npm run build` passes
+- [x] 9.8 Verify: `npm run build` passes
 
 ---
 

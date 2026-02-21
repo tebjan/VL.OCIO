@@ -176,3 +176,9 @@
 - Files changed: src/components/StageCard.tsx (new), src/components/Filmstrip.tsx (refactored)
 - Learnings: The StageCard is a self-contained component per the spec. Thumbnail area is placeholder text for now — actual GPU thumbnail rendering (160x90 rgba8unorm blit) will be wired when PipelineRenderer is integrated. Tree-shaking keeps build size identical after refactor.
 - Validation: npx tsc --noEmit (clean), npm run build (298.59 KB, gzip 94.12 KB)
+
+### Iteration 29 — 2026-02-21 — 7.3: ControlsPanel component
+- Implemented: Created ControlsPanel.tsx with 4 collapsible sections (Input, Color Grading, Tonemap, Output). All controls from the spec are wired: 2 selects in Input, 9 sliders + 7 vec3 sliders + 4 soft-clip sliders + 1 grading space select in Color Grading, 3 selects + 2 toggles + 3 sliders in Tonemap, 1 select + 4 sliders in Output. Uses placeholder inline components (PlaceholderSlider, PlaceholderSelect, PlaceholderToggle, PlaceholderVec3Slider, CollapsibleSection) that will be extracted to reusable components in 7.4. Also created src/types/settings.ts with PipelineSettings interface, Vec3 type, and createDefaultSettings() — task 7.5 will add the full enum constants. Inline enum arrays in ControlsPanel match the spec exactly.
+- Files changed: src/components/ControlsPanel.tsx (new), src/types/settings.ts (new)
+- Learnings: PipelineSettings type was needed before ControlsPanel could compile, so it was created as part of this task. Task 7.5 will add HDR_COLOR_SPACES, TONEMAP_OPERATORS, BC_FORMATS etc. as exported const arrays to settings.ts and refactor ControlsPanel to import them. The inline PlaceholderSlider/Select/Toggle/Vec3Slider components are functional but will be replaced by the polished reusable components in 7.4. Vec3 RGB channel colors use muted tones (#cc6666, #66cc66, #6666cc) — still neutral enough for color work.
+- Validation: npx tsc --noEmit (clean), npm run build (299.06 KB, gzip 94.19 KB)

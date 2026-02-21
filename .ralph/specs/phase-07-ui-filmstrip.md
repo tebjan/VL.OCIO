@@ -9,7 +9,7 @@
 
 - [x] 7.1 Filmstrip component
 - [x] 7.2 StageCard component
-- [ ] 7.3 ControlsPanel component
+- [x] 7.3 ControlsPanel component
 - [ ] 7.4 Reusable Slider, Select, Section components
 - [ ] 7.5 settings.ts types (mirror C# enums)
 - [ ] 7.6 Reset button + usePipeline hook

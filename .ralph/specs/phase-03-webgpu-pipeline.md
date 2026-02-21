@@ -11,7 +11,7 @@
 - [x] 3.2 FragmentStage implementation
 - [x] 3.3 PipelineRenderer orchestrator
 - [x] 3.4 Render target management
-- [ ] 3.5 Uniform buffer layout
+- [x] 3.5 Uniform buffer layout
 - [ ] 3.6 Pixel readback utility
 - [ ] 3.7 Verify: `npm run build` passes
 

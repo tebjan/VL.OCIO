@@ -51,3 +51,9 @@
 - Files changed: pipeline-checker/src/pipeline/TextureUtils.ts (new)
 - Learnings: writeTexture (upload) does NOT require 256-byte bytesPerRow alignment — only copyTextureToBuffer (readback) does. Upload uses width*16 directly. The upload texture needs COPY_DST (for upload) while stage render targets don't (they write via render passes).
 - Validation: npx tsc --noEmit (clean), npm run build (296 KB)
+
+### Iteration 10 — 2026-02-21 — 3.5: PipelineUniforms
+- Implemented: Created src/pipeline/PipelineUniforms.ts with: PipelineSettings interface (all 30+ fields covering stages 4-9 + toggles + BC + view), DEFAULT_SETTINGS constant (neutral grading, no tonemap, passthrough), serializeUniforms() that writes to a shared Float32Array/Int32Array (512 bytes). Layout matches WGSL struct with vec3+pad pattern: 10 scalars, 2-float pad, 7x vec3+pad blocks, 4 more scalars, 6 tonemap fields, 2 remap fields, 3 toggle i32s, 2 BC i32s, 1 view float. Total ~232 bytes used of 512.
+- Files changed: pipeline-checker/src/pipeline/PipelineUniforms.ts (new)
+- Learnings: serializeUniforms returns Float32Array<ArrayBuffer> (matching PipelineRenderer.updateUniforms signature). The _pad0 at offset 40 is vec2<f32> (8 bytes) to align the first vec3 (lift) to 16-byte boundary at offset 48. All subsequent vec3s naturally align because each is 12+4=16 bytes.
+- Validation: npx tsc --noEmit (clean), npm run build (296 KB)

@@ -12,7 +12,7 @@
 - [x] 9.1 Three.js WebGPU renderer + OrbitControls
 - [x] 9.2 TSL compute shader for heightmap data
 - [x] 9.3 SpriteNodeMaterial billboard rendering
-- [ ] 9.4 7 height modes (all GPU-side)
+- [x] 9.4 7 height modes (all GPU-side)
 - [ ] 9.5 HeightmapControls component
 - [ ] 9.6 Wireframe bounding box
 - [ ] 9.7 MainPreview tab toggle (2D/3D)

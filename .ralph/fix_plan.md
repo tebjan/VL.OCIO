@@ -94,7 +94,7 @@ Each phase file references a detailed section file in `specs-pipeline-checker/se
 
 ### Phase 9: 3D Heightmap
 - [x] 9.1 Three.js WebGPU renderer + OrbitControls in `HeightmapView.tsx`
-- [ ] 9.2 TSL compute shader — reads stage texture, writes instancedArray buffers (no CPU readback)
+- [x] 9.2 TSL compute shader — reads stage texture, writes instancedArray buffers (no CPU readback)
 - [ ] 9.3 SpriteNodeMaterial billboards — positionNode + colorNode from storage buffers
 - [ ] 9.4 7 height modes (luminance, R, G, B, max, RGB length, AP1 luma) all GPU-side
 - [ ] 9.5 Height scale, exponent, range, downsample controls

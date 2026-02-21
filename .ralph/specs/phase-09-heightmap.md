@@ -10,7 +10,7 @@
 ## Checklist
 
 - [x] 9.1 Three.js WebGPU renderer + OrbitControls
-- [ ] 9.2 TSL compute shader for heightmap data
+- [x] 9.2 TSL compute shader for heightmap data
 - [ ] 9.3 SpriteNodeMaterial billboard rendering
 - [ ] 9.4 7 height modes (all GPU-side)
 - [ ] 9.5 HeightmapControls component

@@ -4,8 +4,35 @@ import {
   Scene,
   PerspectiveCamera,
   Color,
+  DataTexture,
+  RGBAFormat,
+  FloatType,
+  NearestFilter,
+  ClampToEdgeWrapping,
+  LinearSRGBColorSpace,
 } from 'three/webgpu';
+import {
+  instancedArray,
+  Fn,
+  instanceIndex,
+  texture,
+  uniform,
+  vec2,
+  vec3,
+  float,
+  select,
+  dot,
+  clamp,
+  max,
+  pow,
+  log2,
+} from 'three/tsl';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import type ComputeNode from 'three/src/nodes/gpgpu/ComputeNode.js';
+import type StorageBufferNode from 'three/src/nodes/accessors/StorageBufferNode.js';
+import type UniformNode from 'three/src/nodes/core/UniformNode.js';
+import type { ShaderNodeObject } from 'three/src/nodes/tsl/TSLCore.js';
+import type { HeightmapSettings } from '../types/pipeline';
 
 export interface HeightmapViewProps {
   stageTexture: GPUTexture | null;
@@ -13,7 +40,8 @@ export interface HeightmapViewProps {
 }
 
 /**
- * Manages Three.js WebGPU renderer, scene, camera, and controls.
+ * Manages Three.js WebGPU renderer, scene, camera, controls, and
+ * the TSL compute shader that builds heightmap instance data on the GPU.
  * Instantiated once on first activation; persists across tab switches.
  */
 class HeightmapScene {
@@ -23,6 +51,33 @@ class HeightmapScene {
   controls: OrbitControls;
   private animationId = 0;
   private disposed = false;
+
+  // --- TSL compute state ---
+  /** GPU storage buffer: per-instance vec3 positions */
+  positionBuffer: ShaderNodeObject<StorageBufferNode> | null = null;
+  /** GPU storage buffer: per-instance vec3 colors */
+  colorBuffer: ShaderNodeObject<StorageBufferNode> | null = null;
+  /** TSL compute node dispatched before each render */
+  computeNode: ShaderNodeObject<ComputeNode> | null = null;
+  /** Three.js DataTexture wrapping the stage pixel data (RGBA32F) */
+  sourceTexture: DataTexture | null = null;
+  /** Current downsampled dimensions */
+  dsWidth = 0;
+  dsHeight = 0;
+  /** Current instance count */
+  instanceCount = 0;
+
+  // Uniforms (updated from HeightmapSettings)
+  private uDsWidth: ShaderNodeObject<UniformNode<number>> | null = null;
+  private uDsHeight: ShaderNodeObject<UniformNode<number>> | null = null;
+  private uAspect: ShaderNodeObject<UniformNode<number>> | null = null;
+  private uHeightScale: ShaderNodeObject<UniformNode<number>> | null = null;
+  private uHeightMode: ShaderNodeObject<UniformNode<number>> | null = null;
+  private uExponent: ShaderNodeObject<UniformNode<number>> | null = null;
+  private uRangeMin: ShaderNodeObject<UniformNode<number>> | null = null;
+  private uRangeMax: ShaderNodeObject<UniformNode<number>> | null = null;
+  private uStopsMode: ShaderNodeObject<UniformNode<number>> | null = null;
+  private uPerceptualMode: ShaderNodeObject<UniformNode<number>> | null = null;
 
   constructor() {
     this.renderer = null!;
@@ -45,11 +100,164 @@ class HeightmapScene {
     this.resetCamera();
   }
 
+  /**
+   * Set up (or rebuild) the TSL compute pipeline for a given texture resolution.
+   * Creates instancedArray buffers, uniforms, and the Fn() compute shader.
+   * Called when the stage texture resolution or downsample factor changes.
+   */
+  setupCompute(
+    fullWidth: number,
+    fullHeight: number,
+    downsample: number,
+  ): void {
+    const dsW = Math.max(1, Math.floor(fullWidth / downsample));
+    const dsH = Math.max(1, Math.floor(fullHeight / downsample));
+
+    // Skip if dimensions haven't changed
+    if (dsW === this.dsWidth && dsH === this.dsHeight) return;
+
+    this.dsWidth = dsW;
+    this.dsHeight = dsH;
+    const count = dsW * dsH;
+    this.instanceCount = count;
+    const aspect = fullHeight / fullWidth;
+
+    // Create or recreate source DataTexture (RGBA32F)
+    if (this.sourceTexture) this.sourceTexture.dispose();
+    const placeholderData = new Float32Array(dsW * dsH * 4);
+    this.sourceTexture = new DataTexture(
+      placeholderData,
+      dsW,
+      dsH,
+      RGBAFormat,
+      FloatType,
+    );
+    this.sourceTexture.minFilter = NearestFilter;
+    this.sourceTexture.magFilter = NearestFilter;
+    this.sourceTexture.wrapS = ClampToEdgeWrapping;
+    this.sourceTexture.wrapT = ClampToEdgeWrapping;
+    this.sourceTexture.colorSpace = LinearSRGBColorSpace;
+    this.sourceTexture.needsUpdate = true;
+
+    // GPU storage buffers — data never leaves the GPU
+    this.positionBuffer = instancedArray(count, 'vec3');
+    this.colorBuffer = instancedArray(count, 'vec3');
+
+    // Uniforms
+    this.uDsWidth = uniform(dsW);
+    this.uDsHeight = uniform(dsH);
+    this.uAspect = uniform(aspect);
+    this.uHeightScale = uniform(0.1);
+    this.uHeightMode = uniform(0);
+    this.uExponent = uniform(1.0);
+    this.uRangeMin = uniform(0.0);
+    this.uRangeMax = uniform(1.0);
+    this.uStopsMode = uniform(0);
+    this.uPerceptualMode = uniform(0);
+
+    // Capture refs for the closure
+    const posBuf = this.positionBuffer;
+    const colBuf = this.colorBuffer;
+    const srcTex = this.sourceTexture;
+    const uDsW = this.uDsWidth;
+    const uDsH = this.uDsHeight;
+    const uAsp = this.uAspect;
+    const uHS = this.uHeightScale;
+    const uHM = this.uHeightMode;
+    const uExp = this.uExponent;
+    const uRMin = this.uRangeMin;
+    const uRMax = this.uRangeMax;
+    const uStop = this.uStopsMode;
+    const uPerc = this.uPerceptualMode;
+
+    // Luminance weight vectors
+    const luminanceRec709 = vec3(0.2126, 0.7152, 0.0722);
+    const luminanceAP1 = vec3(0.2722287, 0.6740818, 0.0536895);
+    const SQRT3_INV = float(1.0 / Math.sqrt(3.0));
+
+    // Build the TSL compute shader
+    this.computeNode = Fn(() => {
+      const idx = instanceIndex;
+      const gx = idx.mod(uDsW);
+      const gy = idx.div(uDsW);
+
+      // UV at center of each downsampled cell
+      const uv = vec2(
+        gx.add(0.5).div(uDsW),
+        gy.add(0.5).div(uDsH),
+      );
+      const pixel = texture(srcTex, uv);
+
+      // --- Height mode selection (GPU-side select() chain) ---
+      const h = select(uHM.equal(0),
+        pixel.rgb.length().mul(SQRT3_INV),
+        select(uHM.equal(1),
+          dot(pixel.rgb, luminanceRec709),
+          select(uHM.equal(2), pixel.r,
+          select(uHM.equal(3), pixel.g,
+          select(uHM.equal(4), pixel.b,
+          select(uHM.equal(5),
+            max(pixel.r, max(pixel.g, pixel.b)),
+            dot(pixel.rgb, luminanceAP1),
+          )))))).toVar();
+
+      // --- Modifier pipeline ---
+      // 1. Range remap: [rangeMin, rangeMax] → [0, 1]
+      h.assign(h.sub(uRMin).div(uRMax.sub(uRMin)).clamp(0.0, 1.0));
+
+      // 2. Stops mode: -log2(h)
+      h.assign(select(uStop.equal(1),
+        log2(max(h, float(1e-10))).negate(), h));
+
+      // 3. Perceptual mode: pow(h, 1/2.2)
+      h.assign(select(uPerc.equal(1),
+        pow(max(h, float(0.0)), float(1.0 / 2.2)), h));
+
+      // 4. Exponent
+      h.assign(pow(max(h, float(0.0)), uExp));
+
+      // --- Grid position (centered, aspect-correct, height-scaled Y) ---
+      const x = gx.add(0.5).div(uDsW).sub(0.5);
+      const z = gy.add(0.5).div(uDsH).sub(0.5).mul(uAsp);
+      const y = h.mul(uHS);
+
+      // Write to GPU storage buffers
+      posBuf.element(idx).assign(vec3(x, y, z));
+      return colBuf.element(idx).assign(clamp(pixel.rgb, 0.0, 1.0));
+    })().compute(count, [64]);
+  }
+
+  /**
+   * Update the source DataTexture with readback pixel data.
+   * Called after CPU readback from the pipeline's raw GPUTexture.
+   * @param data Float32Array of RGBA pixels (dsWidth * dsHeight * 4 floats)
+   */
+  updateSourceTexture(data: Float32Array): void {
+    if (!this.sourceTexture) return;
+    const img = this.sourceTexture.image;
+    // DataTexture image.data type is Uint8Array but is actually Float32Array
+    // when constructed with FloatType
+    (img as unknown as { data: Float32Array }).data = data;
+    this.sourceTexture.needsUpdate = true;
+  }
+
+  /**
+   * Update uniforms from HeightmapSettings (called when settings change).
+   */
+  updateSettings(settings: HeightmapSettings): void {
+    if (this.uHeightMode) this.uHeightMode.value = settings.heightMode;
+    if (this.uHeightScale) this.uHeightScale.value = settings.heightScale;
+    if (this.uExponent) this.uExponent.value = settings.exponent;
+    if (this.uRangeMin) this.uRangeMin.value = settings.rangeMin;
+    if (this.uRangeMax) this.uRangeMax.value = settings.rangeMax;
+    if (this.uStopsMode) this.uStopsMode.value = settings.stopsMode ? 1 : 0;
+    if (this.uPerceptualMode) this.uPerceptualMode.value = settings.perceptualMode ? 1 : 0;
+  }
+
   resetCamera(): void {
-    // 45 deg elevation, 30 deg azimuth, distance ~1.2
     const dist = 1.2;
-    const elev = Math.PI / 4;   // 45 degrees
-    const azim = Math.PI / 6;   // 30 degrees
+    const elev = Math.PI / 4;
+    const azim = Math.PI / 6;
     this.camera.position.set(
       dist * Math.cos(elev) * Math.sin(azim),
       dist * Math.sin(elev),
@@ -89,6 +297,7 @@ class HeightmapScene {
     this.disposed = true;
     this.stopRenderLoop();
     this.controls?.dispose();
+    this.sourceTexture?.dispose();
     this.renderer?.dispose();
   }
 }

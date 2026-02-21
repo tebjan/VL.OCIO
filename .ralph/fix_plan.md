@@ -22,7 +22,7 @@ Each phase file references a detailed section file in `specs-pipeline-checker/se
 > Phases 3 and 5 can be done in any order within this wave.
 
 ### Phase 3: WebGPU Render Pipeline
-- [ ] 3.1 `PipelineStage` interface (initialize/resize/encode/destroy)
+- [x] 3.1 `PipelineStage` interface (initialize/resize/encode/destroy)
 - [ ] 3.2 `FragmentStage` — GPURenderPipeline from WGSL, fullscreen triangle, rgba32float target
 - [ ] 3.3 `PipelineRenderer` — chains stages, disabled stages passthrough
 - [ ] 3.4 Render target management — rgba32float, RENDER_ATTACHMENT | TEXTURE_BINDING | COPY_SRC

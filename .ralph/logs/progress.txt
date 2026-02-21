@@ -27,3 +27,9 @@
 - Files changed: None (verification only; checkboxes updated)
 - Learnings: Phase 1 complete. Wave 1 done. Next is Wave 2: Phase 3 (WebGPU Render Pipeline) or Phase 5 (BC Encoder). Phase 3 should come first since Phase 4 depends on it.
 - Validation: npm install (clean), npx tsc --noEmit (clean), npm run build (296 KB)
+
+### Iteration 6 — 2026-02-21 — 3.1: PipelineStage interface
+- Implemented: Created src/pipeline/PipelineStage.ts with the PipelineStage interface — name, index, enabled, output properties + initialize/resize/encode/destroy lifecycle methods. encode() takes GPUCommandEncoder, GPUTexture (input), GPUBuffer (uniforms).
+- Files changed: pipeline-checker/src/pipeline/PipelineStage.ts (new)
+- Learnings: Section file clarifies encode() takes GPUBuffer (not PipelineSettings type), keeping the interface dependency-free. PipelineSettings type comes in task 3.5.
+- Validation: npx tsc --noEmit (clean), npm run build (296 KB)

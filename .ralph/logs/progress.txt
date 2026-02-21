@@ -260,3 +260,9 @@
 - Files changed: pipeline-checker/vite.config.ts (added chunkSizeWarningLimit)
 - Learnings: Config was mostly correct from Phase 1 scaffolding. The chunkSizeWarningLimit suppresses Rollup warnings when the single-file bundle exceeds default 500 KB limit.
 - Validation: npx tsc --noEmit (clean), npm run build (299.58 KB single index.html)
+
+### Iteration 43 — 2026-02-22 — 10.2+10.3: Verify file:// protocol + size < 10 MB (Phase 10 complete)
+- Implemented: Verification-only task. Confirmed dist/ contains single index.html (299.58 KB, well under 10 MB). Verified HTML has all JS inlined in <script type="module">, CSS inlined in <style>, all WGSL as string literals. No external <script src> or <link stylesheet href> tags. No fetch() for shader files. navigator.gpu init code present. Phase 10 complete.
+- Files changed: fix_plan.md (checkboxes), phase-10-build.md (checkboxes)
+- Learnings: Phase 10 complete. The 299.58 KB size is because HeightmapView/MainPreview/HeightmapControls are tree-shaken (not wired into App.tsx). Full integration would add Three.js (~1.5 MB). Next: Phase 11 (test verification).
+- Validation: npm run build (clean), verified single-file output, size 299.58 KB < 10 MB

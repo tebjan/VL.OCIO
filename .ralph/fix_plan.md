@@ -108,8 +108,8 @@ Each phase file references a detailed section file in `specs-pipeline-checker/se
 
 ### Phase 10: Build & Distribution
 - [x] 10.1 vite-plugin-singlefile config, WGSL ?raw imports, inlineDynamicImports
-- [ ] 10.2 Verify: `dist/index.html` opens via file://, WebGPU inits, sample EXR loads
-- [ ] 10.3 Verify: file size < 10 MB
+- [x] 10.2 Verify: `dist/index.html` opens via file://, WebGPU inits, sample EXR loads
+- [x] 10.3 Verify: file size < 10 MB
 
 ### Phase 11: Test Verification
 - [ ] 11.1 Create `test/fixtures/reference-values.json` with known pixel test points

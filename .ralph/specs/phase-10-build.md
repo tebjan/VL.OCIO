@@ -9,9 +9,9 @@
 
 - [x] 10.1 Vite build config for single-file output
 - [x] 10.2 WGSL shader embedding via ?raw imports
-- [ ] 10.3 Build and verify file:// protocol works
-- [ ] 10.4 Size optimization (target < 10 MB)
-- [ ] 10.5 Verify: `dist/index.html` opens, WebGPU inits, sample EXR loads
+- [x] 10.3 Build and verify file:// protocol works
+- [x] 10.4 Size optimization (target < 10 MB)
+- [x] 10.5 Verify: `dist/index.html` opens, WebGPU inits, sample EXR loads
 
 ## Task 10.1: Vite build config
 

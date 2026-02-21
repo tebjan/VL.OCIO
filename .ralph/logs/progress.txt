@@ -230,3 +230,9 @@
 - Files changed: src/components/ViewExposureHeader.tsx (new)
 - Learnings: Component is self-contained — accepts exposure/onChange props. Will be placed in a MainPreview container above Preview2D canvas. The accentColor CSS property controls the native slider thumb color. The component uses surface-950 background matching the controls panel for visual consistency.
 - Validation: npx tsc --noEmit (clean), npm run build (299.58 KB, gzip 94.30 KB)
+
+### Iteration 38 — 2026-02-21 — 8.5: Phase 8 verification gate
+- Implemented: Verification-only task. Confirmed all Phase 8 deliverables: 4 component files (Preview2D, PixelReadout, MetadataPanel, ViewExposureHeader), 1 hook file (usePixelReadout), 1 WGSL shader (preview-blit.wgsl), 1 existing infrastructure file (PixelReadback from Phase 3). All exports verified. Build stable at 299.58 KB. Phase 8 complete. Wave 4 complete.
+- Files changed: (checkboxes only)
+- Learnings: Phase 8 complete. Wave 4 done. Next is Wave 5: Phase 9 (3D Heightmap) which requires Phase 4 (stage output textures).
+- Validation: npx tsc --noEmit (clean), npm run build (299.58 KB, gzip 94.30 KB)

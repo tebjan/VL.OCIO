@@ -65,7 +65,7 @@ Each phase file references a detailed section file in `specs-pipeline-checker/se
 - [x] 6.6 Verify: `npm run build` passes
 
 ### Phase 7: UI — Filmstrip + Controls
-- [ ] 7.1 `Filmstrip.tsx` — horizontal scrollable, arrow connectors, stage cards
+- [x] 7.1 `Filmstrip.tsx` — horizontal scrollable, arrow connectors, stage cards
 - [ ] 7.2 `StageCard.tsx` — 160x90 thumbnail, name, enable/disable checkbox
 - [ ] 7.3 `ControlsPanel.tsx` — collapsible sections: Input, Grading, Tonemap, Output
 - [ ] 7.4 Reusable `Slider.tsx`, `Select.tsx`, `Section.tsx` (match VL.OCIO web UI style)

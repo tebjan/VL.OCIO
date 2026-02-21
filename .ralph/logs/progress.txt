@@ -164,3 +164,9 @@
 - Files changed: (checkboxes only)
 - Learnings: Phase 6 is complete. All BC infrastructure is in place. UI wiring (format selector, delta toggle, metrics display, "Not Available" labels) will happen in Phase 7.
 - Validation: npx tsc --noEmit (clean), npm run build (297.86 KB, gzip 93.98 KB)
+
+### Iteration 27 — 2026-02-21 — 7.1: Filmstrip component
+- Implemented: Created Filmstrip.tsx — horizontal scrollable row of 10 stage cards with arrow connectors (› unicode), visual states (normal/selected/disabled/unavailable), bypass arrow overlay (↷) on disabled stages, "Not Available" label on unavailable stages, enable/disable checkbox per card. Also created StageInfo interface + STAGE_NAMES constant in pipeline/types/StageInfo.ts. Added surface-950 through surface-100 CSS custom properties to index.css for the Phase 7 color palette.
+- Files changed: src/components/Filmstrip.tsx (new), src/pipeline/types/StageInfo.ts (new), src/index.css (surface tokens)
+- Learnings: Tailwind 4 has no tailwind.config.js — using CSS custom properties (--surface-*) with inline styles instead of Tailwind utility classes for the surface palette. StageCard will be extracted as a separate component in task 7.2. The `available` field on StageInfo maps to `PipelineStage.available` from Phase 6.
+- Validation: npx tsc --noEmit (clean), npm run build (298.59 KB, gzip 94.12 KB)

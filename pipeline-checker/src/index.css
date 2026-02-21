@@ -10,6 +10,18 @@
   --color-accent: #4a4a4a;
   --color-accent-hover: #5a5a5a;
   --color-error: #cc4444;
+
+  /* Surface palette (neutral grays for color-accurate UI) */
+  --surface-950: #0a0a0a;
+  --surface-900: #171717;
+  --surface-800: #262626;
+  --surface-700: #404040;
+  --surface-600: #525252;
+  --surface-500: #737373;
+  --surface-400: #a3a3a3;
+  --surface-300: #d4d4d4;
+  --surface-200: #e5e5e5;
+  --surface-100: #f5f5f5;
 }
 
 /*

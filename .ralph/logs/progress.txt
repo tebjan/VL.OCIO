@@ -218,3 +218,9 @@
 - Files changed: src/hooks/usePixelReadout.ts (new), src/components/PixelReadout.tsx (new)
 - Learnings: The hook adds screenX/screenY to the readout state so PixelReadout can position itself relative to the container without needing direct mouse event access. PixelReadback's pending guard prevents overlapping GPU reads — the hook doesn't need its own throttle beyond rAF. Both files are tree-shaken in the build until wired into Preview2D/MainPreview (build size unchanged).
 - Validation: npx tsc --noEmit (clean), npm run build (299.50 KB, gzip 94.27 KB)
+
+### Iteration 36 — 2026-02-21 — 8.3: MetadataPanel component
+- Implemented: Created MetadataPanel.tsx with: ChannelStats interface (min/max tuples), ImageMetadata interface (width, height, channels, fileSizeMB, stats), computeChannelStats() utility function (O(n) scan of Float32Array, called once at EXR load), collapsible section UI using existing Section component (defaultOpen=false). Displays resolution, channels, file size, and per-channel min/max with 5 decimal places. Uses CSS grid layout with monospace font, dark theme inline styles.
+- Files changed: src/components/MetadataPanel.tsx (new)
+- Learnings: computeChannelStats is exported so it can be called from App.tsx or a data loading hook at EXR load time. The metadata prop is nullable — component renders nothing when no image is loaded. Uses display:contents trick for the channel rows to work within CSS grid.
+- Validation: npx tsc --noEmit (clean), npm run build (299.55 KB, gzip 94.29 KB)

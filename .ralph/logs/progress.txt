@@ -152,3 +152,15 @@
 - Files changed: pipeline-checker/src/pipeline/shaders/bc-delta.wgsl (new)
 - Learnings: Delta shader needs two input textures bound simultaneously (originalTex and decompressedTex), unlike the single-input color stages. The DeltaParams struct is padded to 16 bytes (1 f32 + 3 padding). The delta pipeline in BCDecompressStage will need a separate render pipeline with auto layout since the bind group layout differs from the decompress path.
 - Validation: npx tsc --noEmit (clean), npm run build (297.86 KB)
+
+### Iteration 25 — 2026-02-21 — 6.5: Graceful fallback when texture-compression-bc unavailable
+- Implemented: Added optional `available?: boolean` property to PipelineStage interface (defaults true). BCCompressStage constructor now takes `(device, hasBC)` — when !hasBC, encoder is null, stage auto-disabled. BCDecompressStage constructor now takes `(hasBC)` — when !hasBC, initialize/resize/uploadBCData all early-return. Pipeline passes EXR directly to Stage 4.
+- Files changed: PipelineStage.ts, BCCompressStage.ts, BCDecompressStage.ts
+- Learnings: Nullable encoder pattern (`BCEncoder | null`) with optional chaining (`this.encoder?.destroy()`) keeps the code clean. Early-return guards in initialize/resize/uploadBCData prevent any GPU resource creation when BC unavailable.
+- Validation: npx tsc --noEmit (clean), npm run build (297.86 KB)
+
+### Iteration 26 — 2026-02-21 — 6.6: Phase 6 verification gate
+- Implemented: Verification-only task. Confirmed all 6 Phase 6 files exist: BCCompressStage.ts, BCDecompressStage.ts, BCMetrics.ts, computeBCMetrics.ts, bc-decompress.wgsl, bc-delta.wgsl. Both stages implement PipelineStage with available/hasBC fallback. Build stable at 297.86 KB.
+- Files changed: (checkboxes only)
+- Learnings: Phase 6 is complete. All BC infrastructure is in place. UI wiring (format selector, delta toggle, metrics display, "Not Available" labels) will happen in Phase 7.
+- Validation: npx tsc --noEmit (clean), npm run build (297.86 KB, gzip 93.98 KB)

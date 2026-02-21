@@ -12,7 +12,7 @@
 - [x] 6.3 BC metrics display in stage card
 - [x] 6.4 Delta overlay (heat map)
 - [x] 6.5 Graceful fallback when BC unavailable
-- [ ] 6.6 Verify: `npm run build` passes
+- [x] 6.6 Verify: `npm run build` passes
 
 ## Task 6.1: Stage 2 — BC Compress
 

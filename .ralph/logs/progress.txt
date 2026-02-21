@@ -236,3 +236,9 @@
 - Files changed: (checkboxes only)
 - Learnings: Phase 8 complete. Wave 4 done. Next is Wave 5: Phase 9 (3D Heightmap) which requires Phase 4 (stage output textures).
 - Validation: npx tsc --noEmit (clean), npm run build (299.58 KB, gzip 94.30 KB)
+
+### Iteration 39 — 2026-02-21 — 9.1: Three.js WebGPU renderer + OrbitControls
+- Implemented: Created HeightmapView.tsx with HeightmapScene class managing Three.js WebGPU renderer (THREE.WebGPURenderer from 'three/webgpu'), PerspectiveCamera (45 FOV), OrbitControls (damping 0.1), dark scene background (0x0d0d0d). React component with: lazy init on first activation, ResizeObserver for canvas sizing, render loop start/stop on active toggle (preserves camera across tab switches), resetCamera() at 45 deg elevation / 30 deg azimuth. Uses renderAsync for WebGPU compatibility.
+- Files changed: src/components/HeightmapView.tsx (new)
+- Learnings: Three.js WebGPU types: import from 'three/webgpu' (not 'three'). The package exports map is: three/webgpu → build/three.webgpu.js, three/tsl → build/three.tsl.js, three/addons/* → examples/jsm/*. WebGPURenderer.init() is async — must await before rendering. renderer.setSize with updateStyle=false for manual canvas sizing. Component is tree-shaken until wired into MainPreview.
+- Validation: npx tsc --noEmit (clean), npm run build (299.58 KB, gzip 94.30 KB)

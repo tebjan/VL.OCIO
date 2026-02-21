@@ -17,7 +17,7 @@
 ## Checklist
 
 - [x] 4.1 `input-convert.wgsl` — Stage 4
-- [ ] 4.2 `color-grade.wgsl` — Stage 5
+- [x] 4.2 `color-grade.wgsl` — Stage 5
 - [ ] 4.3 `rrt.wgsl` — Stage 6
 - [ ] 4.4 `odt.wgsl` — Stage 7
 - [ ] 4.5 `output-encode.wgsl` — Stage 8

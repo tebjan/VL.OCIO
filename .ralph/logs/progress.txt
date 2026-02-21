@@ -110,3 +110,9 @@
 - Files changed: pipeline-checker/src/shaders/generated/input-convert.wgsl (new)
 - Learnings: FragmentStage prepends VertexOutput struct + vs entrypoint. Fragment shader must NOT redeclare these. Uniform struct can be minimal — only declare fields this stage reads (inputSpace at offset 0). WGSL step() takes vec3 args when operating on vec3 (e.g., step(vec3<f32>(0.5), V) not step(0.5, V)).
 - Validation: npx tsc --noEmit (clean), npm run build (296 KB)
+
+### Iteration 18 — 2026-02-21 — 4.2: color-grade.wgsl (Stage 5 — Color Grading)
+- Implemented: Created src/shaders/generated/color-grade.wgsl with full professional color grading. Uniform struct covers PipelineUniforms offsets 0-172 (22 params: inputSpace, gradingSpace, exposure, contrast, saturation, temperature, tint, highlights, shadows, vibrance, lift/gamma/gain/offset vec3, shadowColor/midtoneColor/highlightColor vec3, highlightSoftClip/shadowSoftClip/highlightKnee/shadowKnee). WGSL vec3 alignment causes implicit 8-byte padding between vibrance (offset 36) and lift (offset 48) — matches PipelineUniforms.ts layout. Includes DecodeInput() (any space → Linear AP1 via hub), ApplyGradingLog() (12-step ACEScct workflow), ApplyGradingLinear() (11-step ACEScg workflow), GetZoneWeights(), ApplySoftClip(). Output converts back via AP1_to_Rec709.
+- Files changed: pipeline-checker/src/shaders/generated/color-grade.wgsl (new)
+- Learnings: WGSL `step(scalar, vec3)` doesn't auto-broadcast — use `step(vec3<f32>(scalar), vec3)` for vec3 comparisons. In ApplySoftClip, the `step(0.001, hStr)` is scalar×scalar producing scalar, which then multiplies vec3 — this works in WGSL. The `offset` WGSL keyword issue was avoided by naming the field `offset_val`. WGSL pow() requires vec3 args for vec3 results: `pow(vec3, vec3<f32>(scalar))`.
+- Validation: npx tsc --noEmit (clean), npm run build (298 KB)

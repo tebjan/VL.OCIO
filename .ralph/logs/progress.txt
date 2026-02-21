@@ -212,3 +212,9 @@
 - Files changed: src/shaders/generated/preview-blit.wgsl (new), src/components/Preview2D.tsx (new)
 - Learnings: Preview2D creates its own GPUCanvasContext separate from the Phase 1 hidden canvas. The shader uses unfilterable-float + non-filtering sampler (same pattern as pipeline stages) since stage textures are rgba32float. Zoom state update uses functional setZoom to avoid stale closures — pan adjustments happen inside the zoom updater. Container uses ResizeObserver with devicePixelRatio for crisp rendering.
 - Validation: npx tsc --noEmit (clean), npm run build (299.50 KB, gzip 94.27 KB)
+
+### Iteration 35 — 2026-02-21 — 8.2: PixelReadout overlay + usePixelReadout hook
+- Implemented: Created usePixelReadout.ts hook with requestAnimationFrame throttling (sets needsRead flag on mousemove, reads on next rAF frame). Converts screen coords to texture UV via zoom/pan formula, clamps to texture bounds, calls PixelReadback.readPixel(). Tracks mouseenter/mouseleave for valid state. Returns PixelReadoutState with x, y, r, g, b, a, valid, screenX, screenY. Created PixelReadout.tsx floating tooltip component: semi-transparent dark panel (rgba 0,0,0,0.85), monospace 12px, shows pixel coords and RGBA values with 5 decimal places. Tooltip positioned 16px offset from cursor, flips when near container edges.
+- Files changed: src/hooks/usePixelReadout.ts (new), src/components/PixelReadout.tsx (new)
+- Learnings: The hook adds screenX/screenY to the readout state so PixelReadout can position itself relative to the container without needing direct mouse event access. PixelReadback's pending guard prevents overlapping GPU reads — the hook doesn't need its own throttle beyond rAF. Both files are tree-shaken in the build until wired into Preview2D/MainPreview (build size unchanged).
+- Validation: npx tsc --noEmit (clean), npm run build (299.50 KB, gzip 94.27 KB)

@@ -8,7 +8,7 @@
 - [x] 11.2 `reference-values.json` — golden reference data
 - [x] 11.3 `verify.py` — main verification runner
 - [x] 11.4 Per-stage Python math verification
-- [ ] 11.5 Verify: `python test/verify.py` exits 0
+- [x] 11.5 Verify: `python test/verify.py` exits 0
 
 ## Task 11.1: Test directory scaffolding
 

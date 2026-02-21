@@ -20,6 +20,7 @@ interface WebSocketActions {
   updateTonemap: (params: Partial<TonemapSettings>) => void
   loadPreset: (name: string) => void
   savePreset: (name: string) => void
+  deletePreset: (name: string) => void
   listPresets: () => void
   reset: () => void
   // Multi-instance actions
@@ -394,6 +395,13 @@ export function useWebSocket(): WebSocketState & WebSocketActions {
     [send]
   )
 
+  const deletePreset = useCallback(
+    (name: string) => {
+      send({ type: 'deletePreset', name })
+    },
+    [send]
+  )
+
   const listPresets = useCallback(() => {
     send({ type: 'listPresets' })
   }, [send])
@@ -426,6 +434,7 @@ export function useWebSocket(): WebSocketState & WebSocketActions {
     updateTonemap,
     loadPreset,
     savePreset,
+    deletePreset,
     listPresets,
     reset,
     selectInstance,

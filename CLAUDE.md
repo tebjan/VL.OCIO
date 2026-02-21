@@ -442,6 +442,10 @@ config.ApplyCPUTransformPixel(testPixel);
 - `lastError` output pin on the node
 - Check `discovery.json` in UI dist folder for port info
 
+## Important Implementation Rules
+
+- **Web UI parity:** Every new feature that adds or changes enums, settings, or parameters in the C# backend or SDSL shaders MUST also be implemented in the web UI (`ui/src/types/settings.ts` for types/labels, components for any new controls). Always rebuild the web UI (`cd ui && npm run build`) after changes.
+
 ## References
 
 - [OCIO v2.5 Docs](https://opencolorio.readthedocs.io/)

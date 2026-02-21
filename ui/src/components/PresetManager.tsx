@@ -7,6 +7,7 @@ interface PresetManagerProps {
   presets: string[]
   onLoad: (name: string) => void
   onSave: (name: string) => void
+  onDelete: (name: string) => void
   onReset: () => void
 }
 
@@ -16,11 +17,13 @@ export function PresetManager({
   presets,
   onLoad,
   onSave,
+  onDelete,
   onReset,
 }: PresetManagerProps) {
   const [showSaveInput, setShowSaveInput] = useState(false)
   const [newPresetName, setNewPresetName] = useState('')
   const [confirmLoad, setConfirmLoad] = useState<string | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [confirmReset, setConfirmReset] = useState(false)
 
   const handleSave = useCallback(() => {
@@ -50,6 +53,7 @@ export function PresetManager({
       if (isActiveClean) {
         onLoad(name)
       } else {
+        setConfirmDelete(null)
         setConfirmLoad(name)
       }
     },
@@ -62,6 +66,19 @@ export function PresetManager({
       setConfirmLoad(null)
     }
   }, [confirmLoad, onLoad])
+
+  const handleDeleteClick = useCallback((e: React.MouseEvent, name: string) => {
+    e.stopPropagation()
+    setConfirmLoad(null)
+    setConfirmDelete(name)
+  }, [])
+
+  const handleConfirmDelete = useCallback(() => {
+    if (confirmDelete) {
+      onDelete(confirmDelete)
+      setConfirmDelete(null)
+    }
+  }, [confirmDelete, onDelete])
 
   const handleResetClick = useCallback(() => {
     setConfirmReset(true)
@@ -89,52 +106,6 @@ export function PresetManager({
             {activePresetName}
             {showDirty && <span className="text-amber-400 ml-0.5">*</span>}
           </span>
-        </div>
-      )}
-
-      {/* Confirmation dialog — load preset */}
-      {confirmLoad && (
-        <div className="mx-3 mb-2 p-2.5 bg-surface-800 border border-amber-500/30 rounded-lg">
-          <p className="text-xs text-surface-300 mb-2">
-            Current state will be replaced. Load "{confirmLoad}"?
-          </p>
-          <div className="flex gap-1.5">
-            <button
-              onClick={handleConfirmLoad}
-              className="flex-1 px-2 py-1.5 text-xs bg-amber-600/20 border border-amber-500/40 hover:bg-amber-600/30 rounded-md text-amber-300 transition-colors"
-            >
-              Load
-            </button>
-            <button
-              onClick={() => setConfirmLoad(null)}
-              className="flex-1 px-2 py-1.5 text-xs bg-surface-700 hover:bg-surface-600 rounded-md text-surface-300 transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Confirmation dialog — reset */}
-      {confirmReset && (
-        <div className="mx-3 mb-2 p-2.5 bg-surface-800 border border-red-500/30 rounded-lg">
-          <p className="text-xs text-surface-300 mb-2">
-            Reset all values to defaults?
-          </p>
-          <div className="flex gap-1.5">
-            <button
-              onClick={handleConfirmReset}
-              className="flex-1 px-2 py-1.5 text-xs bg-red-600/20 border border-red-500/40 hover:bg-red-600/30 rounded-md text-red-300 transition-colors"
-            >
-              Reset
-            </button>
-            <button
-              onClick={() => setConfirmReset(false)}
-              className="flex-1 px-2 py-1.5 text-xs bg-surface-700 hover:bg-surface-600 rounded-md text-surface-300 transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
         </div>
       )}
 
@@ -167,6 +138,22 @@ export function PresetManager({
               className="px-2 py-1.5 text-xs bg-surface-800 hover:bg-surface-700 rounded-md text-surface-400 transition-colors"
             >
               X
+            </button>
+          </div>
+        ) : confirmReset ? (
+          /* Reset confirmation — replaces button row in-place */
+          <div className="flex gap-1.5">
+            <button
+              onClick={handleConfirmReset}
+              className="flex-1 px-3 py-2 text-xs bg-red-600/20 border border-red-500/40 hover:bg-red-600/30 rounded-lg text-red-300 transition-colors"
+            >
+              Confirm Reset
+            </button>
+            <button
+              onClick={() => setConfirmReset(false)}
+              className="px-3 py-2 text-xs bg-surface-800 border border-surface-700 hover:bg-surface-750 rounded-lg text-surface-400 transition-colors"
+            >
+              Cancel
             </button>
           </div>
         ) : (
@@ -208,26 +195,95 @@ export function PresetManager({
         ) : (
           presets.map((name) => {
             const isActive = name === activePresetName
+
+            /* Load confirmation — replaces this row in-place */
+            if (confirmLoad === name) {
+              return (
+                <div
+                  key={name}
+                  className="p-2 bg-surface-800 border border-amber-500/30 rounded-lg"
+                >
+                  <p className="text-xs text-surface-300 mb-1.5 break-words">
+                    Load "{name}"?
+                  </p>
+                  <div className="flex gap-1.5">
+                    <button
+                      onClick={handleConfirmLoad}
+                      className="flex-1 px-2 py-1.5 text-xs bg-amber-600/20 border border-amber-500/40 hover:bg-amber-600/30 rounded-md text-amber-300 transition-colors"
+                    >
+                      Load
+                    </button>
+                    <button
+                      onClick={() => setConfirmLoad(null)}
+                      className="flex-1 px-2 py-1.5 text-xs bg-surface-700 hover:bg-surface-600 rounded-md text-surface-300 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )
+            }
+
+            /* Delete confirmation — replaces this row in-place */
+            if (confirmDelete === name) {
+              return (
+                <div
+                  key={name}
+                  className="p-2 bg-surface-800 border border-red-500/30 rounded-lg"
+                >
+                  <p className="text-xs text-surface-300 mb-1.5 break-words">
+                    Delete "{name}"?
+                  </p>
+                  <div className="flex gap-1.5">
+                    <button
+                      onClick={handleConfirmDelete}
+                      className="flex-1 px-2 py-1.5 text-xs bg-red-600/20 border border-red-500/40 hover:bg-red-600/30 rounded-md text-red-300 transition-colors"
+                    >
+                      Delete
+                    </button>
+                    <button
+                      onClick={() => setConfirmDelete(null)}
+                      className="flex-1 px-2 py-1.5 text-xs bg-surface-700 hover:bg-surface-600 rounded-md text-surface-300 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )
+            }
+
+            /* Normal preset row */
             return (
-              <button
+              <div
                 key={name}
-                onClick={() => handleLoadClick(name)}
-                title={`Load "${name}"`}
                 className={cn(
-                  'w-full text-left px-3 py-2 rounded-lg transition-all duration-150',
+                  'group flex items-center rounded-lg transition-all duration-150',
                   'border',
                   isActive
                     ? 'bg-surface-800 border-surface-600 text-surface-50'
                     : 'bg-surface-900/50 border-surface-800/50 text-surface-400 hover:bg-surface-850 hover:text-surface-200 hover:border-surface-700'
                 )}
               >
-                <span className="text-xs font-medium leading-snug break-words">
-                  {name}
-                  {isActive && showDirty && (
-                    <span className="text-amber-400 ml-0.5">*</span>
-                  )}
-                </span>
-              </button>
+                <button
+                  onClick={() => handleLoadClick(name)}
+                  title={`Load "${name}"`}
+                  className="flex-1 min-w-0 text-left px-3 py-2"
+                >
+                  <span className="text-xs font-medium leading-snug break-words">
+                    {name}
+                    {isActive && showDirty && (
+                      <span className="text-amber-400 ml-0.5">*</span>
+                    )}
+                  </span>
+                </button>
+                <button
+                  onClick={(e) => handleDeleteClick(e, name)}
+                  title={`Delete "${name}"`}
+                  className="flex-shrink-0 px-2 py-2 text-xs text-surface-600 opacity-0 group-hover:opacity-100 hover:text-red-400 transition-all"
+                >
+                  &times;
+                </button>
+              </div>
             )
           })
         )}

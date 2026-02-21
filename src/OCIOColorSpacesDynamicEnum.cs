@@ -5,6 +5,22 @@ using VL.Lib.Collections;
 
 namespace VL.OCIO;
 
+/// <summary>
+/// Increments whenever any OCIO dynamic enum entries change. Use for change detection.
+/// </summary>
+public static class OCIOEnumVersion
+{
+    public static int Version;
+
+    static OCIOEnumVersion()
+    {
+        OCIODisplayViewEnumDefinition.Instance.OnChange.Subscribe(_ => Version++);
+        OCIOLookEnumDefinition.Instance.OnChange.Subscribe(_ => Version++);
+        OCIOColorSpaceEnumDefinition.Instance.OnChange.Subscribe(_ => Version++);
+        OCIOConfigEnumDefinition.Instance.OnChange.Subscribe(_ => Version++);
+    }
+}
+
 [Serializable]
 public class OCIODisplayViewEnum : DynamicEnumBase<OCIODisplayViewEnum, OCIODisplayViewEnumDefinition>
 {

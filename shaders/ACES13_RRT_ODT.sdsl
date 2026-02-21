@@ -1,0 +1,361 @@
+// ============================================================================
+// ACES13_RRT_ODT.sdsl
+// ACES 1.3 Reference Rendering Transform + Output Device Transforms
+// ============================================================================
+//
+// Accurate port of the official ACES 1.3 RRT and ODT from the Academy
+// reference CTL (ampas/aces-dev). Inherits from ColorSpaceConversion.
+//
+// All output functions return LINEAR values in the target display gamut.
+// The caller applies the final OETF (sRGB gamma, PQ, HLG) separately.
+//
+// Public API:
+//   float3 ACES13_RRT(float3 acescg)
+//   float3 ACES13_ODT_Rec709_100nits(float3 rrtOutput)
+//   float3 ACES13_ODT_Rec2020_1000nits(float3 rrtOutput)
+//   float3 ACES13_RRT_ODT_Rec709(float3 acescg)
+//   float3 ACES13_RRT_ODT_Rec2020_1000nits(float3 acescg)
+//
+// ============================================================================
+
+shader ACES13_RRT_ODT : ColorSpaceConversion
+{
+    // ========================================================================
+    // RRT CONSTANTS
+    // ========================================================================
+
+    static const float RRT_GLOW_GAIN = 0.05;
+    static const float RRT_GLOW_MID  = 0.08;
+    static const float RRT_RED_SCALE = 0.82;
+    static const float RRT_RED_PIVOT = 0.03;
+    static const float RRT_RED_HUE   = 0.0;
+    static const float RRT_RED_WIDTH = 135.0;
+
+    static const float CINEMA_WHITE = 48.0;
+    static const float CINEMA_BLACK = 0.02;
+
+    // RRT desaturation (factor = 0.96)
+    static const float3x3 RRT_SAT_MAT = float3x3(
+        0.9708890, 0.0269633, 0.00214758,
+        0.0108892, 0.9869630, 0.00214758,
+        0.0108892, 0.0269633, 0.96214800
+    );
+
+    // ODT desaturation (factor = 0.93)
+    static const float3x3 ODT_SAT_MAT = float3x3(
+        0.949056, 0.0471857, 0.00375827,
+        0.019056, 0.9771860, 0.00375827,
+        0.019056, 0.0471857, 0.93375800
+    );
+
+    // ========================================================================
+    // RRT HELPER FUNCTIONS
+    // ========================================================================
+
+    float aces_rgb_2_saturation(float3 rgb)
+    {
+        float mi = min(min(rgb.r, rgb.g), rgb.b);
+        float ma = max(max(rgb.r, rgb.g), rgb.b);
+        return (max(ma, 1e-4) - max(mi, 1e-4)) / max(ma, 1e-2);
+    }
+
+    float aces_rgb_2_yc(float3 rgb)
+    {
+        const float ycRadiusWeight = 1.75;
+        float k = max(rgb.z * (rgb.z - rgb.y) + rgb.y * (rgb.y - rgb.x) + rgb.x * (rgb.x - rgb.z), 0.0);
+        return (rgb.z + rgb.y + rgb.x + ycRadiusWeight * sqrt(k)) / 3.0;
+    }
+
+    float aces_rgb_2_hue(float3 rgb)
+    {
+        float hue;
+        if (rgb.x == rgb.y && rgb.y == rgb.z)
+            hue = 0.0;
+        else
+            hue = (180.0 / 3.14159265) * atan2(sqrt(3.0) * (rgb.y - rgb.z), 2.0 * rgb.x - rgb.y - rgb.z);
+        if (hue < 0.0) hue += 360.0;
+        return hue;
+    }
+
+    float aces_center_hue(float hue, float centerH)
+    {
+        float h = hue - centerH;
+        if (h < -180.0) h += 360.0;
+        else if (h > 180.0) h -= 360.0;
+        return h;
+    }
+
+    float aces_sigmoid_shaper(float x)
+    {
+        float t = max(1.0 - abs(x / 2.0), 0.0);
+        return (1.0 + sign(x) * (1.0 - t * t)) / 2.0;
+    }
+
+    float aces_glow_fwd(float ycIn, float glowGainIn, float glowMid)
+    {
+        if (ycIn <= 2.0 / 3.0 * glowMid)
+            return glowGainIn;
+        else if (ycIn >= 2.0 * glowMid)
+            return 0.0;
+        else
+            return glowGainIn * (glowMid / ycIn - 0.5);
+    }
+
+    // ========================================================================
+    // SEGMENTED SPLINE C5 (RRT tone curve)
+    // ========================================================================
+
+    float aces_spline_c5_fwd(float x)
+    {
+        const float coefsLow[6] = {
+            -4.0000000000, -4.0000000000, -3.1573765773,
+            -0.4852499958,  1.8477324706,  1.8477324706
+        };
+        const float coefsHigh[6] = {
+            -0.7185482425,  2.0810307172,  3.6681241237,
+             4.0000000000,  4.0000000000,  4.0000000000
+        };
+        const float logMinX = log10(0.18 * exp2(-15.0));  // -5.26
+        const float logMidX = log10(0.18);                 // -0.745
+        const float logMaxX = log10(0.18 * exp2(18.0));    //  4.674
+
+        float logx = log10(max(x, 1e-10));
+        float logy;
+
+        if (logx <= logMinX)
+        {
+            logy = logx * 0.0 + (log10(0.0001) - 0.0 * logMinX);
+        }
+        else if (logx < logMidX)
+        {
+            float knot_coord = 3.0 * (logx - logMinX) / (logMidX - logMinX);
+            int j = (int)knot_coord;
+            float t = knot_coord - (float)j;
+            float3 cf = float3(coefsLow[j], coefsLow[j + 1], coefsLow[j + 2]);
+            logy = dot(float3(t * t, t, 1.0), mul(ACES_SPLINE_M, cf));
+        }
+        else if (logx < logMaxX)
+        {
+            float knot_coord = 3.0 * (logx - logMidX) / (logMaxX - logMidX);
+            int j = (int)knot_coord;
+            float t = knot_coord - (float)j;
+            float3 cf = float3(coefsHigh[j], coefsHigh[j + 1], coefsHigh[j + 2]);
+            logy = dot(float3(t * t, t, 1.0), mul(ACES_SPLINE_M, cf));
+        }
+        else
+        {
+            logy = logx * 0.0 + (log10(10000.0) - 0.0 * logMaxX);
+        }
+
+        return pow(10.0, logy);
+    }
+
+    // ========================================================================
+    // SEGMENTED SPLINE C9 - 48 nits (SDR)
+    // ========================================================================
+
+    float aces_spline_c9_fwd_48nits(float x)
+    {
+        const float coefsLow[10] = {
+            -1.6989700043, -1.6989700043, -1.4779000000, -1.2291000000, -0.8648000000,
+            -0.4480000000,  0.0051800000,  0.4511080334,  0.9113744414,  0.9113744414
+        };
+        const float coefsHigh[10] = {
+             0.5154386965,  0.8470437783,  1.1358000000,  1.3802000000,  1.5197000000,
+             1.5985000000,  1.6467000000,  1.6746091357,  1.6878733390,  1.6878733390
+        };
+        float logMinX = log10(aces_spline_c5_fwd(0.18 * pow(2.0, -6.5)));
+        float logMidX = log10(aces_spline_c5_fwd(0.18));
+        float logMaxX = log10(aces_spline_c5_fwd(0.18 * pow(2.0, 6.5)));
+        float logMinY = log10(0.02);
+        float logMaxY = log10(48.0);
+
+        float logx = log10(max(x, 1e-4));
+        float logy;
+
+        if (logx <= logMinX)
+        {
+            logy = logx * 0.0 + (logMinY - 0.0 * logMinX);
+        }
+        else if (logx < logMidX)
+        {
+            float knot_coord = 7.0 * (logx - logMinX) / (logMidX - logMinX);
+            int j = (int)knot_coord;
+            float t = knot_coord - (float)j;
+            float3 cf = float3(coefsLow[j], coefsLow[j + 1], coefsLow[j + 2]);
+            logy = dot(float3(t * t, t, 1.0), mul(ACES_SPLINE_M, cf));
+        }
+        else if (logx < logMaxX)
+        {
+            float knot_coord = 7.0 * (logx - logMidX) / (logMaxX - logMidX);
+            int j = (int)knot_coord;
+            float t = knot_coord - (float)j;
+            float3 cf = float3(coefsHigh[j], coefsHigh[j + 1], coefsHigh[j + 2]);
+            logy = dot(float3(t * t, t, 1.0), mul(ACES_SPLINE_M, cf));
+        }
+        else
+        {
+            logy = logx * 0.04 + (logMaxY - 0.04 * logMaxX);
+        }
+
+        return pow(10.0, logy);
+    }
+
+    // ========================================================================
+    // SEGMENTED SPLINE C9 - 1000 nits (HDR)
+    // ========================================================================
+
+    float aces_spline_c9_fwd_1000nits(float x)
+    {
+        const float coefsLow[10] = {
+            -4.9706219331, -3.0293780669, -2.1262000000, -1.5105000000, -1.0578000000,
+            -0.4668000000,  0.1193800000,  0.7088134201,  1.2911865799,  1.2911865799
+        };
+        const float coefsHigh[10] = {
+             0.8089132070,  1.1910867930,  1.5683000000,  1.9483000000,  2.3083000000,
+             2.6384000000,  2.8595000000,  2.9872608805,  3.0127391195,  3.0127391195
+        };
+        float logMinX = log10(aces_spline_c5_fwd(0.18 * pow(2.0, -12.0)));
+        float logMidX = log10(aces_spline_c5_fwd(0.18));
+        float logMaxX = log10(aces_spline_c5_fwd(0.18 * pow(2.0, 10.0)));
+        float logMinY = log10(0.0001);
+        float logMaxY = log10(1000.0);
+
+        float logx = log10(max(x, 1e-4));
+        float logy;
+
+        if (logx <= logMinX)
+        {
+            logy = logx * 3.0 + (logMinY - 3.0 * logMinX);
+        }
+        else if (logx < logMidX)
+        {
+            float knot_coord = 7.0 * (logx - logMinX) / (logMidX - logMinX);
+            int j = (int)knot_coord;
+            float t = knot_coord - (float)j;
+            float3 cf = float3(coefsLow[j], coefsLow[j + 1], coefsLow[j + 2]);
+            logy = dot(float3(t * t, t, 1.0), mul(ACES_SPLINE_M, cf));
+        }
+        else if (logx < logMaxX)
+        {
+            float knot_coord = 7.0 * (logx - logMidX) / (logMaxX - logMidX);
+            int j = (int)knot_coord;
+            float t = knot_coord - (float)j;
+            float3 cf = float3(coefsHigh[j], coefsHigh[j + 1], coefsHigh[j + 2]);
+            logy = dot(float3(t * t, t, 1.0), mul(ACES_SPLINE_M, cf));
+        }
+        else
+        {
+            logy = logx * 0.06 + (logMaxY - 0.06 * logMaxX);
+        }
+
+        return pow(10.0, logy);
+    }
+
+    // ========================================================================
+    // ACES 1.3 RRT (Reference Rendering Transform)
+    // Input:  ACEScg (linear AP1)
+    // Output: RRT-processed values in AP1 (ready for ODT)
+    // ========================================================================
+
+    float3 ACES13_RRT(float3 acescg)
+    {
+        // Convert AP1 → AP0 for glow and red modifier
+        float3 aces = mul(ACES_AP1_to_AP0, acescg);
+
+        // Glow module: boost colorfulness in darks
+        float saturation = aces_rgb_2_saturation(aces);
+        float ycIn = aces_rgb_2_yc(aces);
+        float s = aces_sigmoid_shaper((saturation - 0.4) / 0.2);
+        float addedGlow = 1.0 + aces_glow_fwd(ycIn, RRT_GLOW_GAIN * s, RRT_GLOW_MID);
+        aces *= addedGlow;
+
+        // Red modifier: reduce over-saturated reds
+        float hue = aces_rgb_2_hue(aces);
+        float centeredHue = aces_center_hue(hue, RRT_RED_HUE);
+        float hueWeight = smoothstep(0.0, 1.0, 1.0 - abs(2.0 * centeredHue / RRT_RED_WIDTH));
+        hueWeight *= hueWeight;
+        aces.r += hueWeight * saturation * (RRT_RED_PIVOT - aces.r) * (1.0 - RRT_RED_SCALE);
+
+        // Convert AP0 → AP1, clamp negatives
+        float3 rgbPre = max(mul(ACES_AP0_to_AP1, max(aces, 0.0)), 0.0);
+
+        // RRT desaturation
+        rgbPre = mul(RRT_SAT_MAT, rgbPre);
+
+        // RRT tone curve (segmented spline c5, per channel)
+        float3 rgbPost;
+        rgbPost.x = aces_spline_c5_fwd(rgbPre.x);
+        rgbPost.y = aces_spline_c5_fwd(rgbPre.y);
+        rgbPost.z = aces_spline_c5_fwd(rgbPre.z);
+
+        return rgbPost;
+    }
+
+    // ========================================================================
+    // ACES 1.3 ODT - Rec.709 100 nits (SDR)
+    // Input:  RRT output in AP1
+    // Output: LINEAR Rec.709
+    // ========================================================================
+
+    float3 ACES13_ODT_Rec709_100nits(float3 rrtOutput)
+    {
+        // ODT tone curve (48 nits)
+        float3 rgbPost;
+        rgbPost.x = aces_spline_c9_fwd_48nits(rrtOutput.x);
+        rgbPost.y = aces_spline_c9_fwd_48nits(rrtOutput.y);
+        rgbPost.z = aces_spline_c9_fwd_48nits(rrtOutput.z);
+
+        // Normalize to display range
+        float3 linearCV = aces_Y_2_linCV(rgbPost, CINEMA_WHITE, CINEMA_BLACK);
+
+        // Dim surround compensation
+        linearCV = aces_darkSurround_to_dimSurround(linearCV);
+
+        // ODT desaturation
+        linearCV = mul(ODT_SAT_MAT, linearCV);
+
+        // AP1 → display Rec.709 (pre-computed combined matrix with D60→D65)
+        return saturate(mul(AP1_to_Rec709, linearCV));
+    }
+
+    // ========================================================================
+    // ACES 1.3 ODT - Rec.2020 1000 nits (HDR)
+    // Input:  RRT output in AP1
+    // Output: LINEAR Rec.2020 (normalized: 1.0 = 1000 nits)
+    // ========================================================================
+
+    float3 ACES13_ODT_Rec2020_1000nits(float3 rrtOutput)
+    {
+        // ODT tone curve (1000 nits)
+        float3 rgbPost;
+        rgbPost.x = aces_spline_c9_fwd_1000nits(rrtOutput.x);
+        rgbPost.y = aces_spline_c9_fwd_1000nits(rrtOutput.y);
+        rgbPost.z = aces_spline_c9_fwd_1000nits(rrtOutput.z);
+
+        // Normalize to display range
+        float3 linearCV = aces_Y_2_linCV(rgbPost, 1000.0, 0.0001);
+
+        // ODT desaturation (no dim surround for HDR viewing)
+        linearCV = mul(ODT_SAT_MAT, linearCV);
+
+        // AP1 → display Rec.2020 (pre-computed combined matrix with D60→D65)
+        return max(mul(AP1_to_Rec2020, linearCV), 0.0);
+    }
+
+    // ========================================================================
+    // COMBINED RRT+ODT (convenience)
+    // Input:  ACEScg (linear AP1)
+    // Output: LINEAR in target display gamut
+    // ========================================================================
+
+    float3 ACES13_RRT_ODT_Rec709(float3 acescg)
+    {
+        return ACES13_ODT_Rec709_100nits(ACES13_RRT(acescg));
+    }
+
+    float3 ACES13_RRT_ODT_Rec2020_1000nits(float3 acescg)
+    {
+        return ACES13_ODT_Rec2020_1000nits(ACES13_RRT(acescg));
+    }
+};

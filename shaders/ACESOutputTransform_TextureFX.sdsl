@@ -1,0 +1,130 @@
+// ============================================================================
+// ACES_OutputTransform_TextureFX.sdsl
+// Unified ACES Output Transform for VVVV
+// ============================================================================
+//
+// Complete ACES output transform TextureFX combining ACES 1.3 and 2.0
+// with selectable display output targets.
+//
+// InputSpace:  ACEScg (linear AP1) by default, or selectable via InputSpace enum
+// Output: Display-ready signal in selected format
+//
+// Inherits:
+//   ACES13_RRT_ODT         - Full ACES 1.3 RRT + ODT
+//   ACES20_RRT_ODT         - ACES 2.0 Daniele Evo tonescale
+//   ColorSpaceConversion   - OETF encodings (sRGB, PQ, HLG) and gamut matrices
+//
+// ============================================================================
+
+shader ACESOutputTransform_TextureFX : FilterBase, ACES13_RRT_ODT, ACES20_RRT_ODT
+{
+    // ========================================================================
+    // PARAMETERS
+    // ========================================================================
+
+    // InputSpace color space
+    [EnumType("HDRColorGradingUtils.IOColorSpace, HDRColorGradingUtils")]
+    int InputSpace = 0;  // Default: ACEScg
+
+    // ACES version: None (gamut only), 1.3 (RRT+ODT), 2.0 (Daniele Evo)
+    [EnumType("HDRColorGradingUtils.ACESVersion, HDRColorGradingUtils")]
+    int Version = 1;  // Default: ACES 1.3
+
+    // Display output target
+    [EnumType("HDRColorGradingUtils.DisplayTarget, HDRColorGradingUtils")]
+    int Display = 1;  // Default: sRGB
+
+    // Pre-tonemap exposure adjustment (stops)
+    float Exposure = 0.0;
+
+    // Peak luminance in nits (cd/m2)
+    // - ACES 2.0: controls tonescale curve shape (use 100 for SDR, 1000+ for HDR)
+    // - ACES 1.3: ignored (fixed at 100 nits SDR / 1000 nits HDR)
+    // - None: used for PQ/HLG absolute luminance scaling
+    float PeakLuminance = 100.0;
+
+    // ========================================================================
+    // MAIN FILTER
+    // ========================================================================
+
+    float4 Filter(float4 tex0col)
+    {
+        // --------------------------------------------------------------------
+        // Step 1: Convert input to ACEScg (linear AP1)
+        // --------------------------------------------------------------------
+        float3 acescg = tex0col.rgb;
+
+        if (InputSpace == 1)      // Linear Rec.709
+            acescg = mul(Rec709_to_AP1, acescg);
+        else if (InputSpace == 2) // sRGB
+            acescg = mul(Rec709_to_AP1, sRGBToLinear(acescg));
+        else if (InputSpace == 3) // ACEScct
+            acescg = ACEScctToLinear(acescg);
+        // else InputSpace == 0: ACEScg passthrough
+
+        // --------------------------------------------------------------------
+        // Step 2: Apply exposure in scene-linear
+        // --------------------------------------------------------------------
+        acescg *= exp2(Exposure);
+
+        // --------------------------------------------------------------------
+        // Step 3: Apply ACES output transform
+        // Rec.709 targets (Display 0,1) use Rec.709 gamut ODT
+        // Rec.2020 targets (Display 2,3,4) use Rec.2020 gamut ODT
+        // Output: display-linear [0-1] in target gamut
+        // peakNits: the absolute luminance that 1.0 represents
+        // --------------------------------------------------------------------
+        bool isRec2020 = (Display >= 2);
+        float3 displayLinear;
+        float peakNits;
+
+        if (Version == 0) // None - gamut convert only, no tonemapping
+        {
+            if (isRec2020)
+                displayLinear = mul(AP1_to_Rec2020, acescg);
+            else
+                displayLinear = mul(AP1_to_Rec709, acescg);
+            peakNits = PeakLuminance;
+        }
+        else if (Version == 1) // ACES 1.3 RRT + ODT
+        {
+            float3 rrt = ACES13_RRT(acescg);
+            if (isRec2020)
+            {
+                displayLinear = ACES13_ODT_Rec2020_1000nits(rrt);
+                peakNits = 1000.0;
+            }
+            else
+            {
+                displayLinear = ACES13_ODT_Rec709_100nits(rrt);
+                peakNits = 100.0;
+            }
+        }
+        else // ACES 2.0 Daniele Evo
+        {
+            if (isRec2020)
+                displayLinear = ACES20_OutputTransform_Rec2020_Nits(acescg, PeakLuminance);
+            else
+                displayLinear = ACES20_OutputTransform_Rec709_Nits(acescg, PeakLuminance);
+            peakNits = PeakLuminance;
+        }
+
+        // --------------------------------------------------------------------
+        // Step 4: Apply OETF for display target
+        // --------------------------------------------------------------------
+        float3 result;
+
+        if (Display == 0)      // Linear Rec.709 - no encoding
+            result = displayLinear;
+        else if (Display == 1) // sRGB
+            result = LinearToSRGB(saturate(displayLinear));
+        else if (Display == 2) // Linear Rec.2020 - no encoding
+            result = displayLinear;
+        else if (Display == 3) // PQ Rec.2020 (ST.2084)
+            result = LinearToPQ(clamp(displayLinear * peakNits / PQ_MAX_NITS, 0.0, 1.0));
+        else                   // HLG Rec.2020 (BT.2100)
+            result = LinearToHLG(clamp(displayLinear, 0.0, 1.0));
+
+        return float4(result, tex0col.a);
+    }
+};

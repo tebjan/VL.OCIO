@@ -11,16 +11,18 @@
 // Each consumer declares its own pins (avoiding name conflicts).
 //
 // Operators:
-// - None (0) - Passthrough
-// - ACES (1) - Stephen Hill approximation with AP1 gamut mapping
-// - AgX (2) - Troy Sobotka, exact analytical curve (Blender default)
-// - Gran Turismo (3) - Uchimura (HDR-aware parametric curve)
-// - Uncharted 2 (4) - Filmic curve (John Hable)
-// - Khronos PBR Neutral (5) - E-commerce/product visualization
-// - Lottes (6) - Luma-based (Epic Games)
-// - Reinhard (7) - Simple Reinhard
-// - Reinhard Extended (8) - Adjustable white point
-// - Hejl-Burgess (9) - Fast approximation
+//  0 - None (passthrough)
+//  1 - ACES (Fit) - Stephen Hill approximation with AP1 gamut mapping
+//  2 - ACES 1.3 - Full RRT + ODT (segmented spline tone curves)
+//  3 - ACES 2.0 - Daniele Evo tonescale (simplified, no Hellwig CAM)
+//  4 - AgX - Troy Sobotka, exact analytical curve (Blender default)
+//  5 - Gran Turismo - Uchimura (HDR-aware parametric curve)
+//  6 - Uncharted 2 - Filmic curve (John Hable)
+//  7 - Khronos PBR Neutral - E-commerce/product visualization
+//  8 - Lottes - Luma-based (Epic Games)
+//  9 - Reinhard - Simple Reinhard
+// 10 - Reinhard Extended - Adjustable white point
+// 11 - Hejl-Burgess - Fast approximation
 //
 // ============================================================================
 
@@ -37,8 +39,77 @@ shader HDRTonemap : TonemapOperators
                               int tonemap, float exposure, float whitePoint,
                               float paperWhite, float peakBrightness)
     {
-        // Input-space-aware tonemap: converts to native space, applies exposure
-        // + tonemap, returns Linear Rec.709 (no redundant round-trips)
+        // ----------------------------------------------------------------
+        // ACES 1.3 / 2.0: full RRT+ODT with output-space-dependent ODT
+        // These need ACEScg input and choose ODT variant based on output target.
+        // ----------------------------------------------------------------
+        if (tonemap == 2 || tonemap == 3)
+        {
+            // Convert input to ACEScg (AP1) with direct paths for common cases
+            float3 acescg;
+            if (inputSpace == 2)        // ACEScg — passthrough
+                acescg = color;
+            else if (inputSpace == 0)   // Linear Rec.709
+                acescg = mul(Rec709_to_AP1, color);
+            else if (inputSpace == 1)   // Linear Rec.2020
+                acescg = mul(Rec2020_to_AP1, color);
+            else if (inputSpace == 4)   // ACEScct
+                acescg = ACEScctToLinear(color);
+            else if (inputSpace == 3)   // ACEScc
+                acescg = ACESccToLinear(color);
+            else                        // sRGB, PQ, HLG, scRGB → hub → AP1
+                acescg = mul(Rec709_to_AP1, ToLinearRec709(color, inputSpace));
+
+            // Apply exposure in scene-linear AP1
+            acescg *= exp2(exposure);
+
+            // Choose ODT based on output gamut target
+            // Rec.2020 targets (Linear2020=1, PQ=6, HLG=7) use Rec.2020 ODT
+            // Everything else uses Rec.709 ODT
+            bool isRec2020Target = (outputSpace == 1 || outputSpace == 6 || outputSpace == 7);
+            float3 displayLinear;
+            float peakNits;
+
+            if (tonemap == 2) // ACES 1.3
+            {
+                float3 rrt = ACES13_RRT(acescg);
+                if (isRec2020Target)
+                {
+                    displayLinear = ACES13_ODT_Rec2020_1000nits(rrt);
+                    peakNits = 1000.0;
+                }
+                else
+                {
+                    displayLinear = ACES13_ODT_Rec709_100nits(rrt);
+                    peakNits = 100.0;
+                }
+            }
+            else // ACES 2.0
+            {
+                if (isRec2020Target)
+                    displayLinear = ACES20_OutputTransform_Rec2020_Nits(acescg, peakBrightness);
+                else
+                    displayLinear = ACES20_OutputTransform_Rec709_Nits(acescg, peakBrightness);
+                peakNits = peakBrightness;
+            }
+
+            // Apply OETF / output encoding
+            // displayLinear is already in the correct gamut (709 or 2020)
+            if (outputSpace == 5)       // sRGB
+                return LinearToSRGB(saturate(displayLinear));
+            else if (outputSpace == 6)  // PQ Rec.2020
+                return LinearToPQ(clamp(displayLinear * peakNits / PQ_MAX_NITS, 0.0, 1.0));
+            else if (outputSpace == 7)  // HLG Rec.2020
+                return LinearToHLG(clamp(displayLinear, 0.0, 1.0));
+            else if (outputSpace == 8)  // scRGB
+                return displayLinear * (peakNits / 80.0);
+            else                        // Linear Rec.709 (0), Linear Rec.2020 (1), ACEScg (2), etc.
+                return displayLinear;
+        }
+
+        // ----------------------------------------------------------------
+        // All other operators (0, 1, 4-11): existing path via ApplyTonemap
+        // ----------------------------------------------------------------
         float3 linear709 = ApplyTonemap(color, inputSpace, tonemap, exposure, whitePoint);
 
         // Convert to output color space

@@ -47,6 +47,7 @@ interface MobileLayoutProps {
   handleGainMasterChange: (value: number) => void
   loadPreset: (name: string) => void
   savePreset: (name: string) => void
+  deletePreset: (name: string) => void
   reset: () => void
   selectInstance: (id: string) => void
 }
@@ -188,7 +189,7 @@ function OutputTab(props: MobileLayoutProps) {
 }
 
 function PresetsTab(props: MobileLayoutProps) {
-  const { instances, selectedInstanceId, selectInstance, serverInfo, knownServers, presetName, isPresetDirty, presets, loadPreset, savePreset, reset } = props
+  const { instances, selectedInstanceId, selectInstance, serverInfo, knownServers, presetName, isPresetDirty, presets, loadPreset, savePreset, deletePreset, reset } = props
   const hasSidebar = instances.length > 1
   const hasNetworkPeers = knownServers.length > 1
 
@@ -209,6 +210,7 @@ function PresetsTab(props: MobileLayoutProps) {
         presets={presets}
         onLoad={loadPreset}
         onSave={savePreset}
+        onDelete={deletePreset}
         onReset={reset}
       />
 

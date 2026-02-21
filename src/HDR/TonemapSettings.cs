@@ -9,7 +9,7 @@ namespace VL.OCIO;
 /// </summary>
 public class TonemapSettings
 {
-    [JsonInclude] internal HDRColorSpace OutputSpace { get; set; } = HDRColorSpace.sRGB;
+    [JsonInclude] internal HDRColorSpace OutputSpace { get; set; } = HDRColorSpace.Linear_Rec709;
     [JsonInclude] internal TonemapOperator Tonemap { get; set; } = TonemapOperator.None;
     [JsonInclude] internal float Exposure { get; set; } = 0f;
     [JsonInclude] internal float WhitePoint { get; set; } = 4f;

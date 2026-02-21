@@ -22,7 +22,7 @@ shader HDRGrade_Tonemap_TextureFX : FilterBase, HDRGrade, HDRTonemap
     // Final display output color space
     // 0=Linear709, 1=Linear2020, 2=ACEScg, 3=ACEScc, 4=ACEScct, 5=sRGB, 6=PQ2020, 7=HLG2020, 8=scRGB
     [EnumType("VL.OCIO.HDRColorSpace, VL.OCIO")]
-    int OutputSpace = 5;  // Default to sRGB for display
+    int OutputSpace = 0;  // Default to Linear Rec.709 for linear pipeline
 
     // Tonemapping operator (see TonemapOperator enum)
     [EnumType("VL.OCIO.TonemapOperator, VL.OCIO")]

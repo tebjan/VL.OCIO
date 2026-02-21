@@ -48,8 +48,8 @@ Each phase file references a detailed section file in `specs-pipeline-checker/se
 ### Phase 4: Color Pipeline WGSL Shaders (manual port from SDSL)
 - [x] 4.1 `input-convert.wgsl` — Stage 4: ToLinearRec709(), 6 gamut matrices (TRANSPOSED), 10 transfer functions
 - [x] 4.2 `color-grade.wgsl` — Stage 5: DecodeInput, ApplyGradingLog, ApplyGradingLinear, 22 uniforms
-- [ ] 4.3 `rrt.wgsl` — Stage 6: all 12 tonemap operators, ACES 1.3/2.0 RRT, spline arrays
-- [ ] 4.4 `odt.wgsl` — Stage 7: ACES 1.3/2.0 ODT, gamut conversion
+- [x] 4.3 `rrt.wgsl` — Stage 6: all 12 tonemap operators, ACES 1.3/2.0 RRT, spline arrays
+- [x] 4.4 `odt.wgsl` — Stage 7: ACES 1.3/2.0 ODT, gamut conversion
 - [ ] 4.5 `output-encode.wgsl` — Stage 8: FromLinearRec709, PQ, HLG, scRGB encoding
 - [ ] 4.6 `display-remap.wgsl` — Stage 9: black/white level remap (trivial)
 - [ ] 4.7 `fullscreen-quad.wgsl` — shared vertex shader

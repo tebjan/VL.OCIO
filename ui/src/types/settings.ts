@@ -101,7 +101,7 @@ export type ColorSpace =
 
 export type GradingSpace = 'Log' | 'Linear'
 
-export type TonemapOperator = 'None' | 'ACES' | 'AgX' | 'GranTurismo' | 'Uncharted2' | 'KhronosPBRNeutral' | 'Lottes' | 'Reinhard' | 'ReinhardExtended' | 'HejlBurgess'
+export type TonemapOperator = 'None' | 'ACES' | 'ACES13' | 'ACES20' | 'AgX' | 'GranTurismo' | 'Uncharted2' | 'KhronosPBRNeutral' | 'Lottes' | 'Reinhard' | 'ReinhardExtended' | 'HejlBurgess'
 
 export const COLOR_SPACE_LABELS: Record<ColorSpace, string> = {
   Linear_Rec709: 'Linear Rec.709',
@@ -122,7 +122,9 @@ export const GRADING_SPACE_LABELS: Record<GradingSpace, string> = {
 
 export const TONEMAP_LABELS: Record<TonemapOperator, string> = {
   None: 'None',
-  ACES: 'ACES',
+  ACES: 'ACES (Fit)',
+  ACES13: 'ACES 1.3',
+  ACES20: 'ACES 2.0',
   AgX: 'AgX',
   GranTurismo: 'Gran Turismo',
   Uncharted2: 'Uncharted 2',
@@ -164,7 +166,7 @@ export function createDefaultColorCorrection(): ColorCorrectionSettings {
 
 export function createDefaultTonemap(): TonemapSettings {
   return {
-    outputSpace: 'sRGB',
+    outputSpace: 'Linear_Rec709',
     tonemap: 'None',
     exposure: 0,
     whitePoint: 4,

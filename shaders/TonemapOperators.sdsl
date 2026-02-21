@@ -8,21 +8,25 @@
 // - HDRTonemap_ShaderFX (ComputeColor, for composition)
 //
 // Input-space-aware dispatcher routes each operator to its native space:
-// - ACES: AP1 direct when ACEScg input (no round-trip), BT.709 otherwise
+// - ACES (Fit): AP1 direct when ACEScg input (no round-trip), BT.709 otherwise
+// - ACES 1.3/2.0: full RRT+ODT, routed in ApplyTonemapOutput (not here)
 // - AgX/Khronos/Lottes: always BT.709 (hardcoded matrices/coefficients)
 // - GT/Uncharted2/Reinhard/HejlBurgess: per-channel, applied in input space
 // All operators return Linear Rec.709 for the output stage.
 //
 // Operators:
-// - ACES (Stephen Hill approximation with AP1 gamut mapping)
-// - AgX (Troy Sobotka, exact analytical curve, Blender default)
-// - Gran Turismo V1 / Uchimura (HDR-aware parametric curve)
-// - Uncharted 2 / Hable (filmic curve, game industry standard)
-// - Khronos PBR Neutral (e-commerce, 13-line official spec)
-// - Lottes (Epic Games, luma-based)
-// - Reinhard (simple)
-// - Reinhard Extended (adjustable white point)
-// - Hejl-Burgess (fast approximation)
+//  0 - None (passthrough)
+//  1 - ACES (Fit) (Stephen Hill approximation with AP1 gamut mapping)
+//  2 - ACES 1.3 (full RRT+ODT, routed in HDRTonemap.ApplyTonemapOutput)
+//  3 - ACES 2.0 (Daniele Evo tonescale, routed in HDRTonemap.ApplyTonemapOutput)
+//  4 - AgX (Troy Sobotka, exact analytical curve, Blender default)
+//  5 - Gran Turismo V1 / Uchimura (HDR-aware parametric curve)
+//  6 - Uncharted 2 / Hable (filmic curve, game industry standard)
+//  7 - Khronos PBR Neutral (e-commerce, 13-line official spec)
+//  8 - Lottes (Epic Games, luma-based)
+//  9 - Reinhard (simple)
+// 10 - Reinhard Extended (adjustable white point)
+// 11 - Hejl-Burgess (fast approximation)
 //
 // References:
 // - ACES Reference Rendering Transform (Stephen Hill / MJP fit)
@@ -35,7 +39,7 @@
 //
 // ============================================================================
 
-shader TonemapOperators : ColorSpaceConversion
+shader TonemapOperators : ColorSpaceConversion, ACES13_RRT_ODT, ACES20_RRT_ODT
 {
     // ========================================================================
     // ACES TONEMAP
@@ -327,16 +331,17 @@ shader TonemapOperators : ColorSpaceConversion
     // ========================================================================
     // TONEMAP DISPATCHER
     // Routes each operator to its native working space:
-    //   ACES: AP1 direct path when inputSpace==ACEScg, BT.709 otherwise
-    //   AgX/Khronos/Lottes: always BT.709 (hardcoded matrices/coefficients)
-    //   GT/Uncharted2/Reinhard/HejlBurgess: space-agnostic per-channel curves,
-    //     applied in input space, then converted to Rec.709 for output
+    //   ACES (Fit) [1]: AP1 direct path when inputSpace==ACEScg, BT.709 otherwise
+    //   ACES 1.3/2.0 [2,3]: NOT handled here — routed in HDRTonemap.ApplyTonemapOutput
+    //   AgX/Khronos/Lottes [4,7,8]: always BT.709 (hardcoded matrices/coefficients)
+    //   GT/Uncharted2/Reinhard/ReinhardExt/HejlBurgess [5,6,9,10,11]:
+    //     space-agnostic per-channel curves, applied in input space, convert to 709
     // All paths return Linear Rec.709
     // ========================================================================
 
     float3 ApplyTonemap(float3 color, int inputSpace, int op, float exposure, float whitePoint)
     {
-        // ACES: direct AP1 path when input is ACEScg (skip Rec.709 round-trip)
+        // ACES (Fit): direct AP1 path when input is ACEScg (skip Rec.709 round-trip)
         if (op == 1)
         {
             if (inputSpace == 2) // ACEScg — feed AP1 directly
@@ -353,7 +358,7 @@ shader TonemapOperators : ColorSpaceConversion
         }
 
         // Space-agnostic per-channel curves: apply in input space, convert after
-        if (op == 3 || op == 4 || op == 7 || op == 8 || op == 9)
+        if (op == 5 || op == 6 || op == 9 || op == 10 || op == 11)
         {
             // For linear spaces: keep in native gamut, apply curve, convert after
             // For non-linear (log/gamma/PQ/HLG): decode to Rec.709 first
@@ -370,13 +375,13 @@ shader TonemapOperators : ColorSpaceConversion
 
             // Apply per-channel curve in current linear space
             float3 tonemapped = linColor;
-            if (op == 3)
+            if (op == 5)
                 tonemapped = GranTurismoTonemap(linColor);
-            else if (op == 4)
+            else if (op == 6)
                 tonemapped = Uncharted2Tonemap(linColor);
-            else if (op == 7)
+            else if (op == 9)
                 tonemapped = ReinhardTonemap(linColor);
-            else if (op == 8)
+            else if (op == 10)
                 tonemapped = ReinhardExtendedTonemap(linColor, whitePoint);
             else
                 tonemapped = HejlBurgessTonemap(linColor);
@@ -396,11 +401,11 @@ shader TonemapOperators : ColorSpaceConversion
 
         if (op == 0)
             return lin709;                                  // None (passthrough)
-        else if (op == 2)
+        else if (op == 4)
             return AgXTonemap(lin709);                      // AgX (BT.709 inset matrix)
-        else if (op == 5)
+        else if (op == 7)
             return KhronosPBRTonemap(lin709);               // Khronos PBR (BT.709 spec)
-        else if (op == 6)
+        else if (op == 8)
             return LottesTonemap(lin709);                   // Lottes (BT.709 luma)
         else
             return lin709;                                   // Fallback

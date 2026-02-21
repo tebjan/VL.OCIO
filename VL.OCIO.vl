@@ -9,7 +9,7 @@
     ************************ InterpolationType ************************
 
 -->
-        <Node Name="InterpolationType" Bounds="497,313" Id="Pm79Z8MV3EZOLfmkFnwU9v">
+        <Node Name="InterpolationType" Bounds="347,410" Id="Pm79Z8MV3EZOLfmkFnwU9v">
           <p:NodeReference>
             <Choice Kind="ForwardRecordDefinition" Name="Immutable Forward" />
             <CategoryReference Kind="Category" Name="Primitive" />
@@ -27,7 +27,7 @@
     ************************ OCIOConfig ************************
 
 -->
-        <Node Name="OCIOConfig" Bounds="777,313" Id="SdiDf1f2H2zMKA5g0a7OFK">
+        <Node Name="OCIOConfig" Bounds="627,410" Id="SdiDf1f2H2zMKA5g0a7OFK">
           <p:NodeReference>
             <Choice Kind="ForwardDefinition" Name="Forward" />
             <CategoryReference Kind="Category" Name="Primitive" />
@@ -45,7 +45,7 @@
     ************************ Texture3DInfo ************************
 
 -->
-        <Node Name="Texture3DInfo" Bounds="217,363" Id="Hm4jhTpWkKQNXmi5gLvCIp">
+        <Node Name="Texture3DInfo" Bounds="67,460" Id="Hm4jhTpWkKQNXmi5gLvCIp">
           <p:NodeReference>
             <Choice Kind="ForwardDefinition" Name="Forward" />
             <CategoryReference Kind="Category" Name="Primitive" />
@@ -63,7 +63,7 @@
     ************************ TextureDimensions ************************
 
 -->
-        <Node Name="TextureDimensions" Bounds="497,363" Id="MPd2o6WHnHTLUSxFHKs93v">
+        <Node Name="TextureDimensions" Bounds="347,460" Id="MPd2o6WHnHTLUSxFHKs93v">
           <p:NodeReference>
             <Choice Kind="ForwardRecordDefinition" Name="Immutable Forward" />
             <CategoryReference Kind="Category" Name="Primitive" />
@@ -81,7 +81,7 @@
     ************************ TextureInfo ************************
 
 -->
-        <Node Name="TextureInfo" Bounds="777,363" Id="DGFufNn4DagPSltf8B3Gop">
+        <Node Name="TextureInfo" Bounds="627,460" Id="DGFufNn4DagPSltf8B3Gop">
           <p:NodeReference>
             <Choice Kind="ForwardDefinition" Name="Forward" />
             <CategoryReference Kind="Category" Name="Primitive" />
@@ -99,7 +99,7 @@
     ************************ TextureType ************************
 
 -->
-        <Node Name="TextureType" Bounds="217,413" Id="KQC0uhdWRWpLu3iZapGfDw">
+        <Node Name="TextureType" Bounds="67,510" Id="KQC0uhdWRWpLu3iZapGfDw">
           <p:NodeReference>
             <Choice Kind="ForwardRecordDefinition" Name="Immutable Forward" />
             <CategoryReference Kind="Category" Name="Primitive" />
@@ -117,7 +117,7 @@
     ************************ UniformInfo ************************
 
 -->
-        <Node Name="UniformInfo" Bounds="497,413" Id="AS3dqAblAf4M2QenbCgBND">
+        <Node Name="UniformInfo" Bounds="347,510" Id="AS3dqAblAf4M2QenbCgBND">
           <p:NodeReference>
             <Choice Kind="ForwardDefinition" Name="Forward" />
             <CategoryReference Kind="Category" Name="Primitive" />
@@ -135,7 +135,7 @@
     ************************ UniformType ************************
 
 -->
-        <Node Name="UniformType" Bounds="777,413" Id="G1d94P2szP8O8oHTyZfZi8">
+        <Node Name="UniformType" Bounds="627,510" Id="G1d94P2szP8O8oHTyZfZi8">
           <p:NodeReference>
             <Choice Kind="ForwardRecordDefinition" Name="Immutable Forward" />
             <CategoryReference Kind="Category" Name="Primitive" />
@@ -153,7 +153,7 @@
     ************************ View ************************
 
 -->
-        <Node Name="View" Bounds="217,463" Id="U5Xe2I0MQLEPYhokTnHe6V">
+        <Node Name="View" Bounds="67,560" Id="U5Xe2I0MQLEPYhokTnHe6V">
           <p:NodeReference>
             <Choice Kind="ForwardDefinition" Name="Forward" />
             <CategoryReference Kind="Category" Name="Primitive" />
@@ -171,7 +171,7 @@
     ************************ Display ************************
 
 -->
-        <Node Name="Display" Bounds="217,310" Id="AKU9foiSJ7MMZvZPhO39wI">
+        <Node Name="Display" Bounds="67,407" Id="AKU9foiSJ7MMZvZPhO39wI">
           <p:NodeReference>
             <Choice Kind="ForwardDefinition" Name="Forward" />
             <CategoryReference Kind="Category" Name="Primitive" />
@@ -191,7 +191,7 @@
     ************************ TextureFXGraph ************************
 
 -->
-        <Node Name="TextureFXGraph" Bounds="217,220" Id="RMHUD2YP9V2LMOFrBgLsfi">
+        <Node Name="TextureFXGraph" Bounds="67,317" Id="RMHUD2YP9V2LMOFrBgLsfi">
           <p:NodeReference>
             <Choice Kind="ContainerDefinition" />
           </p:NodeReference>
@@ -349,7 +349,7 @@
     ************************ ShaderInputManager ************************
 
 -->
-        <Node Name="ShaderInputManager" Bounds="215,82" Id="LdKavyf3Zp8PIkZ28JhbFw">
+        <Node Name="ShaderInputManager" Bounds="65,179" Id="LdKavyf3Zp8PIkZ28JhbFw">
           <p:NodeReference>
             <Choice Kind="ContainerDefinition" />
           </p:NodeReference>
@@ -1792,7 +1792,7 @@
     ************************ InputParameterManager ************************
 
 -->
-        <Node Name="InputParameterManager" Bounds="217,156" Id="Lwsq2fBFv1uP40r8ohmw6k">
+        <Node Name="InputParameterManager" Bounds="67,253" Id="Lwsq2fBFv1uP40r8ohmw6k">
           <p:NodeReference LastCategoryFullName="Primitive" LastDependency="builtin">
             <Choice Kind="ContainerDefinition" Name="Process" />
           </p:NodeReference>
@@ -2185,7 +2185,7 @@
     ************************ BuildTransformShader ************************
 
 -->
-        <Node Name="BuildTransformShader" Bounds="494,80" Id="UkCBgrMAexVLlWsSG557GB">
+        <Node Name="BuildTransformShader" Bounds="344,177" Id="UkCBgrMAexVLlWsSG557GB">
           <p:NodeReference>
             <Choice Kind="ContainerDefinition" />
           </p:NodeReference>
@@ -2691,7 +2691,7 @@
     ************************ GetGPUResources ************************
 
 -->
-        <Node Name="GetGPUResources" Bounds="217,-20" Id="GESMConQoZiMsIyY6JfySm">
+        <Node Name="GetGPUResources" Bounds="67,77" Id="GESMConQoZiMsIyY6JfySm">
           <p:NodeReference>
             <Choice Kind="ContainerDefinition" Name="Process" />
             <CategoryReference Kind="Category" Name="Primitive" />
@@ -2725,11 +2725,21 @@
                 <ControlPoint Id="OVd0ZdHC0vSLAsNdnXf56R" Bounds="246,190" Alignment="Bottom" />
                 <ControlPoint Id="AQnkE5AtP8IOdnFgVZiv4z" Bounds="246,106" Alignment="Top" />
                 <ControlPoint Id="O391Ur2RXcyNqlHYOtpyYA" Bounds="337,106" Alignment="Top" />
+                <ControlPoint Id="AAPbutMtNWCOX54twqoaoC" Bounds="319,106" Alignment="Top" />
               </Node>
               <ControlPoint Id="DHZmMAElQ1WN01PvSNKspd" Bounds="293,48" />
               <ControlPoint Id="LrbOYYWcTWhLcByxLprVdj" Bounds="247,232" />
               <ControlPoint Id="HEuJCJK0sf9QR8AYaMQJ4h" Bounds="247,48" />
               <ControlPoint Id="VYhlNacQYI9PZs3w1dULGT" Bounds="358,50" />
+              <Node Bounds="317,70,51,19" Id="QGk7dLqvNSwMvhanGq6mjH">
+                <p:NodeReference LastCategoryFullName="VL.OCIO.OCIOEnumVersion" LastDependency="VL.OCIO.dll">
+                  <Choice Kind="NodeFlag" Name="Node" Fixed="true" />
+                  <CategoryReference Kind="Category" Name="OCIO" />
+                  <CategoryReference Kind="ClassType" Name="OCIOEnumVersion" />
+                  <Choice Kind="OperationCallFlag" Name="Version" />
+                </p:NodeReference>
+                <Pin Id="RXEZzFgezDQM3VtdOdm5fK" Name="Version" Kind="OutputPin" />
+              </Node>
             </Canvas>
             <Link Id="MKvjqvkoiCjM1CVow69sbx" Ids="OjFAFYojvL7MFexrKlI9V8,DHZmMAElQ1WN01PvSNKspd" IsHidden="true" />
             <Link Id="NUX2Fzzx9PkNBHX0Dbate9" Ids="DHZmMAElQ1WN01PvSNKspd,PIGb84IMvIBP34LGtOTxxv" />
@@ -2754,6 +2764,7 @@
               <Fragment Id="G8aXW5J2Rd3NQCrs0DY28Q" Patch="BmYk0hMAZyiM8UoDmM5EVr" Enabled="true" />
               <Fragment Id="NwIghiaDtQuNTY6VFEPb2x" Patch="UOO4G8HzPNKM2cQ62ZM35a" Enabled="true" />
             </ProcessDefinition>
+            <Link Id="VzM1dxzxerXPZITQkvsGMG" Ids="RXEZzFgezDQM3VtdOdm5fK,AAPbutMtNWCOX54twqoaoC" />
           </Patch>
         </Node>
         <!--
@@ -2761,14 +2772,14 @@
     ************************ GetGPUResourcesDisplay ************************
 
 -->
-        <Node Name="GetGPUResourcesDisplay" Bounds="217,20" Id="L8gsQJ2zeNGM9soAnNdjAu">
+        <Node Name="GetGPUResourcesDisplay" Bounds="67,117" Id="L8gsQJ2zeNGM9soAnNdjAu">
           <p:NodeReference>
             <Choice Kind="ContainerDefinition" Name="Process" />
             <CategoryReference Kind="Category" Name="Primitive" />
           </p:NodeReference>
           <Patch Id="UykCZKpO4BLLG06MENZ9zU">
             <Canvas Id="LvJFXcyVZCuOnu107IrzyL" CanvasType="Group">
-              <Node Bounds="232,104,203,92" Id="Idbbj9zJNzqNIvmExchKdm">
+              <Node Bounds="126,155,203,101" Id="Idbbj9zJNzqNIvmExchKdm">
                 <p:NodeReference LastCategoryFullName="Primitive" LastDependency="Builtin">
                   <Choice Kind="StatefulRegion" Name="Region (Stateful)" Fixed="true" />
                   <CategoryReference Kind="Category" Name="Primitive" />
@@ -2780,7 +2791,7 @@
                 <Patch Id="GvixjLiM1DgQRyim9YZGyC" ManuallySortedPins="true">
                   <Patch Id="LqVSMVjvGtxNYPfWqETRkX" Name="Create" ManuallySortedPins="true" />
                   <Patch Id="MqBmPug8KtgQQn9e5cZiaz" Name="Then" ManuallySortedPins="true" />
-                  <Node Bounds="244,127,179,19" Id="KwMtzqA6XTaOK3557Vg3ei">
+                  <Node Bounds="138,187,179,19" Id="KwMtzqA6XTaOK3557Vg3ei">
                     <p:NodeReference LastCategoryFullName="VL.OCIO.OCIOConfigUtils" LastDependency="VL.OCIO.dll">
                       <Choice Kind="NodeFlag" Name="Node" Fixed="true" />
                       <Choice Kind="OperationCallFlag" Name="GetDisplayViewTransformResources" />
@@ -2792,16 +2803,18 @@
                     <Pin Id="VT3PSBtHUGNOKSCesrjLP7" Name="Result" Kind="OutputPin" />
                   </Node>
                 </Patch>
-                <ControlPoint Id="DpdB3ZIHu2NOA2xschKNdk" Bounds="304,110" Alignment="Top" />
-                <ControlPoint Id="GIY7ZtxWKO8LgrIC5Zyi9Y" Bounds="246,190" Alignment="Bottom" />
-                <ControlPoint Id="AoJ3sWd75CqMlyVkTJ6lKG" Bounds="246,110" Alignment="Top" />
-                <ControlPoint Id="Vs7epbaQWo7MfsZoISCIU0" Bounds="420,110" Alignment="Top" />
+                <ControlPoint Id="DpdB3ZIHu2NOA2xschKNdk" Bounds="198,161" Alignment="Top" />
+                <ControlPoint Id="GIY7ZtxWKO8LgrIC5Zyi9Y" Bounds="140,250" Alignment="Bottom" />
+                <ControlPoint Id="AoJ3sWd75CqMlyVkTJ6lKG" Bounds="140,161" Alignment="Top" />
+                <ControlPoint Id="Vs7epbaQWo7MfsZoISCIU0" Bounds="314,161" Alignment="Top" />
+                <ControlPoint Id="ONtDMrnV5SdMBnnZrKmjda" Bounds="256,161" Alignment="Top" />
+                <ControlPoint Id="PcUWNyIOmjjOgEBemnfooM" Bounds="299,161" Alignment="Top" />
               </Node>
-              <ControlPoint Id="G0GxnH4GEvgMI2hofOcUAY" Bounds="304,11" />
-              <ControlPoint Id="VodyrNS6M0JPWGW7iMwOhz" Bounds="247,232" />
-              <ControlPoint Id="CYK8esnJB2DMMHBj9xA4tp" Bounds="246,-19" />
-              <ControlPoint Id="S2kGzcY45mqOOGxiRgVVjc" Bounds="421,50" />
-              <Pad Id="VB0pObUJlhhPjl4RuzNCq9" Comment="Force" Bounds="217,60,35,35" ShowValueBox="true" isIOBox="true" Value="False">
+              <ControlPoint Id="G0GxnH4GEvgMI2hofOcUAY" Bounds="198,71" />
+              <ControlPoint Id="VodyrNS6M0JPWGW7iMwOhz" Bounds="141,292" />
+              <ControlPoint Id="CYK8esnJB2DMMHBj9xA4tp" Bounds="140,41" />
+              <ControlPoint Id="S2kGzcY45mqOOGxiRgVVjc" Bounds="315,110" />
+              <Pad Id="VB0pObUJlhhPjl4RuzNCq9" Comment="Force" Bounds="86,101,35,35" ShowValueBox="true" isIOBox="true" Value="False">
                 <p:TypeAnnotation LastCategoryFullName="Primitive" LastDependency="VL.CoreLib.vl">
                   <Choice Kind="ImmutableTypeFlag" Name="Boolean" />
                 </p:TypeAnnotation>
@@ -2809,7 +2822,16 @@
                   <p:buttonmode p:Assembly="VL.UI.Forms" p:Type="VL.HDE.PatchEditor.Editors.ButtonModeEnum">Toggle</p:buttonmode>
                 </p:ValueBoxSettings>
               </Pad>
-              <ControlPoint Id="A5iRDyQS6chNrVpLPJA2sY" Bounds="362,40" />
+              <ControlPoint Id="A5iRDyQS6chNrVpLPJA2sY" Bounds="256,100" />
+              <Node Bounds="297,50,51,19" Id="D6IsDA3hJxhO4kXxFsSPwI">
+                <p:NodeReference LastCategoryFullName="VL.OCIO.OCIOEnumVersion" LastDependency="VL.OCIO.dll">
+                  <Choice Kind="NodeFlag" Name="Node" Fixed="true" />
+                  <CategoryReference Kind="Category" Name="OCIO" />
+                  <CategoryReference Kind="ClassType" Name="OCIOEnumVersion" />
+                  <Choice Kind="OperationCallFlag" Name="Version" />
+                </p:NodeReference>
+                <Pin Id="JbgAmvw0NMlPChWfAoT3Zp" Name="Version" Kind="OutputPin" />
+              </Node>
             </Canvas>
             <Link Id="F0A1P92lFWHL9EsLOPQ8OC" Ids="UOWyYQ9nWidO1q2CRuXFD7,G0GxnH4GEvgMI2hofOcUAY" IsHidden="true" />
             <Link Id="OCulRqscOLIN1jQuJ4Qnxl" Ids="G0GxnH4GEvgMI2hofOcUAY,DpdB3ZIHu2NOA2xschKNdk" />
@@ -2836,8 +2858,10 @@
             <Link Id="ObRX0934f2qQF3DqOXUKAm" Ids="DpdB3ZIHu2NOA2xschKNdk,EKAlZ2grfyDL5nJrmNXyHM" />
             <Link Id="Llt6r10szGEO9JuBtrdGbA" Ids="VB0pObUJlhhPjl4RuzNCq9,CoQswtcP7f0LB56C0R9iir" />
             <Link Id="HWyV7tnLu06L7sAWGSM66l" Ids="AoJ3sWd75CqMlyVkTJ6lKG,KSGrBcM1imuLwH3G7wGXU5" />
-            <Link Id="N3bVT3A0twtN7X6soO09WR" Ids="A5iRDyQS6chNrVpLPJA2sY,D3LwRfWTeTRQG9tOR4O5xo" />
             <Link Id="MOD91lgGk00NPY7oEh55Us" Ids="QPtg3oVWKLUP9kgAAvIoxQ,A5iRDyQS6chNrVpLPJA2sY" IsHidden="true" />
+            <Link Id="Lx3uOLYJFkpP2G0uclaDKY" Ids="A5iRDyQS6chNrVpLPJA2sY,ONtDMrnV5SdMBnnZrKmjda" />
+            <Link Id="AyQBg8cjohALkCr8aWFiWw" Ids="ONtDMrnV5SdMBnnZrKmjda,D3LwRfWTeTRQG9tOR4O5xo" />
+            <Link Id="VcCEnotrC14PwxSiREjccS" Ids="JbgAmvw0NMlPChWfAoT3Zp,PcUWNyIOmjjOgEBemnfooM" />
           </Patch>
         </Node>
       </Canvas>

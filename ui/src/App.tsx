@@ -49,6 +49,7 @@ function App() {
     updateTonemap,
     loadPreset,
     savePreset,
+    deletePreset,
     reset,
     selectInstance,
   } = useWebSocket()
@@ -166,6 +167,7 @@ function App() {
           handleGainMasterChange={handleGainMasterChange}
           loadPreset={loadPreset}
           savePreset={savePreset}
+          deletePreset={deletePreset}
           reset={reset}
           selectInstance={selectInstance}
         />
@@ -266,6 +268,7 @@ function App() {
             presets={presets}
             onLoad={loadPreset}
             onSave={savePreset}
+            onDelete={deletePreset}
             onReset={reset}
           />
         </div>

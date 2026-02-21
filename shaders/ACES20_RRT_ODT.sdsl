@@ -1,0 +1,190 @@
+// ============================================================================
+// ACES20_RRT_ODT.sdsl
+// ACES 2.0 Output Transform (Daniele Evo Tonescale)
+// ============================================================================
+//
+// Port of the official ACES 2.0 tonescale from aces-aswf/aces-core
+// (Lib.Academy.Tonescale.ctl). Inherits from ColorSpaceConversion.
+//
+// NOTE ON COMPLETENESS:
+// The full ACES 2.0 output transform uses the Hellwig 2022 Color Appearance
+// Model with hue-dependent gamut compression (360-entry cusp tables, binary
+// search for gamut boundaries). That is 500+ lines of complex perceptual
+// color science not practical as a real-time per-pixel shader.
+//
+// This implementation provides:
+// 1. The EXACT Daniele Evo tonescale (official formula)
+// 2. A simplified per-channel output transform suitable for real-time use
+// 3. Proper gamut conversion and display output
+//
+// For the full ACES 2.0 with Hellwig CAM and gamut mapping, use a
+// pre-baked 3D LUT (64x64x64) generated via OpenColorIO.
+//
+// Public API:
+//
+//   Low-level (building blocks):
+//     float4 aces20_tonescale_init(float peakLuminance)
+//     float  aces20_tonescale_fwd(float x, float4 tsP)
+//
+//   RRT equivalent - tonescale only, returns normalized AP1 [0-1]:
+//     float3 ACES20_RRT(float3 acescg, float peakLuminance)
+//
+//   ODT equivalents - gamut convert from AP1 to display:
+//     float3 ACES20_ODT_Rec709(float3 ap1)
+//     float3 ACES20_ODT_Rec2020(float3 ap1)
+//
+//   Combined RRT+ODT (convenience):
+//     float3 ACES20_OutputTransform_Rec709_Nits(float3 acescg, float peak)
+//     float3 ACES20_OutputTransform_Rec2020_Nits(float3 acescg, float peak)
+//     float3 ACES20_OutputTransform_Rec709(float3 acescg)
+//     float3 ACES20_OutputTransform_Rec2020(float3 acescg)
+//
+// References:
+//   - aces-aswf/aces-core Lib.Academy.Tonescale.ctl
+//   - Daniele Siragusano (Michaelis-Menten based tonescale)
+//   - ampas/ACES_ODT_Candidates (Nuke/DCTL implementations)
+//
+// ============================================================================
+
+shader ACES20_RRT_ODT : ColorSpaceConversion
+{
+    // ========================================================================
+    // DANIELE EVO TONESCALE - FIXED CONSTANTS
+    // These are the base constants from the official ACES 2.0 spec.
+    // All derived values are computed from peakLuminance.
+    // ========================================================================
+
+    static const float DANIELE_N_R         = 100.0;
+    static const float DANIELE_G           = 1.15;
+    static const float DANIELE_C           = 0.18;
+    static const float DANIELE_C_D         = 10.013;
+    static const float DANIELE_W_G         = 0.14;
+    static const float DANIELE_T_1         = 0.04;
+    static const float DANIELE_R_HIT_MIN   = 128.0;
+    static const float DANIELE_R_HIT_MAX   = 896.0;
+
+    // ========================================================================
+    // TONESCALE PARAMETER DERIVATION
+    // Computes all derived constants from peak luminance.
+    // Returns float4(s_2, u_2, m_2, t_1).
+    // ========================================================================
+
+    float4 aces20_tonescale_init(float peakLuminance)
+    {
+        float n   = peakLuminance;
+        float n_r = DANIELE_N_R;
+        float g   = DANIELE_G;
+        float t_1 = DANIELE_T_1;
+
+        float r_hit = DANIELE_R_HIT_MIN + (DANIELE_R_HIT_MAX - DANIELE_R_HIT_MIN)
+                    * (log2(n / n_r) / log2(10000.0 / 100.0));
+
+        float m_0    = n / n_r;
+        float m_1    = 0.5 * (m_0 + sqrt(m_0 * (m_0 + 4.0 * t_1)));
+        float u      = pow((r_hit / m_1) / ((r_hit / m_1) + 1.0), g);
+        float w_i    = log2(n / 100.0);
+        float c_t    = DANIELE_C_D / n_r * (1.0 + w_i * DANIELE_W_G);
+        float g_ip   = 0.5 * (c_t + sqrt(c_t * (c_t + 4.0 * t_1)));
+        float ratio  = pow(g_ip / (m_1 / u), 1.0 / g);
+        float g_ipp2 = -m_1 * ratio / (ratio - 1.0);
+        float w_2    = DANIELE_C / g_ipp2;
+        float s_2    = w_2 * m_1;
+        float u_2    = pow((r_hit / m_1) / ((r_hit / m_1) + w_2), g);
+        float m_2    = m_1 / u_2;
+
+        return float4(s_2, u_2, m_2, t_1);
+    }
+
+    // ========================================================================
+    // TONESCALE FORWARD (per-channel)
+    // Input:  Scene-linear value
+    // Output: Display luminance in nits
+    // tsP:    output of aces20_tonescale_init() = float4(s_2, u_2, m_2, t_1)
+    // ========================================================================
+
+    float aces20_tonescale_fwd(float x, float4 tsP)
+    {
+        float s_2 = tsP.x;
+        float m_2 = tsP.z;
+        float g   = DANIELE_G;
+        float t_1 = tsP.w;
+
+        float f = m_2 * pow(max(0.0, x) / (x + s_2), g);
+        float h = max(0.0, f * f / (f + t_1));
+        return h * DANIELE_N_R;
+    }
+
+    // ========================================================================
+    // RRT EQUIVALENT - TONESCALE ONLY
+    // Input:  ACEScg (linear AP1)
+    // Output: Tonemapped AP1, normalized [0-1] (1.0 = peakLuminance)
+    // Parallel to ACES13_RRT() - use when you want tonemapped AP1 values
+    // for further processing before display conversion.
+    // ========================================================================
+
+    float3 ACES20_RRT(float3 acescg, float peakLuminance)
+    {
+        float4 tsP = aces20_tonescale_init(peakLuminance);
+
+        float3 tonemapped;
+        tonemapped.x = aces20_tonescale_fwd(acescg.x, tsP);
+        tonemapped.y = aces20_tonescale_fwd(acescg.y, tsP);
+        tonemapped.z = aces20_tonescale_fwd(acescg.z, tsP);
+
+        // Normalize: tonescale outputs nits, map to 0-1
+        return tonemapped / peakLuminance;
+    }
+
+    // ========================================================================
+    // ODT EQUIVALENTS - DISPLAY GAMUT CONVERSION
+    // Input:  Tonemapped AP1 [0-1] (from ACES20_RRT or other source)
+    // Output: LINEAR in target display gamut
+    // Parallel to ACES13_ODT_Rec709_100nits / ACES13_ODT_Rec2020_1000nits
+    //
+    // NOTE: Unlike ACES 1.3 ODTs, these are simple gamut conversions.
+    // The full ACES 2.0 ODT uses Hellwig CAM for perceptual gamut mapping
+    // (not implemented here - use 3D LUT via OCIO for that).
+    // ========================================================================
+
+    // AP1 -> Linear Rec.709 (pre-computed combined matrix with D60->D65)
+    float3 ACES20_ODT_Rec709(float3 ap1)
+    {
+        return saturate(mul(AP1_to_Rec709, ap1));
+    }
+
+    // AP1 -> Linear Rec.2020 (pre-computed combined matrix with D60->D65)
+    float3 ACES20_ODT_Rec2020(float3 ap1)
+    {
+        return max(mul(AP1_to_Rec2020, ap1), 0.0);
+    }
+
+    // ========================================================================
+    // COMBINED RRT+ODT (convenience)
+    // Input:  ACEScg (linear AP1)
+    // Output: LINEAR in target display gamut
+    // ========================================================================
+
+    // SDR: ACEScg -> Linear Rec.709 (variable peak luminance)
+    float3 ACES20_OutputTransform_Rec709_Nits(float3 acescg, float peakLuminance)
+    {
+        return ACES20_ODT_Rec709(ACES20_RRT(acescg, peakLuminance));
+    }
+
+    // HDR: ACEScg -> Linear Rec.2020 (variable peak luminance)
+    float3 ACES20_OutputTransform_Rec2020_Nits(float3 acescg, float peakLuminance)
+    {
+        return ACES20_ODT_Rec2020(ACES20_RRT(acescg, peakLuminance));
+    }
+
+    // Convenience: SDR 100 nits default
+    float3 ACES20_OutputTransform_Rec709(float3 acescg)
+    {
+        return ACES20_OutputTransform_Rec709_Nits(acescg, 100.0);
+    }
+
+    // Convenience: HDR 1000 nits default
+    float3 ACES20_OutputTransform_Rec2020(float3 acescg)
+    {
+        return ACES20_OutputTransform_Rec2020_Nits(acescg, 1000.0);
+    }
+};

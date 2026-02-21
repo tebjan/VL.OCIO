@@ -283,4 +283,65 @@ shader ColorSpaceConversion : ColorUtility
         float3 linear709 = ToLinearRec709(color, fromSpace);
         return FromLinearRec709(linear709, toSpace);
     }
+
+    // ========================================================================
+    // ACES INTERNAL MATRICES AND FUNCTIONS
+    // Used by ACES 1.3 RRT+ODT and ACES 2.0 output transforms.
+    // Moved from ACES_Common.sdsl — only items needed by the RRT/ODT internals.
+    // Display gamut conversion uses the pre-computed AP1_to_Rec709/Rec2020 matrices above.
+    // ========================================================================
+
+    // AP0 / AP1 gamut matrices (needed for RRT glow/red modifier in AP0)
+    static const float3x3 ACES_AP0_to_AP1 = float3x3(
+         1.4514393161, -0.2365107469, -0.2149285693,
+        -0.0765537734,  1.1762296998, -0.0996759264,
+         0.0083161484, -0.0060324498,  0.9977163014
+    );
+
+    static const float3x3 ACES_AP1_to_AP0 = float3x3(
+         0.6954522414, 0.1406786965, 0.1638690622,
+         0.0447945634, 0.8596711185, 0.0955343182,
+        -0.0055258826, 0.0040252103, 1.0015006723
+    );
+
+    // AP1 ↔ XYZ (D60 white point) — needed for dim surround compensation
+    static const float3x3 ACES_AP1_to_XYZ = float3x3(
+         0.6624541811, 0.1340042065, 0.1561876870,
+         0.2722287168, 0.6740817658, 0.0536895174,
+        -0.0055746495, 0.0040607335, 1.0103391003
+    );
+
+    static const float3x3 ACES_XYZ_to_AP1 = float3x3(
+         1.6410233797, -0.3248032942, -0.2364246952,
+        -0.6636628587,  1.6153315917,  0.0167563477,
+         0.0117218943, -0.0082844420,  0.9883948585
+    );
+
+    // Quadratic B-spline basis matrix (used by all ACES segmented spline evaluations)
+    static const float3x3 ACES_SPLINE_M = float3x3(
+         0.5, -1.0, 0.5,
+        -1.0,  1.0, 0.0,
+         0.5,  0.5, 0.0
+    );
+
+    // Dim surround gamma (dark cinema → dim monitor)
+    static const float ACES_DIM_SURROUND_GAMMA = 0.9811;
+
+    // Dim surround compensation (dark → dim viewing environment)
+    float3 aces_darkSurround_to_dimSurround(float3 linearCV)
+    {
+        float3 XYZ = mul(ACES_AP1_to_XYZ, linearCV);
+        float divisor = max(dot(XYZ, float3(1.0, 1.0, 1.0)), 1e-4);
+        float3 xyY = float3(XYZ.xy / divisor, XYZ.y);
+        xyY.z = pow(max(xyY.z, 0.0), ACES_DIM_SURROUND_GAMMA);
+        float m = xyY.z / max(xyY.y, 1e-4);
+        XYZ = float3(xyY.x * m, xyY.z, (1.0 - xyY.x - xyY.y) * m);
+        return mul(ACES_XYZ_to_AP1, XYZ);
+    }
+
+    // Display linear normalization
+    float3 aces_Y_2_linCV(float3 Y, float Ymax, float Ymin)
+    {
+        return (Y - Ymin) / (Ymax - Ymin);
+    }
 };

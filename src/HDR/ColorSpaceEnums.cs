@@ -28,30 +28,35 @@ public enum HDRColorSpace
 
 /// <summary>
 /// Tonemapping operator selection.
-/// All operators expect Linear Rec.709 input (pipeline converts automatically).
+/// ACES 1.3/2.0 use full RRT+ODT (output-space-dependent).
+/// All other operators work in Linear Rec.709 (pipeline converts automatically).
 /// </summary>
 public enum TonemapOperator
 {
     /// <summary>No tonemapping (passthrough)</summary>
     None = 0,
-    /// <summary>ACES - Stephen Hill RRT+ODT approximation (industry standard)</summary>
+    /// <summary>ACES (Fit) - Stephen Hill RRT+ODT approximation</summary>
     ACES = 1,
+    /// <summary>ACES 1.3 - Full RRT + ODT (segmented spline tone curves)</summary>
+    ACES13 = 2,
+    /// <summary>ACES 2.0 - Daniele Evo tonescale (simplified, no Hellwig CAM)</summary>
+    ACES20 = 3,
     /// <summary>AgX - Troy Sobotka, exact analytical curve (Blender default)</summary>
-    AgX = 2,
+    AgX = 4,
     /// <summary>Gran Turismo V1 / Uchimura (HDR-aware parametric curve)</summary>
-    GranTurismo = 3,
+    GranTurismo = 5,
     /// <summary>Uncharted 2 / Hable filmic curve (game industry)</summary>
-    Uncharted2 = 4,
+    Uncharted2 = 6,
     /// <summary>Khronos PBR Neutral (e-commerce, product visualization)</summary>
-    KhronosPBRNeutral = 5,
+    KhronosPBRNeutral = 7,
     /// <summary>Lottes - luma-based (Epic Games, The Witness)</summary>
-    Lottes = 6,
+    Lottes = 8,
     /// <summary>Reinhard simple</summary>
-    Reinhard = 7,
+    Reinhard = 9,
     /// <summary>Reinhard Extended with white point</summary>
-    ReinhardExtended = 8,
+    ReinhardExtended = 10,
     /// <summary>Hejl-Burgess fast approximation</summary>
-    HejlBurgess = 9
+    HejlBurgess = 11
 }
 
 /// <summary>

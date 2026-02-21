@@ -1739,6 +1739,16 @@ h2{font-size:.625rem;font-weight:600;text-transform:uppercase;letter-spacing:.1e
                     }
                     break;
 
+                case "deletePreset":
+                    var deleteName = root.GetProperty("name").GetString();
+                    if (!string.IsNullOrEmpty(deleteName))
+                    {
+                        DeletePreset(deleteName, instanceId);
+                        await BroadcastPresetList();
+                        await BroadcastState();
+                    }
+                    break;
+
                 case "listPresets":
                     await SendPresetList(sender);
                     break;
@@ -2132,6 +2142,27 @@ h2{font-size:.625rem;font-weight:600;text-transform:uppercase;letter-spacing:.1e
             instance.ActivePresetName = name;
             instance.IsPresetDirty = false;
             GradeLog.Debug(Tag, $"Saved preset '{name}' from instance '{instanceId}'");
+        }
+    }
+
+    private void DeletePreset(string name, string? instanceId)
+    {
+        if (string.IsNullOrEmpty(_resolvedPresetsPath))
+            return;
+
+        var filePath = Path.Combine(_resolvedPresetsPath, $"{name}.json");
+        if (File.Exists(filePath))
+        {
+            File.Delete(filePath);
+            GradeLog.Debug(Tag, $"Deleted preset '{name}'");
+
+            // If the deleted preset was active on the target instance, clear it
+            if (!string.IsNullOrEmpty(instanceId) && _instances.TryGetValue(instanceId, out var inst)
+                && inst.ActivePresetName == name)
+            {
+                inst.ActivePresetName = "";
+                inst.IsPresetDirty = false;
+            }
         }
     }
 

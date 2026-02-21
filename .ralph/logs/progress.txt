@@ -140,3 +140,9 @@
 - Files changed: pipeline-checker/src/pipeline/shaders/bc-decompress.wgsl (new), pipeline-checker/src/pipeline/stages/BCDecompressStage.ts (new)
 - Learnings: Uint8Array from BCEncodeResult.data needs explicit cast to Uint8Array<ArrayBuffer> for writeTexture's GPUAllowSharedBufferSource param (TypeScript strict mode with SharedArrayBuffer). BC decompress uses layout:'auto' since bind group is simple (texture + sampler only). The WGSL shader includes its own VertexOutput struct and vertex shader (not using shared fullscreen-vert.wgsl) since BC decompress uses a filtering sampler, unlike the color stages which use non-filtering.
 - Validation: npx tsc --noEmit (clean), npm run build (297.86 KB)
+
+### Iteration 23 — 2026-02-21 — 6.3: BC metrics display data infrastructure
+- Implemented: Created src/pipeline/types/BCMetrics.ts with PipelineBCMetrics interface (nested ChannelMetrics objects for psnr/maxError/mse, plus encode metadata: compressionRatio, encodedSizeBytes, encodeTimeMs, format, dimensions). Created src/pipeline/utils/computeBCMetrics.ts — async function wrapping encoder's BCMetricsComputer, maps flat BCMetrics fields to nested structure, computes compression ratio (uncompressed rgba32float vs encoded). The actual UI rendering of metrics in stage cards is Phase 7 (StageCard component).
+- Files changed: pipeline-checker/src/pipeline/types/BCMetrics.ts (new), pipeline-checker/src/pipeline/utils/computeBCMetrics.ts (new)
+- Learnings: BCMetricsComputer already has device internally, so computeBCMetrics doesn't need a device param. The encoder's BCMetrics uses flat naming (psnrR, mseG) while the pipeline's PipelineBCMetrics uses nested objects (psnr.r, mse.g) — the utility bridges the two.
+- Validation: npx tsc --noEmit (clean), npm run build (297.86 KB)

@@ -31,7 +31,7 @@ Each phase file references a detailed section file in `specs-pipeline-checker/se
 - [x] 3.7 Verify: `npm run build` passes
 
 ### Phase 5: BC Encoder Package
-- [ ] 5.1 Scaffold `packages/webgpu-bc-encoder/` with TypeScript
+- [x] 5.1 Scaffold `packages/webgpu-bc-encoder/` with TypeScript
 - [ ] 5.2 Port WGSL compute shaders from block_compression repo (BC1-7)
 - [ ] 5.3 BCEncoder class — encode(texture, format, quality) → BCEncodeResult
 - [ ] 5.4 BC metrics compute shader — PSNR per channel + max error

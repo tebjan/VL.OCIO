@@ -1,7 +1,59 @@
 /**
  * Pipeline settings types — mirrors C# enums and settings classes.
- * Task 7.5 will add the full enum constants (HDR_COLOR_SPACES, TONEMAP_OPERATORS, etc.)
+ * Integer-keyed arrays because WGSL uniform buffers use integer values.
  */
+
+// --- HDRColorSpace (9 values, maps to i32 in uniform buffer) ---
+export const HDR_COLOR_SPACES = [
+  { value: 0, label: 'Linear Rec.709', name: 'Linear_Rec709' },
+  { value: 1, label: 'Linear Rec.2020', name: 'Linear_Rec2020' },
+  { value: 2, label: 'ACEScg', name: 'ACEScg' },
+  { value: 3, label: 'ACEScc', name: 'ACEScc' },
+  { value: 4, label: 'ACEScct', name: 'ACEScct' },
+  { value: 5, label: 'sRGB', name: 'sRGB' },
+  { value: 6, label: 'PQ Rec.2020 (HDR10)', name: 'PQ_Rec2020' },
+  { value: 7, label: 'HLG Rec.2020', name: 'HLG_Rec2020' },
+  { value: 8, label: 'scRGB', name: 'scRGB' },
+] as const;
+
+// --- TonemapOperator (12 values) ---
+export const TONEMAP_OPERATORS = [
+  { value: 0, label: 'None' },
+  { value: 1, label: 'ACES (Fit)' },
+  { value: 2, label: 'ACES 1.3' },
+  { value: 3, label: 'ACES 2.0' },
+  { value: 4, label: 'AgX' },
+  { value: 5, label: 'Gran Turismo' },
+  { value: 6, label: 'Uncharted 2' },
+  { value: 7, label: 'Khronos PBR Neutral' },
+  { value: 8, label: 'Lottes' },
+  { value: 9, label: 'Reinhard' },
+  { value: 10, label: 'Reinhard Extended' },
+  { value: 11, label: 'Hejl-Burgess' },
+] as const;
+
+// --- GradingSpace (2 values) ---
+export const GRADING_SPACES = [
+  { value: 0, label: 'Log (ACEScct)' },
+  { value: 1, label: 'Linear (ACEScg)' },
+] as const;
+
+// --- BC Formats (7 values) ---
+export const BC_FORMATS = [
+  { value: 0, label: 'BC1 (DXT1)', gpuFormat: 'bc1-rgba-unorm' },
+  { value: 1, label: 'BC2 (DXT3)', gpuFormat: 'bc2-rgba-unorm' },
+  { value: 2, label: 'BC3 (DXT5)', gpuFormat: 'bc3-rgba-unorm' },
+  { value: 3, label: 'BC4 (ATI1)', gpuFormat: 'bc4-r-unorm' },
+  { value: 4, label: 'BC5 (ATI2)', gpuFormat: 'bc5-rg-unorm' },
+  { value: 5, label: 'BC6H (HDR)', gpuFormat: 'bc6h-rgb-ufloat' },
+  { value: 6, label: 'BC7', gpuFormat: 'bc7-rgba-unorm' },
+] as const;
+
+// --- ODT Targets ---
+export const ODT_TARGETS = [
+  { value: 0, label: 'Rec.709 100 nits' },
+  { value: 1, label: 'Rec.2020 1000 nits' },
+] as const;
 
 export interface Vec3 {
   x: number;

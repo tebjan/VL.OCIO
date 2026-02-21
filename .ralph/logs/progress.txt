@@ -188,3 +188,9 @@
 - Files changed: src/components/ui/Section.tsx (new), src/components/ui/Slider.tsx (new), src/components/ui/Vec3Slider.tsx (new), src/components/ui/Select.tsx (new), src/components/ui/Toggle.tsx (new), src/components/ControlsPanel.tsx (refactored)
 - Learnings: Slider value editing uses useState + useRef for inline <input> on click. Toggle has two variants: simple (circle thumb on track) for boolean props, segmented buttons (labelOn/labelOff) for named option pairs. All label widths standardized to 96px. The ControlsPanel now adds defaultValue to all Slider/Vec3Slider instances, and uses decimals/unit props for nits and precision controls.
 - Validation: npx tsc --noEmit (clean), npm run build (299.22 KB, gzip 94.22 KB)
+
+### Iteration 31 — 2026-02-21 — 7.5: Settings types with enum constants
+- Implemented: Added 5 exported `as const` enum constant arrays to src/types/settings.ts: HDR_COLOR_SPACES (9 values with name field), TONEMAP_OPERATORS (12 values), GRADING_SPACES (2 values), BC_FORMATS (7 values with gpuFormat field), ODT_TARGETS (2 values). All arrays match C# enums exactly. Refactored ControlsPanel.tsx to import these constants from settings.ts, removing all inline duplicate arrays.
+- Files changed: src/types/settings.ts (enum constants added), src/components/ControlsPanel.tsx (imports refactored)
+- Learnings: The `as const` assertion is important — it makes the arrays readonly and narrows the types, matching how the spec defines them. BC_FORMATS includes gpuFormat strings for use with WebGPU createTexture(). HDR_COLOR_SPACES includes a `name` field matching the C# enum member names for display/debugging.
+- Validation: npx tsc --noEmit (clean), npm run build (299.22 KB, gzip 94.22 KB)

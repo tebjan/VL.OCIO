@@ -11,7 +11,7 @@
 - [x] 7.2 StageCard component
 - [x] 7.3 ControlsPanel component
 - [x] 7.4 Reusable Slider, Select, Section components
-- [ ] 7.5 settings.ts types (mirror C# enums)
+- [x] 7.5 settings.ts types (mirror C# enums)
 - [ ] 7.6 Reset button + usePipeline hook
 - [ ] 7.7 Verify: `npm run build` passes
 

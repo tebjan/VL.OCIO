@@ -1,4 +1,11 @@
-import type { PipelineSettings } from '../types/settings';
+import {
+  type PipelineSettings,
+  HDR_COLOR_SPACES,
+  TONEMAP_OPERATORS,
+  GRADING_SPACES,
+  BC_FORMATS,
+  ODT_TARGETS,
+} from '../types/settings';
 import { Section } from './ui/Section';
 import { Slider } from './ui/Slider';
 import { Vec3Slider } from './ui/Vec3Slider';
@@ -9,54 +16,6 @@ export interface ControlsPanelProps {
   settings: PipelineSettings;
   onSettingsChange: (patch: Partial<PipelineSettings>) => void;
 }
-
-// --- Enum options (will move to settings.ts in task 7.5) ---
-const HDR_COLOR_SPACES = [
-  { value: 0, label: 'Linear Rec.709' },
-  { value: 1, label: 'Linear Rec.2020' },
-  { value: 2, label: 'ACEScg' },
-  { value: 3, label: 'ACEScc' },
-  { value: 4, label: 'ACEScct' },
-  { value: 5, label: 'sRGB' },
-  { value: 6, label: 'PQ Rec.2020 (HDR10)' },
-  { value: 7, label: 'HLG Rec.2020' },
-  { value: 8, label: 'scRGB' },
-];
-
-const BC_FORMATS = [
-  { value: 0, label: 'BC1 (DXT1)' },
-  { value: 1, label: 'BC2 (DXT3)' },
-  { value: 2, label: 'BC3 (DXT5)' },
-  { value: 3, label: 'BC4 (ATI1)' },
-  { value: 4, label: 'BC5 (ATI2)' },
-  { value: 5, label: 'BC6H (HDR)' },
-  { value: 6, label: 'BC7' },
-];
-
-const GRADING_SPACES = [
-  { value: 0, label: 'Log (ACEScct)' },
-  { value: 1, label: 'Linear (ACEScg)' },
-];
-
-const TONEMAP_OPERATORS = [
-  { value: 0, label: 'None' },
-  { value: 1, label: 'ACES (Fit)' },
-  { value: 2, label: 'ACES 1.3' },
-  { value: 3, label: 'ACES 2.0' },
-  { value: 4, label: 'AgX' },
-  { value: 5, label: 'Gran Turismo' },
-  { value: 6, label: 'Uncharted 2' },
-  { value: 7, label: 'Khronos PBR Neutral' },
-  { value: 8, label: 'Lottes' },
-  { value: 9, label: 'Reinhard' },
-  { value: 10, label: 'Reinhard Extended' },
-  { value: 11, label: 'Hejl-Burgess' },
-];
-
-const ODT_TARGETS = [
-  { value: 0, label: 'Rec.709 100 nits' },
-  { value: 1, label: 'Rec.2020 1000 nits' },
-];
 
 export function ControlsPanel({ settings, onSettingsChange }: ControlsPanelProps) {
   const set = (patch: Partial<PipelineSettings>) => onSettingsChange(patch);

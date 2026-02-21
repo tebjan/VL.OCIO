@@ -10,7 +10,7 @@
 - [x] 5.1 Package scaffolding
 - [x] 5.2 Port WGSL compute shaders from block_compression repo
 - [x] 5.3 BCEncoder class with public API
-- [ ] 5.4 BC metrics compute shader (PSNR + max error)
+- [x] 5.4 BC metrics compute shader (PSNR + max error)
 - [ ] 5.5 Verify: package builds, BC6H encodes test texture
 
 ## Task 5.1: Package scaffolding

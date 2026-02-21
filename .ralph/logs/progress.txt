@@ -92,3 +92,9 @@
 - Files changed: 7 WGSL shaders, 8 format .ts files (handler + bc1-bc7), encoder.ts, index.ts, wgsl.d.ts
 - Learnings: block_compression repo not accessible (404). Implemented from BC spec knowledge. BC6H Mode 11 uses pack2x16float for float-to-half conversion. Anchor index fix: if anchor pixel >= half, flip all indices. All shaders share common bind group layout (binding 0=texture, 1=storage, 2=uniform). Task 5.3 was naturally completed alongside 5.2 since the encoder needed the pipelines.
 - Validation: npx tsc --noEmit (clean), npm run build (296 KB)
+
+### Iteration 15 — 2026-02-21 — 5.4: BC metrics compute shader
+- Implemented: Wrote bc-metrics.wgsl compute shader (8x8 workgroups) that computes per-pixel squared error and absolute error (6 floats per pixel: SE_R, SE_G, SE_B, AE_R, AE_G, AE_B). Implemented BCMetricsComputer class in metrics.ts with: lazy pipeline creation, GPU dispatch, staging buffer readback, CPU-side reduction (sum SE → MSE, max AE → max error), PSNR computation (10*log10(1/MSE)). Added mseCombined field to BCMetrics interface in index.ts.
+- Files changed: packages/webgpu-bc-encoder/src/shaders/bc-metrics.wgsl, packages/webgpu-bc-encoder/src/metrics.ts, packages/webgpu-bc-encoder/src/index.ts
+- Learnings: Uniform buffer for metrics params only needs 8 bytes (2 x u32). Error buffer is width*height*6*4 bytes — can be large for high-res images. CPU reduction is simple enough that GPU reduction isn't needed for interactive use.
+- Validation: npx tsc --noEmit (clean), npm run build (296 KB)

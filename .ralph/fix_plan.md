@@ -34,7 +34,7 @@ Each phase file references a detailed section file in `specs-pipeline-checker/se
 - [x] 5.1 Scaffold `packages/webgpu-bc-encoder/` with TypeScript
 - [x] 5.2 Port WGSL compute shaders from block_compression repo (BC1-7)
 - [x] 5.3 BCEncoder class — encode(texture, format, quality) → BCEncodeResult
-- [ ] 5.4 BC metrics compute shader — PSNR per channel + max error
+- [x] 5.4 BC metrics compute shader — PSNR per channel + max error
 - [ ] 5.5 Verify: package builds, BC6H encodes test texture
 
 ---

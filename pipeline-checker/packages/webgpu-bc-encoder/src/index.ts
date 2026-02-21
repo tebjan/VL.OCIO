@@ -32,6 +32,7 @@ export interface BCMetrics {
   mseR: number;
   mseG: number;
   mseB: number;
+  mseCombined: number;
 }
 
 /** Block size in bytes per format. BC1/BC4 = 8, all others = 16. */

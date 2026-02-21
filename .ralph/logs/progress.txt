@@ -3,3 +3,9 @@
 - Files changed: pipeline-checker/package.json, vite.config.ts, tsconfig.json, tsconfig.node.json, index.html, src/index.css, src/main.tsx, src/App.tsx, src/types/raw-imports.d.ts, src/types/webgpu.d.ts
 - Learnings: Tailwind v4 uses @tailwindcss/vite plugin instead of postcss.config.js. No tailwind.config.js needed. App.tsx is a minimal placeholder — WebGPUContext and DropZone are separate tasks (1.2, 1.3).
 - Validation: npm install (0 vulnerabilities), npx tsc --noEmit (clean), npm run build (200 KB single HTML)
+
+### Iteration 2 — 2026-02-21 — 1.2: WebGPU device initialization
+- Implemented: Created src/gpu/WebGPUContext.ts with GPUContext interface (adapter, device, format, canvasContext, hasBC), initWebGPU() async function that requests high-performance adapter, conditionally enables texture-compression-bc, sets 256MB storage/buffer limits, configures canvas with premultiplied alpha, and handles device.lost.
+- Files changed: pipeline-checker/src/gpu/WebGPUContext.ts
+- Learnings: Extended GPUContext interface beyond spec template to include canvasContext and hasBC flag for downstream use. device.lost handler logs but doesn't auto-recover yet.
+- Validation: npx tsc --noEmit (clean), npm run build (201 KB single HTML)

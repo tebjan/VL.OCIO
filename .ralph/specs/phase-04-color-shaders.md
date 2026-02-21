@@ -21,7 +21,7 @@
 - [x] 4.3 `rrt.wgsl` — Stage 6
 - [x] 4.4 `odt.wgsl` — Stage 7
 - [x] 4.5 `output-encode.wgsl` — Stage 8
-- [ ] 4.6 `display-remap.wgsl` — Stage 9
+- [x] 4.6 `display-remap.wgsl` — Stage 9
 - [ ] 4.7 `fullscreen-quad.wgsl` — shared vertex shader
 - [ ] 4.8 Wire all stages into PipelineRenderer
 - [ ] 4.9 Verify: `npm run build` + visual test

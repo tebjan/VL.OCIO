@@ -33,3 +33,9 @@
 - Files changed: pipeline-checker/src/pipeline/PipelineStage.ts (new)
 - Learnings: Section file clarifies encode() takes GPUBuffer (not PipelineSettings type), keeping the interface dependency-free. PipelineSettings type comes in task 3.5.
 - Validation: npx tsc --noEmit (clean), npm run build (296 KB)
+
+### Iteration 7 — 2026-02-21 — 3.2: FragmentStage implementation
+- Implemented: Created src/pipeline/FragmentStage.ts implementing PipelineStage. Includes embedded fullscreen triangle vertex shader (no external file), bind group layout (unfilterable-float texture + non-filtering sampler + uniform buffer), GPURenderPipeline creation with rgba32float target (blend: undefined), encode() with per-frame bind group, render target with RENDER_ATTACHMENT | TEXTURE_BINDING | COPY_SRC. Constructor takes (name, index, fragmentWGSL) — vertex shader is prepended automatically.
+- Files changed: pipeline-checker/src/pipeline/FragmentStage.ts (new)
+- Learnings: tsconfig has noUnusedLocals — removed width/height private fields that were stored but never read. The vertex shader is embedded as a string constant per section-03 spec ("embedded as a constant string in FragmentStage.ts"). The fullscreen-quad.wgsl file (task 4.7) can refactor this later if needed.
+- Validation: npx tsc --noEmit (clean), npm run build (296 KB)

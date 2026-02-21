@@ -8,7 +8,7 @@
 ## Checklist
 
 - [x] 3.1 PipelineStage interface
-- [ ] 3.2 FragmentStage implementation
+- [x] 3.2 FragmentStage implementation
 - [ ] 3.3 PipelineRenderer orchestrator
 - [ ] 3.4 Render target management
 - [ ] 3.5 Uniform buffer layout

@@ -1,13 +1,18 @@
-import type { BCQuality } from '../index';
 import type { BCFormatHandler } from './handler';
+import bc3Shader from '../shaders/bc3-compress.wgsl?raw';
 
 /** BC3 — BC1 color + BC4-style interpolated alpha, 16 bytes/block. */
 export const bc3Handler: BCFormatHandler = {
   blockSize: 16,
+  wordsPerBlock: 4,
   workgroupSize: [1, 1, 1],
+  supportsAlpha: true,
 
-  createPipeline(_device: GPUDevice, _quality: BCQuality): GPUComputePipeline {
-    // TODO (task 5.2): Import bc3-compress.wgsl, create compute pipeline
-    throw new Error('BC3 encoder not yet implemented');
+  createPipeline(device: GPUDevice): GPUComputePipeline {
+    const module = device.createShaderModule({ code: bc3Shader });
+    return device.createComputePipeline({
+      layout: 'auto',
+      compute: { module, entryPoint: 'main' },
+    });
   },
 };

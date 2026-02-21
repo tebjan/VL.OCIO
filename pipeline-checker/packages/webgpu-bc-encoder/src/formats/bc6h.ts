@@ -1,5 +1,5 @@
-import type { BCQuality } from '../index';
 import type { BCFormatHandler } from './handler';
+import bc6hShader from '../shaders/bc6h-compress.wgsl?raw';
 
 /**
  * BC6H — HDR RGB compression, half-float, 14 modes, 16 bytes/block.
@@ -7,18 +7,22 @@ import type { BCFormatHandler } from './handler';
  * Critical format for this project (HDR EXR data).
  *
  * Quality modes:
- * - fast: Mode 11 only
- * - normal: Top partition candidates
- * - high: Exhaustive mode search
+ * - fast: Mode 11 only (no partitioning)
+ * - normal: Mode 11 + try Modes 1, 2
+ * - high: Mode 11 + Modes 1, 2, 6
  */
 export const bc6hHandler: BCFormatHandler = {
   blockSize: 16,
+  wordsPerBlock: 4,
   workgroupSize: [1, 1, 1],
+  supportsAlpha: false,
+  alphaWarning: 'Alpha not preserved in BC6H format. Use BC7 for RGBA.',
 
-  createPipeline(_device: GPUDevice, _quality: BCQuality): GPUComputePipeline {
-    // TODO (task 5.2): Import bc6h-compress.wgsl, create compute pipeline
-    // BC6H is the most complex format — 14 modes with different
-    // partition patterns, endpoint quantization, and delta encoding.
-    throw new Error('BC6H encoder not yet implemented');
+  createPipeline(device: GPUDevice): GPUComputePipeline {
+    const module = device.createShaderModule({ code: bc6hShader });
+    return device.createComputePipeline({
+      layout: 'auto',
+      compute: { module, entryPoint: 'main' },
+    });
   },
 };

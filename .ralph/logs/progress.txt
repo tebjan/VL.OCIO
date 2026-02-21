@@ -69,3 +69,26 @@
 - Files changed: None (verification only; checkboxes updated)
 - Learnings: Phase 3 complete. Wave 2 Phase 3 done. Next is either Phase 5 (BC Encoder Package) or skip to Wave 3 Phase 4 (Color Pipeline WGSL Shaders) — but Phase 4 requires Phase 3 which is now done. Phase 5 (BC) is optional per dependency rules. Follow fix_plan.md order: Phase 5 next.
 - Validation: npm install (clean), npx tsc --noEmit (clean), npm run build (296 KB)
+
+### Iteration 13 — 2026-02-21 — 5.1: BC encoder package scaffolding
+- Implemented: Created packages/webgpu-bc-encoder/ with package.json, tsconfig.json, and all source files: index.ts (types + constants), encoder.ts (BCEncoder placeholder), metrics.ts (BCMetricsComputer placeholder), formats/handler.ts (BCFormatHandler interface), 7 format handler files (bc1-bc7.ts), 8 WGSL compute shader placeholders, wgsl.d.ts type declaration.
+- Files changed: 24 files in packages/webgpu-bc-encoder/
+- Learnings: Package needs its own wgsl.d.ts for ?raw import type resolution. Format handlers use placeholder throw for task 5.2 implementation.
+- Validation: npx tsc --noEmit (clean), npm run build (296 KB)
+
+### Iteration 14 — 2026-02-21 — 5.2 + 5.3: Port WGSL compute shaders + BCEncoder class
+- Implemented: Wrote all 7 BC format WGSL compute shaders with real encoding algorithms:
+  - BC1: bounding box min/max endpoints, RGB565 packing, 4-color palette, 2-bit indices
+  - BC4: min/max single channel, u8 endpoints, 8-value interpolation, 3-bit indices
+  - BC2: BC1 color + 4-bit explicit alpha per pixel
+  - BC3: BC1 color + BC4-style interpolated alpha
+  - BC5: Two independent BC4 blocks (R + G channels)
+  - BC6H: Mode 11 (unsigned, no partitioning, 10-bit endpoints, 4-bit indices, pack2x16float)
+  - BC7: Mode 6 (no partitioning, RGBA 7+1 bit endpoints, 4-bit indices)
+  Updated all format handlers to import WGSL via ?raw and create real GPUComputePipeline.
+  Rewrote encoder.ts with full pipeline: getPipeline cache, uniform buffer, storage buffer, bind group, dispatch, staging readback.
+  Added BCFormatHandler.supportsAlpha + alphaWarning fields. BC6H has alphaWarning string.
+  Added static BCEncoder.getHandler() for downstream alpha warning access.
+- Files changed: 7 WGSL shaders, 8 format .ts files (handler + bc1-bc7), encoder.ts, index.ts, wgsl.d.ts
+- Learnings: block_compression repo not accessible (404). Implemented from BC spec knowledge. BC6H Mode 11 uses pack2x16float for float-to-half conversion. Anchor index fix: if anchor pixel >= half, flip all indices. All shaders share common bind group layout (binding 0=texture, 1=storage, 2=uniform). Task 5.3 was naturally completed alongside 5.2 since the encoder needed the pipelines.
+- Validation: npx tsc --noEmit (clean), npm run build (296 KB)

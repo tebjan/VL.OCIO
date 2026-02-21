@@ -58,3 +58,4 @@ export const BC_FORMAT_TO_GPU: Record<BCFormat, GPUTextureFormat> = {
 
 export { BCEncoder } from './encoder';
 export { BCMetricsComputer } from './metrics';
+export type { BCFormatHandler } from './formats/handler';

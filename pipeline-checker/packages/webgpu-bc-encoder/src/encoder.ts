@@ -1,19 +1,56 @@
 import type { BCFormat, BCQuality, BCEncodeResult } from './index';
 import { BC_BLOCK_SIZE } from './index';
+import type { BCFormatHandler } from './formats/handler';
+import { bc1Handler } from './formats/bc1';
+import { bc2Handler } from './formats/bc2';
+import { bc3Handler } from './formats/bc3';
+import { bc4Handler } from './formats/bc4';
+import { bc5Handler } from './formats/bc5';
+import { bc6hHandler } from './formats/bc6h';
+import { bc7Handler } from './formats/bc7';
+
+const FORMAT_HANDLERS: Record<BCFormat, BCFormatHandler> = {
+  bc1: bc1Handler,
+  bc2: bc2Handler,
+  bc3: bc3Handler,
+  bc4: bc4Handler,
+  bc5: bc5Handler,
+  bc6h: bc6hHandler,
+  bc7: bc7Handler,
+};
 
 /**
  * GPU-based BC texture encoder using WebGPU compute shaders.
  *
- * Lazily creates and caches compute pipelines per format.
+ * Lazily creates and caches compute pipelines per format+quality.
  * Dispatches ceil(width/4) * ceil(height/4) workgroups per encode.
  * Reads back compressed block data via staging buffer.
  */
 export class BCEncoder {
   private device: GPUDevice;
-  private _pipelines: Map<string, GPUComputePipeline> = new Map();
+  private pipelines: Map<string, GPUComputePipeline> = new Map();
 
   constructor(device: GPUDevice) {
     this.device = device;
+  }
+
+  /** Get the format handler for a given format (useful for alpha warnings). */
+  static getHandler(format: BCFormat): BCFormatHandler {
+    return FORMAT_HANDLERS[format];
+  }
+
+  /**
+   * Get or create a cached compute pipeline for a format+quality combination.
+   */
+  private getPipeline(format: BCFormat, quality: BCQuality): GPUComputePipeline {
+    const key = `${format}:${quality}`;
+    let pipeline = this.pipelines.get(key);
+    if (!pipeline) {
+      const handler = FORMAT_HANDLERS[format];
+      pipeline = handler.createPipeline(this.device, quality);
+      this.pipelines.set(key, pipeline);
+    }
+    return pipeline;
   }
 
   /**
@@ -40,17 +77,61 @@ export class BCEncoder {
     const totalBlocks = blocksPerRow * blocksPerCol;
     const outputBytes = totalBlocks * blockSize;
 
-    // TODO (task 5.2): Get or create compute pipeline for this format+quality
-    // TODO (task 5.2): Create output storage buffer, bind group, dispatch
-    // TODO (task 5.2): Read back via staging buffer
+    // Get or create compute pipeline
+    const pipeline = this.getPipeline(format, quality);
 
-    // Placeholder: return empty result
-    void this.device;
-    void this._pipelines;
-    void quality;
-    void source;
+    // Create params uniform buffer (width, height, quality)
+    const qualityValue = quality === 'fast' ? 0 : quality === 'normal' ? 1 : 2;
+    const paramsData = new Uint32Array([originalWidth, originalHeight, qualityValue]);
+    const paramsBuffer = this.device.createBuffer({
+      size: 16, // 3 x u32 + padding for 16-byte alignment
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+    this.device.queue.writeBuffer(paramsBuffer, 0, paramsData);
 
-    const data = new Uint8Array(outputBytes);
+    // Create output storage buffer
+    const outputBuffer = this.device.createBuffer({
+      size: outputBytes,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+    });
+
+    // Create bind group
+    const bindGroup = this.device.createBindGroup({
+      layout: pipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: source.createView() },
+        { binding: 1, resource: { buffer: outputBuffer } },
+        { binding: 2, resource: { buffer: paramsBuffer } },
+      ],
+    });
+
+    // Dispatch compute shader
+    const commandEncoder = this.device.createCommandEncoder();
+    const pass = commandEncoder.beginComputePass();
+    pass.setPipeline(pipeline);
+    pass.setBindGroup(0, bindGroup);
+    pass.dispatchWorkgroups(blocksPerRow, blocksPerCol, 1);
+    pass.end();
+
+    // Create staging buffer for readback
+    const stagingBuffer = this.device.createBuffer({
+      size: outputBytes,
+      usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
+    });
+    commandEncoder.copyBufferToBuffer(outputBuffer, 0, stagingBuffer, 0, outputBytes);
+
+    this.device.queue.submit([commandEncoder.finish()]);
+
+    // Read back results
+    await stagingBuffer.mapAsync(GPUMapMode.READ);
+    const data = new Uint8Array(stagingBuffer.getMappedRange()).slice();
+    stagingBuffer.unmap();
+
+    // Clean up per-encode resources
+    paramsBuffer.destroy();
+    outputBuffer.destroy();
+    stagingBuffer.destroy();
+
     const compressionTimeMs = performance.now() - startTime;
 
     return {
@@ -68,6 +149,6 @@ export class BCEncoder {
 
   /** Release all cached GPU resources. */
   destroy(): void {
-    this._pipelines.clear();
+    this.pipelines.clear();
   }
 }

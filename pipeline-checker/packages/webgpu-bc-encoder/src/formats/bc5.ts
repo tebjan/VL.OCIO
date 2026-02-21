@@ -1,13 +1,18 @@
-import type { BCQuality } from '../index';
 import type { BCFormatHandler } from './handler';
+import bc5Shader from '../shaders/bc5-compress.wgsl?raw';
 
 /** BC5 — Two independent BC4 blocks (RG channels), 16 bytes/block. */
 export const bc5Handler: BCFormatHandler = {
   blockSize: 16,
+  wordsPerBlock: 4,
   workgroupSize: [1, 1, 1],
+  supportsAlpha: false,
 
-  createPipeline(_device: GPUDevice, _quality: BCQuality): GPUComputePipeline {
-    // TODO (task 5.2): Import bc5-compress.wgsl, create compute pipeline
-    throw new Error('BC5 encoder not yet implemented');
+  createPipeline(device: GPUDevice): GPUComputePipeline {
+    const module = device.createShaderModule({ code: bc5Shader });
+    return device.createComputePipeline({
+      layout: 'auto',
+      compute: { module, entryPoint: 'main' },
+    });
   },
 };

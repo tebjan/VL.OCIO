@@ -10,7 +10,7 @@
 - [x] 1.1 Initialize Vite + React + TypeScript project
 - [x] 1.2 WebGPU device initialization
 - [x] 1.3 EXR drop zone component
-- [ ] 1.4 Dark theme setup
+- [x] 1.4 Dark theme setup
 - [ ] 1.5 Load Sample EXR button
 - [ ] 1.6 Verify: `npm install && npm run build && npx tsc --noEmit`
 

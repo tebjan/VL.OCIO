@@ -15,3 +15,9 @@
 - Files changed: pipeline-checker/src/components/DropZone.tsx (new), pipeline-checker/src/components/WebGPUCanvas.tsx (new), pipeline-checker/src/App.tsx (rewritten)
 - Learnings: Used procedural sample generation instead of importing a .exr asset file — avoids build dependency on a binary asset. Task 1.5 in phase file was merged into 1.3 in fix_plan.
 - Validation: npx tsc --noEmit (clean), npm run build (296 KB single HTML)
+
+### Iteration 4 — 2026-02-21 — 1.4: Dark theme setup
+- Implemented: Verified dark theme was already complete from iteration 1. All CSS custom properties match spec exactly: --color-bg #0d0d0d, --color-surface #1a1a1a, --color-border #2a2a2a, --color-text #e0e0e0, --color-text-muted #808080, --color-accent #4a4a4a, --color-accent-hover #5a5a5a, --color-error #cc4444. No saturated accent colors anywhere. White-flash prevention inline style in index.html. Scrollbar theming.
+- Files changed: None (theme was already correct; only checkboxes updated)
+- Learnings: Task 1.4 was effectively completed during 1.1 when index.css was created. All components already use CSS vars, no hardcoded saturated colors.
+- Validation: npx tsc --noEmit (clean), npm run build (296 KB single HTML), grep confirmed no saturated color literals in src/

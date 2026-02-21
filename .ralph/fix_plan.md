@@ -12,7 +12,7 @@ Each phase file references a detailed section file in `specs-pipeline-checker/se
 - [x] 1.1 Initialize Vite + React 19 + TypeScript + Tailwind 4 project in `pipeline-checker/`
 - [x] 1.2 Create `src/gpu/WebGPUContext.ts` — adapter, device, BC feature request, canvas config
 - [x] 1.3 Create `src/components/DropZone.tsx` — drag-drop EXR + "Try sample" button
-- [ ] 1.4 Dark theme setup — backgrounds #0d0d0d/#1a1a1a, no saturated accents
+- [x] 1.4 Dark theme setup — backgrounds #0d0d0d/#1a1a1a, no saturated accents
 - [ ] 1.5 Verify: `npm install && npm run build && npx tsc --noEmit` all pass
 
 ---

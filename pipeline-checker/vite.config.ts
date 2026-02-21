@@ -20,6 +20,7 @@ export default defineConfig({
   build: {
     target: 'esnext',
     assetsInlineLimit: 100_000_000, // Inline everything as base64
+    chunkSizeWarningLimit: 5000,    // Suppress warnings for large single-file output
     rollupOptions: {
       output: {
         inlineDynamicImports: true,

@@ -254,3 +254,9 @@
 - Files changed: fix_plan.md (checkbox), phase-09-heightmap.md (checkbox)
 - Learnings: Phase 9 complete. All components tree-shaken (not wired into App.tsx yet). Next: Phase 10 (build & distribution) and Phase 11 (test verification).
 - Validation: npx tsc --noEmit (clean), npm run build (299.58 KB, gzip 94.30 KB)
+
+### Iteration 42 — 2026-02-22 — 10.1: vite-plugin-singlefile config, WGSL ?raw imports, inlineDynamicImports
+- Implemented: Verified existing vite.config.ts already has viteSingleFile(), base './', inlineDynamicImports, assetsInlineLimit 100MB, target esnext. Added chunkSizeWarningLimit: 5000 from phase spec. Verified all 10 WGSL imports use ?raw suffix (no fetch()). Verified dist/ contains single index.html (299.58 KB). Also marks phase-10 task 10.2 (WGSL ?raw embedding) since all shaders already use ?raw.
+- Files changed: pipeline-checker/vite.config.ts (added chunkSizeWarningLimit)
+- Learnings: Config was mostly correct from Phase 1 scaffolding. The chunkSizeWarningLimit suppresses Rollup warnings when the single-file bundle exceeds default 500 KB limit.
+- Validation: npx tsc --noEmit (clean), npm run build (299.58 KB single index.html)

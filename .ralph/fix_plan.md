@@ -70,7 +70,7 @@ Each phase file references a detailed section file in `specs-pipeline-checker/se
 - [x] 7.3 `ControlsPanel.tsx` — collapsible sections: Input, Grading, Tonemap, Output
 - [x] 7.4 Reusable `Slider.tsx`, `Select.tsx`, `Section.tsx` (match VL.OCIO web UI style)
 - [x] 7.5 `types/settings.ts` — all enums, labels, defaults (mirror C# exactly)
-- [ ] 7.6 Reset button, `usePipeline` hook
+- [x] 7.6 Reset button, `usePipeline` hook
 - [ ] 7.7 Verify: `npm run build` passes, all controls render
 
 ---

@@ -194,3 +194,9 @@
 - Files changed: src/types/settings.ts (enum constants added), src/components/ControlsPanel.tsx (imports refactored)
 - Learnings: The `as const` assertion is important — it makes the arrays readonly and narrows the types, matching how the spec defines them. BC_FORMATS includes gpuFormat strings for use with WebGPU createTexture(). HDR_COLOR_SPACES includes a `name` field matching the C# enum member names for display/debugging.
 - Validation: npx tsc --noEmit (clean), npm run build (299.22 KB, gzip 94.22 KB)
+
+### Iteration 32 — 2026-02-21 — 7.6: Reset button + usePipeline hook
+- Implemented: Created src/types/pipeline.ts with StageState and PipelineState interfaces. Created src/hooks/usePipeline.ts with full pipeline state management: PipelineSettings state (from createDefaultSettings), StageState[] (10 stages, all enabled), selectedStageIndex, derived StageInfo[] for Filmstrip (via useMemo combining StageState + STAGE_NAMES). Locked stages 0 (EXR Load) and 9 (Final Display) cannot be disabled. Added "Reset All" button to ControlsPanel via optional onReset prop with hover effect.
+- Files changed: src/types/pipeline.ts (new), src/hooks/usePipeline.ts (new), src/components/ControlsPanel.tsx (onReset prop + button)
+- Learnings: The hook produces StageInfo[] as a derived value from internal StageState[] — this keeps the Filmstrip's interface clean. Stage availability (GPU feature gating) and thumbnails are left as placeholders (available=true, thumbnail=null) to be wired when PipelineRenderer is integrated. LOCKED_STAGES Set prevents accidental disabling of first/last stages.
+- Validation: npx tsc --noEmit (clean), npm run build (299.22 KB, gzip 94.22 KB)

@@ -15,9 +15,10 @@ import { Toggle } from './ui/Toggle';
 export interface ControlsPanelProps {
   settings: PipelineSettings;
   onSettingsChange: (patch: Partial<PipelineSettings>) => void;
+  onReset?: () => void;
 }
 
-export function ControlsPanel({ settings, onSettingsChange }: ControlsPanelProps) {
+export function ControlsPanel({ settings, onSettingsChange, onReset }: ControlsPanelProps) {
   const set = (patch: Partial<PipelineSettings>) => onSettingsChange(patch);
 
   return (
@@ -36,6 +37,27 @@ export function ControlsPanel({ settings, onSettingsChange }: ControlsPanelProps
         flexShrink: 0,
       }}
     >
+      {/* --- Reset Button --- */}
+      {onReset && (
+        <button
+          onClick={onReset}
+          style={{
+            padding: '6px 12px',
+            background: 'var(--surface-800)',
+            border: '1px solid var(--surface-600)',
+            borderRadius: '4px',
+            color: 'var(--surface-200)',
+            cursor: 'pointer',
+            fontSize: '12px',
+            alignSelf: 'flex-end',
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-700)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--surface-800)'; }}
+        >
+          Reset All
+        </button>
+      )}
+
       {/* --- Input Section (Stages 1-4) --- */}
       <Section title="Input">
         <Select label="Color Space" value={settings.inputColorSpace} options={HDR_COLOR_SPACES} onChange={(v) => set({ inputColorSpace: v })} />

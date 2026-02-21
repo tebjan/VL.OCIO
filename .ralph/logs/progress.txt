@@ -39,3 +39,9 @@
 - Files changed: pipeline-checker/src/pipeline/FragmentStage.ts (new)
 - Learnings: tsconfig has noUnusedLocals — removed width/height private fields that were stored but never read. The vertex shader is embedded as a string constant per section-03 spec ("embedded as a constant string in FragmentStage.ts"). The fullscreen-quad.wgsl file (task 4.7) can refactor this later if needed.
 - Validation: npx tsc --noEmit (clean), npm run build (296 KB)
+
+### Iteration 8 — 2026-02-21 — 3.3: PipelineRenderer orchestrator
+- Implemented: Created src/pipeline/PipelineRenderer.ts — stage orchestrator with: constructor creates 512-byte uniform buffer, setStages() registers stages, setSize() initializes (first call) or resizes (subsequent) all stages, render() chains enabled stages in single command buffer (disabled stages bypass transparently), getStageOutput() walks backwards to find last enabled stage, updateUniforms() writes raw Float32Array to GPU buffer, destroy() cleans up all resources.
+- Files changed: pipeline-checker/src/pipeline/PipelineRenderer.ts (new)
+- Learnings: WebGPU TypeScript types require Float32Array<ArrayBuffer> (not Float32Array<ArrayBufferLike>) for writeBuffer compatibility. Fixed spec's setSize bug where this.width was set before the initialization check. The PipelineSettings typed interface comes in 3.5 — for now updateUniforms takes raw Float32Array.
+- Validation: npx tsc --noEmit (clean), npm run build (296 KB)

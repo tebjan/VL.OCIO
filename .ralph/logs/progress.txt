@@ -98,3 +98,9 @@
 - Files changed: packages/webgpu-bc-encoder/src/shaders/bc-metrics.wgsl, packages/webgpu-bc-encoder/src/metrics.ts, packages/webgpu-bc-encoder/src/index.ts
 - Learnings: Uniform buffer for metrics params only needs 8 bytes (2 x u32). Error buffer is width*height*6*4 bytes — can be large for high-res images. CPU reduction is simple enough that GPU reduction isn't needed for interactive use.
 - Validation: npx tsc --noEmit (clean), npm run build (296 KB)
+
+### Iteration 16 — 2026-02-21 — 5.5: Phase 5 verification
+- Implemented: Verification pass — no code changes needed. Confirmed: tsc --noEmit clean, npm run build clean (296 KB), all 8 WGSL shaders present (7 encode + 1 metrics), all 7 format handlers + handler interface present, all exports correct (BCEncoder, BCMetricsComputer, BCFormatHandler, BCFormat, BCQuality, BCEncodeResult, BCMetrics, BC_BLOCK_SIZE, BC_FORMAT_TO_GPU), all shader imports use ?raw (no fetch), BC6H alpha warning correctly configured (supportsAlpha: false, alphaWarning populated).
+- Files changed: None (verification only; checkboxes updated)
+- Learnings: Phase 5 complete. Wave 2 fully done. Next is Wave 3: Phase 4 (Color Pipeline WGSL Shaders) — requires reading phase-04-color-shaders.md and its section file for tonemap algorithm constants.
+- Validation: npx tsc --noEmit (clean), npm run build (296 KB)

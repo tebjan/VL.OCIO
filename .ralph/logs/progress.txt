@@ -206,3 +206,9 @@
 - Files changed: (checkboxes only)
 - Learnings: Phase 7 complete. Wave 3 fully done (Phases 4, 6, 7 all checked). Next is Wave 4: Phase 8 (Preview + Readout) which requires Phases 4 + 6 + 7.
 - Validation: npx tsc --noEmit (clean), npm run build (299.22 KB, gzip 94.22 KB)
+
+### Iteration 34 — 2026-02-21 — 8.1: Preview2D component
+- Implemented: Created preview-blit.wgsl shader (fullscreen triangle, UV transform by zoom/pan, view exposure via exp2, linear-to-sRGB gamma, out-of-bounds dark border). Created Preview2D.tsx component with: own GPUCanvasContext + render pipeline on mount, ResizeObserver for canvas sizing, render-on-change via requestAnimationFrame, mouse wheel zoom centered on cursor (pixel stays fixed), click-drag pan with pointer capture, double-click fit-to-view (reset zoom=1, pan=0,0), "No image loaded" placeholder when stageTexture is null.
+- Files changed: src/shaders/generated/preview-blit.wgsl (new), src/components/Preview2D.tsx (new)
+- Learnings: Preview2D creates its own GPUCanvasContext separate from the Phase 1 hidden canvas. The shader uses unfilterable-float + non-filtering sampler (same pattern as pipeline stages) since stage textures are rgba32float. Zoom state update uses functional setZoom to avoid stale closures — pan adjustments happen inside the zoom updater. Container uses ResizeObserver with devicePixelRatio for crisp rendering.
+- Validation: npx tsc --noEmit (clean), npm run build (299.50 KB, gzip 94.27 KB)

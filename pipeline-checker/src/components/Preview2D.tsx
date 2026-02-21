@@ -1,0 +1,232 @@
+import { useRef, useState, useEffect, useCallback } from 'react';
+import previewBlitWGSL from '../shaders/generated/preview-blit.wgsl?raw';
+
+export interface Preview2DProps {
+  device: GPUDevice;
+  format: GPUTextureFormat;
+  stageTexture: GPUTexture | null;
+  viewExposure: number;
+}
+
+interface DragState {
+  x: number;
+  y: number;
+  panX: number;
+  panY: number;
+}
+
+export function Preview2D({ device, format, stageTexture, viewExposure }: Preview2DProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const gpuRef = useRef<{
+    ctx: GPUCanvasContext;
+    pipeline: GPURenderPipeline;
+    sampler: GPUSampler;
+    uniformBuffer: GPUBuffer;
+    bindGroupLayout: GPUBindGroupLayout;
+  } | null>(null);
+  const dragRef = useRef<DragState | null>(null);
+  const frameRef = useRef<number>(0);
+
+  const [zoom, setZoom] = useState(1.0);
+  const [panX, setPanX] = useState(0.0);
+  const [panY, setPanY] = useState(0.0);
+
+  // Initialize WebGPU pipeline on mount
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('webgpu') as GPUCanvasContext;
+    ctx.configure({ device, format, alphaMode: 'premultiplied' });
+
+    const bindGroupLayout = device.createBindGroupLayout({
+      entries: [
+        { binding: 0, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'unfilterable-float' } },
+        { binding: 1, visibility: GPUShaderStage.FRAGMENT, sampler: { type: 'non-filtering' } },
+        { binding: 2, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
+      ],
+    });
+
+    const shaderModule = device.createShaderModule({ code: previewBlitWGSL });
+
+    const pipeline = device.createRenderPipeline({
+      layout: device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] }),
+      vertex: { module: shaderModule, entryPoint: 'vs' },
+      fragment: {
+        module: shaderModule,
+        entryPoint: 'fs',
+        targets: [{ format }],
+      },
+      primitive: { topology: 'triangle-list' },
+    });
+
+    const sampler = device.createSampler({
+      magFilter: 'nearest',
+      minFilter: 'nearest',
+    });
+
+    const uniformBuffer = device.createBuffer({
+      size: 16, // 4 x f32: viewExposure, zoom, panX, panY
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+
+    gpuRef.current = { ctx, pipeline, sampler, uniformBuffer, bindGroupLayout };
+
+    return () => {
+      uniformBuffer.destroy();
+    };
+  }, [device, format]);
+
+  // Resize canvas to match container
+  useEffect(() => {
+    const container = containerRef.current;
+    const canvas = canvasRef.current;
+    if (!container || !canvas) return;
+
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        const w = Math.max(1, Math.floor(width * devicePixelRatio));
+        const h = Math.max(1, Math.floor(height * devicePixelRatio));
+        canvas.width = w;
+        canvas.height = h;
+      }
+    });
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
+
+  // Render frame when dependencies change
+  useEffect(() => {
+    const gpu = gpuRef.current;
+    if (!gpu || !stageTexture) return;
+
+    cancelAnimationFrame(frameRef.current);
+    frameRef.current = requestAnimationFrame(() => {
+      // Write uniforms
+      const data = new Float32Array([viewExposure, zoom, panX, panY]);
+      device.queue.writeBuffer(gpu.uniformBuffer, 0, data);
+
+      // Create bind group for current stage texture
+      const bindGroup = device.createBindGroup({
+        layout: gpu.bindGroupLayout,
+        entries: [
+          { binding: 0, resource: stageTexture.createView() },
+          { binding: 1, resource: gpu.sampler },
+          { binding: 2, resource: { buffer: gpu.uniformBuffer } },
+        ],
+      });
+
+      const encoder = device.createCommandEncoder();
+      const pass = encoder.beginRenderPass({
+        colorAttachments: [{
+          view: gpu.ctx.getCurrentTexture().createView(),
+          loadOp: 'clear',
+          storeOp: 'store',
+          clearValue: { r: 0.05, g: 0.05, b: 0.05, a: 1 },
+        }],
+      });
+      pass.setPipeline(gpu.pipeline);
+      pass.setBindGroup(0, bindGroup);
+      pass.draw(3);
+      pass.end();
+      device.queue.submit([encoder.finish()]);
+    });
+
+    return () => cancelAnimationFrame(frameRef.current);
+  }, [device, stageTexture, viewExposure, zoom, panX, panY]);
+
+  // Mouse wheel zoom (centered on cursor)
+  const handleWheel = useCallback((e: React.WheelEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const mouseU = (e.clientX - rect.left) / rect.width;
+    const mouseV = (e.clientY - rect.top) / rect.height;
+
+    setZoom((prevZoom) => {
+      const newZoom = Math.max(0.1, Math.min(100, prevZoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1)));
+      const du = (mouseU - 0.5) * (1 / prevZoom - 1 / newZoom);
+      const dv = (mouseV - 0.5) * (1 / prevZoom - 1 / newZoom);
+      setPanX((prev) => prev + du);
+      setPanY((prev) => prev + dv);
+      return newZoom;
+    });
+  }, []);
+
+  // Click-drag pan
+  const handlePointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    canvas.setPointerCapture(e.pointerId);
+    dragRef.current = { x: e.clientX, y: e.clientY, panX, panY };
+  }, [panX, panY]);
+
+  const handlePointerMove = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+    const drag = dragRef.current;
+    const canvas = canvasRef.current;
+    if (!drag || !canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const dx = (e.clientX - drag.x) / rect.width;
+    const dy = (e.clientY - drag.y) / rect.height;
+    setPanX(drag.panX - dx / zoom);
+    setPanY(drag.panY - dy / zoom);
+  }, [zoom]);
+
+  const handlePointerUp = useCallback(() => {
+    dragRef.current = null;
+  }, []);
+
+  // Double-click fit-to-view
+  const handleDoubleClick = useCallback(() => {
+    setZoom(1.0);
+    setPanX(0.0);
+    setPanY(0.0);
+  }, []);
+
+  return (
+    <div
+      ref={containerRef}
+      style={{
+        flex: 1,
+        position: 'relative',
+        overflow: 'hidden',
+        background: 'var(--color-bg, #0d0d0d)',
+      }}
+    >
+      <canvas
+        ref={canvasRef}
+        style={{
+          width: '100%',
+          height: '100%',
+          display: 'block',
+          cursor: dragRef.current ? 'grabbing' : 'grab',
+        }}
+        onWheel={handleWheel}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onDoubleClick={handleDoubleClick}
+      />
+      {!stageTexture && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            pointerEvents: 'none',
+          }}
+        >
+          <span style={{ color: 'var(--color-text-muted, #808080)', fontSize: '14px' }}>
+            No image loaded
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}

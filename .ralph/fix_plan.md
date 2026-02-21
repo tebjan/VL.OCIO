@@ -25,7 +25,7 @@ Each phase file references a detailed section file in `specs-pipeline-checker/se
 - [x] 3.1 `PipelineStage` interface (initialize/resize/encode/destroy)
 - [x] 3.2 `FragmentStage` — GPURenderPipeline from WGSL, fullscreen triangle, rgba32float target
 - [x] 3.3 `PipelineRenderer` — chains stages, disabled stages passthrough
-- [ ] 3.4 Render target management — rgba32float, RENDER_ATTACHMENT | TEXTURE_BINDING | COPY_SRC
+- [x] 3.4 Render target management — rgba32float, RENDER_ATTACHMENT | TEXTURE_BINDING | COPY_SRC
 - [ ] 3.5 `PipelineUniforms` — shared uniform buffer (~240 bytes), all stage params
 - [ ] 3.6 `PixelReadback` — single pixel read from any stage texture, 30Hz throttle
 - [ ] 3.7 Verify: `npm run build` passes

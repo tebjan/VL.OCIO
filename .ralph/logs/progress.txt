@@ -45,3 +45,9 @@
 - Files changed: pipeline-checker/src/pipeline/PipelineRenderer.ts (new)
 - Learnings: WebGPU TypeScript types require Float32Array<ArrayBuffer> (not Float32Array<ArrayBufferLike>) for writeBuffer compatibility. Fixed spec's setSize bug where this.width was set before the initialization check. The PipelineSettings typed interface comes in 3.5 — for now updateUniforms takes raw Float32Array.
 - Validation: npx tsc --noEmit (clean), npm run build (296 KB)
+
+### Iteration 9 — 2026-02-21 — 3.4: Render target management
+- Implemented: Created src/pipeline/TextureUtils.ts with shared utilities: BYTES_PER_PIXEL (16) and ROW_ALIGNMENT (256) constants, alignedBytesPerRow() for 256-byte readback alignment, copyAlignedToContiguous() for stripping row padding from mapped buffers, uploadFloat32Texture() for writing Float32Array RGBA data to GPUTexture (TEXTURE_BINDING | COPY_SRC | COPY_DST). Render target creation itself was already in FragmentStage (RENDER_ATTACHMENT | TEXTURE_BINDING | COPY_SRC).
+- Files changed: pipeline-checker/src/pipeline/TextureUtils.ts (new)
+- Learnings: writeTexture (upload) does NOT require 256-byte bytesPerRow alignment — only copyTextureToBuffer (readback) does. Upload uses width*16 directly. The upload texture needs COPY_DST (for upload) while stage render targets don't (they write via render passes).
+- Validation: npx tsc --noEmit (clean), npm run build (296 KB)

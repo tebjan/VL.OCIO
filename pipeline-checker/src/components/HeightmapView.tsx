@@ -10,6 +10,9 @@ import {
   NearestFilter,
   ClampToEdgeWrapping,
   LinearSRGBColorSpace,
+  SpriteNodeMaterial,
+  Mesh,
+  PlaneGeometry,
 } from 'three/webgpu';
 import {
   instancedArray,
@@ -66,6 +69,8 @@ class HeightmapScene {
   dsHeight = 0;
   /** Current instance count */
   instanceCount = 0;
+  /** Billboard sprite mesh (instanced via .count) */
+  private billboardMesh: Mesh | null = null;
 
   // Uniforms (updated from HeightmapSettings)
   private uDsWidth: ShaderNodeObject<UniformNode<number>> | null = null;
@@ -228,6 +233,50 @@ class HeightmapScene {
   }
 
   /**
+   * Create or rebuild the billboard sprite mesh that renders the heightmap.
+   * Must be called after setupCompute() so storage buffers exist.
+   * Uses SpriteNodeMaterial for camera-facing billboards reading
+   * position and color from the TSL compute storage buffers.
+   */
+  setupMesh(fullWidth: number, fullHeight: number): void {
+    if (!this.positionBuffer || !this.colorBuffer) return;
+
+    // Remove previous mesh
+    if (this.billboardMesh) {
+      this.scene.remove(this.billboardMesh);
+      this.billboardMesh.geometry.dispose();
+      (this.billboardMesh.material as SpriteNodeMaterial).dispose();
+      this.billboardMesh = null;
+    }
+
+    const aspect = fullHeight / fullWidth;
+    const cellW = 1.0 / this.dsWidth;
+    const cellD = aspect / this.dsHeight;
+
+    // SpriteNodeMaterial reads from compute storage buffers via .toAttribute()
+    // (.toAttribute() exists at runtime but not in @types/three)
+    const material = new SpriteNodeMaterial();
+    material.positionNode = (this.positionBuffer as any).toAttribute();
+    material.colorNode = (this.colorBuffer as any).toAttribute();
+    material.scaleNode = vec2(cellW, cellD);
+    material.depthWrite = true;
+    material.depthTest = true;
+    material.sizeAttenuation = true;
+    material.transparent = false;
+
+    // PlaneGeometry(1,1) is instanced by setting mesh.count
+    const geometry = new PlaneGeometry(1, 1);
+    const mesh = new Mesh(geometry, material);
+    // mesh.count enables instanced rendering in Three.js WebGPU
+    // (not in @types/three but exists at runtime)
+    (mesh as any).count = this.instanceCount;
+    mesh.frustumCulled = false;
+
+    this.billboardMesh = mesh;
+    this.scene.add(mesh);
+  }
+
+  /**
    * Update the source DataTexture with readback pixel data.
    * Called after CPU readback from the pipeline's raw GPUTexture.
    * @param data Float32Array of RGBA pixels (dsWidth * dsHeight * 4 floats)
@@ -279,10 +328,14 @@ class HeightmapScene {
 
   startRenderLoop(): void {
     if (this.disposed) return;
-    const loop = () => {
+    const loop = async () => {
       if (this.disposed) return;
       this.controls.update();
-      this.renderer.renderAsync(this.scene, this.camera);
+      // Run TSL compute to update position/color buffers, then render
+      if (this.computeNode) {
+        await this.renderer.computeAsync(this.computeNode);
+      }
+      await this.renderer.renderAsync(this.scene, this.camera);
       this.animationId = requestAnimationFrame(loop);
     };
     this.animationId = requestAnimationFrame(loop);
@@ -296,6 +349,10 @@ class HeightmapScene {
   dispose(): void {
     this.disposed = true;
     this.stopRenderLoop();
+    if (this.billboardMesh) {
+      this.billboardMesh.geometry.dispose();
+      (this.billboardMesh.material as SpriteNodeMaterial).dispose();
+    }
     this.controls?.dispose();
     this.sourceTexture?.dispose();
     this.renderer?.dispose();

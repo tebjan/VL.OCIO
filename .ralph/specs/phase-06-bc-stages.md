@@ -8,7 +8,7 @@
 ## Checklist
 
 - [x] 6.1 BCCompressStage — compute stage
-- [ ] 6.2 BCDecompressStage — hardware decode
+- [x] 6.2 BCDecompressStage — hardware decode
 - [ ] 6.3 BC metrics display in stage card
 - [ ] 6.4 Delta overlay (heat map)
 - [ ] 6.5 Graceful fallback when BC unavailable

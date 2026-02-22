@@ -32,6 +32,8 @@ export function Preview2D({ device, format, stageTexture, viewExposure, renderVe
   const [zoom, setZoom] = useState(1.0);
   const [panX, setPanX] = useState(0.0);
   const [panY, setPanY] = useState(0.0);
+  const [isDragging, setIsDragging] = useState(false);
+  const [canvasSize, setCanvasSize] = useState(0); // triggers re-render on resize
 
   // Initialize WebGPU pipeline on mount
   useEffect(() => {
@@ -93,6 +95,8 @@ export function Preview2D({ device, format, stageTexture, viewExposure, renderVe
         const h = Math.max(1, Math.floor(height * devicePixelRatio));
         canvas.width = w;
         canvas.height = h;
+        // Trigger re-render after resize so the preview updates to new dimensions
+        setCanvasSize(w + h);
       }
     });
     observer.observe(container);
@@ -140,26 +144,34 @@ export function Preview2D({ device, format, stageTexture, viewExposure, renderVe
     });
 
     return () => cancelAnimationFrame(frameRef.current);
-  }, [device, stageTexture, viewExposure, zoom, panX, panY, renderVersion]);
+  }, [device, stageTexture, viewExposure, zoom, panX, panY, renderVersion, canvasSize]);
 
-  // Mouse wheel zoom (centered on cursor)
-  const handleWheel = useCallback((e: React.WheelEvent<HTMLCanvasElement>) => {
-    e.preventDefault();
+  // Mouse wheel zoom (centered on cursor).
+  // Uses a native event listener with { passive: false } to ensure preventDefault()
+  // actually works. React's synthetic onWheel is passive in React 17+.
+  useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const rect = canvas.getBoundingClientRect();
-    const mouseU = (e.clientX - rect.left) / rect.width;
-    const mouseV = (e.clientY - rect.top) / rect.height;
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
 
-    setZoom((prevZoom) => {
-      const newZoom = Math.max(0.1, Math.min(100, prevZoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1)));
-      const du = (mouseU - 0.5) * (1 / prevZoom - 1 / newZoom);
-      const dv = (mouseV - 0.5) * (1 / prevZoom - 1 / newZoom);
-      setPanX((prev) => prev + du);
-      setPanY((prev) => prev + dv);
-      return newZoom;
-    });
+      const rect = canvas.getBoundingClientRect();
+      const mouseU = (e.clientX - rect.left) / rect.width;
+      const mouseV = (e.clientY - rect.top) / rect.height;
+
+      setZoom((prevZoom) => {
+        const newZoom = Math.max(0.1, Math.min(100, prevZoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1)));
+        const du = (mouseU - 0.5) * (1 / prevZoom - 1 / newZoom);
+        const dv = (mouseV - 0.5) * (1 / prevZoom - 1 / newZoom);
+        setPanX((prev) => prev + du);
+        setPanY((prev) => prev + dv);
+        return newZoom;
+      });
+    };
+
+    canvas.addEventListener('wheel', handleWheel, { passive: false });
+    return () => canvas.removeEventListener('wheel', handleWheel);
   }, []);
 
   // Click-drag pan
@@ -168,6 +180,7 @@ export function Preview2D({ device, format, stageTexture, viewExposure, renderVe
     if (!canvas) return;
     canvas.setPointerCapture(e.pointerId);
     dragRef.current = { x: e.clientX, y: e.clientY, panX, panY };
+    setIsDragging(true);
   }, [panX, panY]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -183,6 +196,7 @@ export function Preview2D({ device, format, stageTexture, viewExposure, renderVe
 
   const handlePointerUp = useCallback(() => {
     dragRef.current = null;
+    setIsDragging(false);
   }, []);
 
   // Double-click fit-to-view
@@ -208,9 +222,8 @@ export function Preview2D({ device, format, stageTexture, viewExposure, renderVe
           width: '100%',
           height: '100%',
           display: 'block',
-          cursor: dragRef.current ? 'grabbing' : 'grab',
+          cursor: isDragging ? 'grabbing' : 'grab',
         }}
-        onWheel={handleWheel}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}

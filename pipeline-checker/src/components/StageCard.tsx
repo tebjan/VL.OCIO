@@ -30,7 +30,7 @@ export function StageCard({ stage, isSelected, onSelect, onToggle, device, forma
 
   const bg = isSelected ? 'var(--surface-700)' : 'var(--surface-800)';
   const border = isSelected
-    ? '2px solid var(--surface-400)'
+    ? '2px solid var(--color-stage-active)'
     : '1px solid var(--surface-600)';
 
   return (

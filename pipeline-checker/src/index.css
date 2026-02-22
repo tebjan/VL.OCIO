@@ -25,6 +25,7 @@
   --color-accent: #4a4a4a;
   --color-accent-hover: #5a5a5a;
   --color-error: #cc4444;
+  --color-stage-active: #4488cc;
 
   /* Surface palette (neutral grays for color-accurate UI) */
   --surface-950: #0a0a0a;
@@ -40,10 +41,12 @@
 }
 
 /*
- * IMPORTANT: No saturated accent colors anywhere in the theme.
+ * IMPORTANT: Minimal saturated accent colors in the theme.
  * Saturated UI elements would bias the artist's color perception
  * when evaluating pipeline stage outputs. All interactive elements
- * use neutral grays.
+ * use neutral grays. Exception: --color-stage-active (#4488cc) is a
+ * muted steel-blue used only for the active stage border, kept
+ * desaturated enough to avoid biasing color perception.
  */
 
 html, body, #root {
@@ -74,4 +77,48 @@ html, body, #root {
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-accent-hover);
+}
+
+/* Range slider styling — dark theme */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--slider-gradient, var(--surface-700));
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--surface-300);
+  border: none;
+  margin-top: -5px;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  background: var(--surface-200);
+}
+
+input[type="range"]::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--slider-gradient, var(--surface-700));
+  border: none;
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--surface-300);
+  border: none;
 }

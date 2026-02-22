@@ -55,6 +55,7 @@ export function StageCard({ stage, isSelected, onSelect, onToggle, device, forma
       {/* Thumbnail area: 152x90 — clickable to select stage */}
       <button
         onClick={onSelect}
+        title={stage.description}
         style={{
           width: '152px',
           height: '90px',
@@ -140,7 +141,7 @@ export function StageCard({ stage, isSelected, onSelect, onToggle, device, forma
             }}
             onClick={(e) => e.stopPropagation()}
             style={{ accentColor: 'var(--surface-400)', flexShrink: 0 }}
-            title={stage.enabled ? 'Disable stage' : 'Enable stage'}
+            title={stage.enabled ? 'Disable this stage (bypass)' : 'Enable this stage'}
           />
         )}
       </div>

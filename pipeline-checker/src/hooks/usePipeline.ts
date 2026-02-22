@@ -72,6 +72,7 @@ export function usePipeline(): UsePipelineReturn {
       index: i,
       name: STAGE_NAMES[i].name,
       shortName: STAGE_NAMES[i].shortName,
+      description: STAGE_NAMES[i].description,
       enabled: state.enabled,
       available: !unavailableStages.has(i),
       thumbnail: null,  // set when PipelineRenderer provides stage textures

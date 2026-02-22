@@ -1,19 +1,26 @@
 import type { StageInfo } from '../pipeline/types/StageInfo';
+import { ThumbnailCanvas } from './ThumbnailCanvas';
 
 export interface StageCardProps {
   stage: StageInfo;
   isSelected: boolean;
   onSelect: () => void;
   onToggle: (enabled: boolean) => void;
+  device: GPUDevice | null;
+  format: GPUTextureFormat;
+  stageTexture: GPUTexture | null;
+  renderVersion?: number;
 }
 
 /**
  * A single pipeline stage card for the filmstrip.
  * Fixed size: 160x120px (160x90 thumbnail + 160x30 label row).
+ * Renders a live GPU thumbnail of the stage's output texture.
  */
-export function StageCard({ stage, isSelected, onSelect, onToggle }: StageCardProps) {
+export function StageCard({ stage, isSelected, onSelect, onToggle, device, format, stageTexture, renderVersion }: StageCardProps) {
   const isAvailable = stage.available !== false;
   const isEnabled = stage.enabled && isAvailable;
+  const hasThumbnail = device && stageTexture && isAvailable;
 
   const opacity = !isAvailable ? 0.4
     : !isEnabled && isSelected ? 0.6
@@ -60,25 +67,38 @@ export function StageCard({ stage, isSelected, onSelect, onToggle }: StageCardPr
           overflow: 'hidden',
         }}
       >
-        {!isAvailable ? (
+        {hasThumbnail ? (
+          <ThumbnailCanvas
+            device={device}
+            format={format}
+            texture={stageTexture}
+            width={152}
+            height={90}
+            renderVersion={renderVersion}
+          />
+        ) : !isAvailable ? (
           <span style={{ color: 'var(--surface-500)', fontSize: '11px' }}>
             Not Available
-          </span>
-        ) : !isEnabled ? (
-          /* Bypass arrow overlay on disabled stage */
-          <span
-            style={{
-              color: 'var(--surface-500)',
-              fontSize: '32px',
-              opacity: 0.6,
-              userSelect: 'none',
-            }}
-          >
-            ↷
           </span>
         ) : (
           <span style={{ color: 'var(--surface-600)', fontSize: '11px' }}>
             {stage.shortName}
+          </span>
+        )}
+
+        {/* Bypass overlay for disabled stages */}
+        {isAvailable && !isEnabled && (
+          <span
+            style={{
+              position: 'absolute',
+              color: 'var(--surface-500)',
+              fontSize: '32px',
+              opacity: 0.6,
+              userSelect: 'none',
+              pointerEvents: 'none',
+            }}
+          >
+            &darr;
           </span>
         )}
       </div>

@@ -79,6 +79,13 @@ export function Preview2D({ device, format, stageTexture, viewExposure, renderVe
     const canvas = canvasRef.current;
     if (!container || !canvas) return;
 
+    // Set initial size synchronously so the first render has valid dimensions
+    const rect = container.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) {
+      canvas.width = Math.max(1, Math.floor(rect.width * devicePixelRatio));
+      canvas.height = Math.max(1, Math.floor(rect.height * devicePixelRatio));
+    }
+
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
         const { width, height } = entry.contentRect;
@@ -99,6 +106,10 @@ export function Preview2D({ device, format, stageTexture, viewExposure, renderVe
 
     cancelAnimationFrame(frameRef.current);
     frameRef.current = requestAnimationFrame(() => {
+      // Guard: skip render if canvas has zero dimensions (ResizeObserver hasn't fired yet)
+      const canvas = canvasRef.current;
+      if (!canvas || canvas.width === 0 || canvas.height === 0) return;
+
       // Write uniforms
       const data = new Float32Array([viewExposure, zoom, panX, panY]);
       device.queue.writeBuffer(gpu.uniformBuffer, 0, data);

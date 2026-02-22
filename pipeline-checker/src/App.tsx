@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { initWebGPU, type GPUContext } from './gpu/WebGPUContext';
 import { DropZone } from './components/DropZone';
 import { WebGPUCanvas } from './components/WebGPUCanvas';
@@ -170,22 +170,35 @@ export default function App() {
     setRenderVersion((v) => v + 1);
   }, [state, pipeline.settings, pipeline.stages, viewExposure]);
 
-  // Get the output texture for the currently selected filmstrip stage
-  const getSelectedTexture = (): GPUTexture | null => {
+  // Get the output texture for a given UI stage index
+  const getStageTexture = useCallback((stageIndex: number): GPUTexture | null => {
     if (state.kind !== 'loaded') return null;
     const renderer = rendererRef.current;
     if (!renderer) return state.sourceTexture;
 
     // UI stages 0-2 (EXR Load, BC Compress, BC Decompress): show source texture
-    if (pipeline.selectedStageIndex < 3) {
+    if (stageIndex < 3) {
       return state.sourceTexture;
     }
 
     // UI stages 3-8 map to renderer stages 0-5
     // UI stage 9 (Final Display) = last renderer stage output
-    const rendererIndex = Math.min(pipeline.selectedStageIndex - 3, renderer.getStages().length - 1);
+    const rendererIndex = Math.min(stageIndex - 3, renderer.getStages().length - 1);
     return renderer.getStageOutput(rendererIndex) ?? state.sourceTexture;
+  }, [state]);
+
+  // Get the output texture for the currently selected filmstrip stage
+  const getSelectedTexture = (): GPUTexture | null => {
+    return getStageTexture(pipeline.selectedStageIndex);
   };
+
+  // Compute per-stage textures for filmstrip thumbnails
+  // Recomputed when renderVersion changes (after pipeline render)
+  const stageTextures = useMemo((): (GPUTexture | null)[] => {
+    if (state.kind !== 'loaded') return [];
+    return pipeline.stages.map((_, i) => getStageTexture(i));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state, renderVersion, pipeline.stages, getStageTexture]);
 
   return (
     <div className="w-full h-full flex flex-col" style={{ background: 'var(--color-bg)' }}>
@@ -236,6 +249,10 @@ export default function App() {
             selectedIndex={pipeline.selectedStageIndex}
             onSelect={pipeline.selectStage}
             onToggle={pipeline.toggleStage}
+            device={state.gpu.device}
+            format={state.gpu.format}
+            stageTextures={stageTextures}
+            renderVersion={renderVersion}
           />
 
           {/* Main content: preview + controls panel side-by-side */}

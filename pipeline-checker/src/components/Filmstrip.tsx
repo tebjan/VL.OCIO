@@ -6,9 +6,14 @@ export interface FilmstripProps {
   selectedIndex: number;
   onSelect: (index: number) => void;
   onToggle: (index: number, enabled: boolean) => void;
+  device: GPUDevice | null;
+  format: GPUTextureFormat;
+  /** Per-stage output textures for thumbnail rendering (indexed by stage index). */
+  stageTextures: (GPUTexture | null)[];
+  renderVersion?: number;
 }
 
-export function Filmstrip({ stages, selectedIndex, onSelect, onToggle }: FilmstripProps) {
+export function Filmstrip({ stages, selectedIndex, onSelect, onToggle, device, format, stageTextures, renderVersion }: FilmstripProps) {
   return (
     <div
       style={{
@@ -35,7 +40,7 @@ export function Filmstrip({ stages, selectedIndex, onSelect, onToggle }: Filmstr
                 flexShrink: 0,
               }}
             >
-              ›
+              &rsaquo;
             </span>
           )}
 
@@ -44,6 +49,10 @@ export function Filmstrip({ stages, selectedIndex, onSelect, onToggle }: Filmstr
             isSelected={i === selectedIndex}
             onSelect={() => onSelect(i)}
             onToggle={(enabled) => onToggle(i, enabled)}
+            device={device}
+            format={format}
+            stageTexture={stageTextures[i] ?? null}
+            renderVersion={renderVersion}
           />
         </div>
       ))}

@@ -109,6 +109,11 @@ export default function App() {
       };
 
       pipeline.selectStage(STAGE_FOR_FILE_TYPE[fileType]);
+      if (fileType === 'dds') {
+        pipeline.setStageAvailability([0, 1], false);
+      } else {
+        pipeline.setStageAvailability([0, 1], true);
+      }
       setState({ kind: 'loaded', gpu, sourceTexture, metadata });
     },
     [pipeline],
@@ -194,6 +199,7 @@ export default function App() {
         };
 
         pipeline.selectStage(STAGE_FOR_FILE_TYPE['dds']);
+        pipeline.setStageAvailability([0, 1], false);
         setState({ kind: 'loaded', gpu, sourceTexture, metadata });
       } catch (err) {
         console.error(`[App] DDS load error for "${fileName}":`, err);

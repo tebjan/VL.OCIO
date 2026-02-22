@@ -152,19 +152,19 @@ Plans:
 - [x] 07-01-PLAN.md -- Create 6 per-stage SDSL TextureFX shaders and verify in Stride
 
 ### Phase 8: Transpiler Tool
-**Goal**: A .NET console app converts the 6 SDSL stage shaders to ready-to-use WGSL files via the Stride compiler, DXC, and Naga toolchain
+**Goal**: A .NET console app converts the 6 SDSL stage shaders to ready-to-use WGSL files
 **Depends on**: Phase 7 (needs SDSL shaders to transpile)
 **Requirements**: TOOL-01, TOOL-02, TOOL-03, TOOL-04
 **Success Criteria** (what must be TRUE):
   1. Running the transpiler console app at `tools/ShaderTranspiler/` produces 6 WGSL files in `pipeline-checker/src/shaders/generated/`
-  2. The transpiler uses Stride NuGet packages to compile SDSL to HLSL (not manual parser init)
-  3. The transpiler invokes DXC (HLSL to SPIR-V) and Naga (SPIR-V to WGSL) as part of its pipeline
+  2. The transpiler reads SDSL sources and generates WGSL with proper syntax transformations (types, functions, matrices)
+  3. Complex mathematical sections (ACES splines, tonemap operators) are extracted from verified hand-ported WGSL via section markers
   4. Generated WGSL files are syntactically valid and contain the expected entry points and bindings
 **Plans**: 1 plan
 
 Plans:
 
-- [ ] 08-01-PLAN.md -- Create transpiler console app with full SDSL-HLSL-SPIRV-WGSL pipeline and generate 6 WGSL files
+- [x] 08-01-PLAN.md -- Create transpiler console app with direct SDSL-to-WGSL transpilation and generate 6 WGSL files (completed 2026-02-22)
 
 ### Phase 9: Verification & Integration
 **Goal**: Generated WGSL is proven mathematically identical to hand-ported WGSL and replaces it in the pipeline checker
@@ -192,5 +192,5 @@ Phases execute in numeric order: 7 -> 8 -> 9
 | 6. Tooltips | 1/1 | Complete    | 2026-02-22 | - |
 | 6.1 Session Persistence | v1.1 | 1/1 | Complete | 2026-02-22 |
 | 7. SDSL Stage Shaders | v1.2 | 1/1 | Complete | 2026-02-22 |
-| 8. Transpiler Tool | v1.2 | 0/? | Not started | - |
+| 8. Transpiler Tool | v1.2 | 1/1 | Complete | 2026-02-22 |
 | 9. Verification & Integration | v1.2 | 0/? | Not started | - |

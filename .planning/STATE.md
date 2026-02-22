@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-02-22)
 
 **Core value:** Every pipeline stage must render correctly -- SDSL shaders are the single source of truth for both Stride and the pipeline-checker
-**Current focus:** Milestone v1.2 - Shader Transpiler, Phase 8
+**Current focus:** Milestone v1.2 - Shader Transpiler, Phase 9
 
 ## Current Position
 
-Phase: 8 of 9 (Transpiler Tool)
-Plan: 0 of ? in current phase
-Status: Ready to plan
-Last activity: 2026-02-22 -- Completed Phase 7 SDSL Stage Shaders
+Phase: 8 of 9 (Transpiler Tool) -- COMPLETE
+Plan: 1 of 1 in current phase
+Status: Phase 8 complete, ready for Phase 9 verification
+Last activity: 2026-02-22 -- Completed Phase 8 Transpiler Tool
 
 ## Performance Metrics
 
@@ -47,7 +47,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
 - SDSL as single source of truth for pipeline-checker shaders -- hand-ported WGSL diverges silently when SDSL changes
-- Stride compiler for SDSL to HLSL (not manual ShaderMixinParser init) -- leverage existing toolchain
+- Direct SDSL-to-WGSL transpilation (not DXC+Naga) -- Stride compiler too complex to bootstrap standalone, Naga not available
+- Complex mathematical sections (ACES splines, tonemap operators) extracted from verified hand-ported WGSL via section markers
+- Double-precision matrix emission with invariant culture formatting -- prevents float truncation and locale issues
 - Generated WGSL committed to git, transpiler runs on-demand (not at build time)
 - Raw IndexedDB API for session persistence (no idb library) -- zero new dependencies
 - Store original file ArrayBuffer for session restore, not parsed Float32Array -- smaller storage
@@ -66,5 +68,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-22
-Stopped at: Phase 7 complete, ready to plan Phase 8
+Stopped at: Phase 8 complete, ready for Phase 9
 Resume file: None

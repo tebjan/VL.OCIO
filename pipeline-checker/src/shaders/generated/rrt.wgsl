@@ -7,14 +7,15 @@
 // 12 tonemap operators: None, ACES Fit, ACES 1.3, ACES 2.0, AgX, Gran Turismo,
 //   Uncharted 2, Khronos PBR, Lottes, Reinhard, Reinhard Extended, Hejl-Burgess.
 
+
 // ============================================================================
 // Uniforms — reads from shared PipelineUniforms buffer
 // ============================================================================
 
 struct Uniforms {
-    // Stage 4 (not used by RRT)
+    // Stage 4 (not used)
     _inputSpace: i32,             // byte 0
-    // Stage 5 scalars (not used by RRT)
+    // Stage 5 scalars (not used)
     _gradingSpace: i32,           // byte 4
     _gradeExposure: f32,          // byte 8
     _contrast: f32,               // byte 12
@@ -26,7 +27,7 @@ struct Uniforms {
     _vibrance: f32,               // byte 36
     _pad0a: f32,                  // byte 40
     _pad0b: f32,                  // byte 44
-    // Stage 5 vec3 fields (not used by RRT)
+    // Stage 5 vec3 fields (not used)
     _lift: vec3<f32>,             // byte 48
     _pad1: f32,                   // byte 60
     _gamma: vec3<f32>,            // byte 64
@@ -92,6 +93,573 @@ const DANIELE_R_HIT_MIN: f32 = 128.0;
 const DANIELE_R_HIT_MAX: f32 = 896.0;
 
 // ============================================================================
+// Gamut Matrices — ALL TRANSPOSED from SDSL row-major to WGSL column-major
+// ============================================================================
+
+// Rec.709 → AP1 (includes D65→D60 Bradford)
+const Rec709_to_AP1 = mat3x3<f32>(
+    vec3<f32>( 0.6131324,  0.0701934,  0.0206155),
+    vec3<f32>( 0.3395381,  0.9163539,  0.1095697),
+    vec3<f32>( 0.0473296,  0.0134527,  0.8698148)
+);
+
+// AP1 → Rec.709 (includes D60→D65 Bradford)
+const AP1_to_Rec709 = mat3x3<f32>(
+    vec3<f32>( 1.7048586, -0.1300768, -0.0239640),
+    vec3<f32>(-0.6217160,  1.1407357, -0.1289755),
+    vec3<f32>(-0.0831426, -0.0106589,  1.1529395)
+);
+
+// AP0 → AP1
+const ACES_AP0_to_AP1 = mat3x3<f32>(
+    vec3<f32>( 1.4514393161, -0.0765537734,  0.0083161484),
+    vec3<f32>(-0.2365107469,  1.1762296998, -0.0060324498),
+    vec3<f32>(-0.2149285693, -0.0996759264,  0.9977163014)
+);
+
+// AP1 → AP0
+const ACES_AP1_to_AP0 = mat3x3<f32>(
+    vec3<f32>( 0.6954522414,  0.0447945634, -0.0055258826),
+    vec3<f32>( 0.1406786965,  0.8596711185,  0.0040252103),
+    vec3<f32>( 0.1638690622,  0.0955343182,  1.0015006723)
+);
+
+// Quadratic B-spline basis matrix
+const ACES_SPLINE_M = mat3x3<f32>(
+    vec3<f32>( 0.5, -1.0,  0.5),
+    vec3<f32>(-1.0,  1.0,  0.5),
+    vec3<f32>( 0.5,  0.0,  0.0)
+);
+
+// RRT desaturation (factor 0.96)
+const RRT_SAT_MAT = mat3x3<f32>(
+    vec3<f32>(0.9708890, 0.0108892, 0.0108892),
+    vec3<f32>(0.0269633, 0.9869630, 0.0269633),
+    vec3<f32>(0.00214758, 0.00214758, 0.96214800)
+);
+
+// ODT desaturation (factor 0.93)
+const ODT_SAT_MAT = mat3x3<f32>(
+    vec3<f32>(0.949056, 0.019056, 0.019056),
+    vec3<f32>(0.0471857, 0.9771860, 0.0471857),
+    vec3<f32>(0.00375827, 0.00375827, 0.93375800)
+);
+
+// ACES Fit: combined sRGB→AP1 + RRT_SAT (BT.709 path)
+const ACESInputMat = mat3x3<f32>(
+    vec3<f32>(0.59719, 0.07600, 0.02840),
+    vec3<f32>(0.35458, 0.90834, 0.13383),
+    vec3<f32>(0.04823, 0.01566, 0.83777)
+);
+
+// ACES Fit: combined ODT_SAT + AP1→sRGB (BT.709 path)
+const ACESOutputMat = mat3x3<f32>(
+    vec3<f32>( 1.60475, -0.10208, -0.00327),
+    vec3<f32>(-0.53108,  1.10813, -0.07276),
+    vec3<f32>(-0.07367, -0.00605,  1.07602)
+);
+
+// AgX: BT.709 → AgX primaries
+const agx_mat = mat3x3<f32>(
+    vec3<f32>(0.842479062253094,  0.0423282422610123, 0.0423756549057051),
+    vec3<f32>(0.0784335999999992, 0.878468636469772,  0.0784336),
+    vec3<f32>(0.0792237451477643, 0.0791661274605434, 0.879142973793104)
+);
+
+// AgX: AgX primaries → BT.709
+const agx_mat_inv = mat3x3<f32>(
+    vec3<f32>( 1.19687900512017,   -0.0980208811401368, -0.0990297440797205),
+    vec3<f32>(-0.0528968517574562,  1.15190312990417,   -0.0989611768448433),
+    vec3<f32>(-0.0529716355144438, -0.0980434501171241,  1.15107367264116)
+);
+
+// ============================================================================
+// ACES 1.3 Helper Functions
+// ============================================================================
+
+fn aces_rgb_2_saturation(rgb: vec3<f32>) -> f32 {
+    let mi = min(min(rgb.r, rgb.g), rgb.b);
+    let ma = max(max(rgb.r, rgb.g), rgb.b);
+    return (max(ma, 1e-4) - max(mi, 1e-4)) / max(ma, 1e-2);
+}
+
+fn aces_rgb_2_yc(rgb: vec3<f32>) -> f32 {
+    let ycRadiusWeight = 1.75;
+    let k = max(rgb.b * (rgb.b - rgb.g) + rgb.g * (rgb.g - rgb.r) + rgb.r * (rgb.r - rgb.b), 0.0);
+    return (rgb.b + rgb.g + rgb.r + ycRadiusWeight * sqrt(k)) / 3.0;
+}
+
+fn aces_rgb_2_hue(rgb: vec3<f32>) -> f32 {
+    var hue: f32;
+    if (rgb.r == rgb.g && rgb.g == rgb.b) {
+        hue = 0.0;
+    } else {
+        hue = (180.0 / 3.14159265) * atan2(
+            sqrt(3.0) * (rgb.g - rgb.b),
+            2.0 * rgb.r - rgb.g - rgb.b
+        );
+    }
+    if (hue < 0.0) { hue += 360.0; }
+    return hue;
+}
+
+fn aces_center_hue(hue: f32, centerH: f32) -> f32 {
+    var h = hue - centerH;
+    if (h < -180.0) { h += 360.0; }
+    else if (h > 180.0) { h -= 360.0; }
+    return h;
+}
+
+fn aces_sigmoid_shaper(x: f32) -> f32 {
+    let t = max(1.0 - abs(x / 2.0), 0.0);
+    return (1.0 + sign(x) * (1.0 - t * t)) / 2.0;
+}
+
+fn aces_glow_fwd(ycIn: f32, glowGainIn: f32, glowMid: f32) -> f32 {
+    if (ycIn <= 2.0 / 3.0 * glowMid) {
+        return glowGainIn;
+    } else if (ycIn >= 2.0 * glowMid) {
+        return 0.0;
+    } else {
+        return glowGainIn * (glowMid / ycIn - 0.5);
+    }
+}
+
+// ============================================================================
+// ACES 1.3 Segmented Spline C5 (RRT tone curve)
+// ============================================================================
+
+fn aces_spline_c5_fwd(x: f32) -> f32 {
+    var coefsLow = array<f32, 6>(
+        -4.0000000000, -4.0000000000, -3.1573765773,
+        -0.4852499958,  1.8477324706,  1.8477324706
+    );
+    var coefsHigh = array<f32, 6>(
+        -0.7185482425,  2.0810307172,  3.6681241237,
+         4.0000000000,  4.0000000000,  4.0000000000
+    );
+    let logMinX = log10_f(0.18 * exp2(-15.0));
+    let logMidX = log10_f(0.18);
+    let logMaxX = log10_f(0.18 * exp2(18.0));
+
+    let logx = log10_f(max(x, 1e-10));
+    var logy: f32;
+
+    if (logx <= logMinX) {
+        logy = log10_f(0.0001);
+    } else if (logx < logMidX) {
+        let knot_coord = 3.0 * (logx - logMinX) / (logMidX - logMinX);
+        let j = min(i32(knot_coord), 3);
+        let t = knot_coord - f32(j);
+        let cf = vec3<f32>(coefsLow[j], coefsLow[j + 1], coefsLow[j + 2]);
+        logy = dot(vec3<f32>(t * t, t, 1.0), ACES_SPLINE_M * cf);
+    } else if (logx < logMaxX) {
+        let knot_coord = 3.0 * (logx - logMidX) / (logMaxX - logMidX);
+        let j = min(i32(knot_coord), 3);
+        let t = knot_coord - f32(j);
+        let cf = vec3<f32>(coefsHigh[j], coefsHigh[j + 1], coefsHigh[j + 2]);
+        logy = dot(vec3<f32>(t * t, t, 1.0), ACES_SPLINE_M * cf);
+    } else {
+        logy = log10_f(10000.0);
+    }
+
+    return pow10(logy);
+}
+
+// ============================================================================
+// ACES 1.3 RRT
+// ============================================================================
+
+// ACES 1.3 RRT
+const RRT_GLOW_GAIN: f32 = 0.05;
+const RRT_GLOW_MID: f32 = 0.08;
+const RRT_RED_SCALE: f32 = 0.82;
+const RRT_RED_PIVOT: f32 = 0.03;
+const RRT_RED_HUE: f32 = 0.0;
+const RRT_RED_WIDTH: f32 = 135.0;
+
+// ============================================================================
+// ACES 2.0 Daniele Evo Tonescale
+// ============================================================================
+
+// Gamut Matrices — ALL TRANSPOSED from SDSL row-major to WGSL column-major
+// ============================================================================
+
+// Rec.709 → AP1 (includes D65→D60 Bradford)
+const Rec709_to_AP1 = mat3x3<f32>(
+    vec3<f32>( 0.6131324,  0.0701934,  0.0206155),
+    vec3<f32>( 0.3395381,  0.9163539,  0.1095697),
+    vec3<f32>( 0.0473296,  0.0134527,  0.8698148)
+);
+
+// AP1 → Rec.709 (includes D60→D65 Bradford)
+const AP1_to_Rec709 = mat3x3<f32>(
+    vec3<f32>( 1.7048590, -0.1300768, -0.0239640),
+    vec3<f32>(-0.6217160,  1.1407360, -0.1289755),
+    vec3<f32>(-0.0831426, -0.0106589,  1.1529400)
+);
+
+// AP0 → AP1
+const ACES_AP0_to_AP1 = mat3x3<f32>(
+    vec3<f32>( 1.4514390, -0.0765538,  0.0083161),
+    vec3<f32>(-0.2365108,  1.1762300, -0.0060325),
+    vec3<f32>(-0.2149286, -0.0996759,  0.9977163)
+);
+
+// AP1 → AP0
+const ACES_AP1_to_AP0 = mat3x3<f32>(
+    vec3<f32>( 0.6954522,  0.0447946, -0.0055259),
+    vec3<f32>( 0.1406787,  0.8596711,  0.0040252),
+    vec3<f32>( 0.1638691,  0.0955343,  1.0015010)
+);
+
+// Quadratic B-spline basis matrix
+const ACES_SPLINE_M = mat3x3<f32>(
+    vec3<f32>( 0.5, -1.0,  0.5),
+    vec3<f32>(-1.0,  1.0,  0.5),
+    vec3<f32>( 0.5,  0.0,  0.0)
+);
+
+// RRT desaturation (factor 0.96)
+const RRT_SAT_MAT = mat3x3<f32>(
+    vec3<f32>(0.9708890, 0.0108892, 0.0108892),
+    vec3<f32>(0.0269633, 0.9869630, 0.0269633),
+    vec3<f32>(0.00214758, 0.00214758, 0.96214800)
+);
+
+// ODT desaturation (factor 0.93)
+const ODT_SAT_MAT = mat3x3<f32>(
+    vec3<f32>(0.949056, 0.019056, 0.019056),
+    vec3<f32>(0.0471857, 0.9771860, 0.0471857),
+    vec3<f32>(0.00375827, 0.00375827, 0.93375800)
+);
+
+// ACES Fit: combined sRGB→AP1 + RRT_SAT (BT.709 path)
+const ACESInputMat = mat3x3<f32>(
+    vec3<f32>(0.59719, 0.07600, 0.02840),
+    vec3<f32>(0.35458, 0.90834, 0.13383),
+    vec3<f32>(0.04823, 0.01566, 0.83777)
+);
+
+// ACES Fit: combined ODT_SAT + AP1→sRGB (BT.709 path)
+const ACESOutputMat = mat3x3<f32>(
+    vec3<f32>( 1.60475, -0.10208, -0.00327),
+    vec3<f32>(-0.53108,  1.10813, -0.07276),
+    vec3<f32>(-0.07367, -0.00605,  1.07602)
+);
+
+// AgX: BT.709 → AgX primaries
+const agx_mat = mat3x3<f32>(
+    vec3<f32>(0.842479062253094,  0.0423282422610123, 0.0423756549057051),
+    vec3<f32>(0.0784335999999992, 0.878468636469772,  0.0784336),
+    vec3<f32>(0.0792237451477643, 0.0791661274605434, 0.879142973793104)
+);
+
+// AgX: AgX primaries → BT.709
+const agx_mat_inv = mat3x3<f32>(
+    vec3<f32>( 1.19687900512017,   -0.0980208811401368, -0.0990297440797205),
+    vec3<f32>(-0.0528968517574562,  1.15190312990417,   -0.0989611768448433),
+    vec3<f32>(-0.0529716355144438, -0.0980434501171241,  1.15107367264116)
+);
+
+// ============================================================================
+// ACES 1.3 Helper Functions
+// ============================================================================
+
+fn aces_rgb_2_saturation(rgb: vec3<f32>) -> f32 {
+    let mi = min(min(rgb.r, rgb.g), rgb.b);
+    let ma = max(max(rgb.r, rgb.g), rgb.b);
+    return (max(ma, 1e-4) - max(mi, 1e-4)) / max(ma, 1e-2);
+}
+
+fn aces_rgb_2_yc(rgb: vec3<f32>) -> f32 {
+    let ycRadiusWeight = 1.75;
+    let k = max(rgb.b * (rgb.b - rgb.g) + rgb.g * (rgb.g - rgb.r) + rgb.r * (rgb.r - rgb.b), 0.0);
+    return (rgb.b + rgb.g + rgb.r + ycRadiusWeight * sqrt(k)) / 3.0;
+}
+
+fn aces_rgb_2_hue(rgb: vec3<f32>) -> f32 {
+    var hue: f32;
+    if (rgb.r == rgb.g && rgb.g == rgb.b) {
+        hue = 0.0;
+    } else {
+        hue = (180.0 / 3.14159265) * atan2(
+            sqrt(3.0) * (rgb.g - rgb.b),
+            2.0 * rgb.r - rgb.g - rgb.b
+        );
+    }
+    if (hue < 0.0) { hue += 360.0; }
+    return hue;
+}
+
+fn aces_center_hue(hue: f32, centerH: f32) -> f32 {
+    var h = hue - centerH;
+    if (h < -180.0) { h += 360.0; }
+    else if (h > 180.0) { h -= 360.0; }
+    return h;
+}
+
+fn aces_sigmoid_shaper(x: f32) -> f32 {
+    let t = max(1.0 - abs(x / 2.0), 0.0);
+    return (1.0 + sign(x) * (1.0 - t * t)) / 2.0;
+}
+
+fn aces_glow_fwd(ycIn: f32, glowGainIn: f32, glowMid: f32) -> f32 {
+    if (ycIn <= 2.0 / 3.0 * glowMid) {
+        return glowGainIn;
+    } else if (ycIn >= 2.0 * glowMid) {
+        return 0.0;
+    } else {
+        return glowGainIn * (glowMid / ycIn - 0.5);
+    }
+}
+
+// ============================================================================
+// ACES 1.3 Segmented Spline C5 (RRT tone curve)
+// ============================================================================
+
+fn aces_spline_c5_fwd(x: f32) -> f32 {
+    var coefsLow = array<f32, 6>(
+        -4.0000000000, -4.0000000000, -3.1573765773,
+        -0.4852499958,  1.8477324706,  1.8477324706
+    );
+    var coefsHigh = array<f32, 6>(
+        -0.7185482425,  2.0810307172,  3.6681241237,
+         4.0000000000,  4.0000000000,  4.0000000000
+    );
+    let logMinX = log10_f(0.18 * exp2(-15.0));
+    let logMidX = log10_f(0.18);
+    let logMaxX = log10_f(0.18 * exp2(18.0));
+
+    let logx = log10_f(max(x, 1e-10));
+    var logy: f32;
+
+    if (logx <= logMinX) {
+        logy = log10_f(0.0001);
+    } else if (logx < logMidX) {
+        let knot_coord = 3.0 * (logx - logMinX) / (logMidX - logMinX);
+        let j = min(i32(knot_coord), 3);
+        let t = knot_coord - f32(j);
+        let cf = vec3<f32>(coefsLow[j], coefsLow[j + 1], coefsLow[j + 2]);
+        logy = dot(vec3<f32>(t * t, t, 1.0), ACES_SPLINE_M * cf);
+    } else if (logx < logMaxX) {
+        let knot_coord = 3.0 * (logx - logMidX) / (logMaxX - logMidX);
+        let j = min(i32(knot_coord), 3);
+        let t = knot_coord - f32(j);
+        let cf = vec3<f32>(coefsHigh[j], coefsHigh[j + 1], coefsHigh[j + 2]);
+        logy = dot(vec3<f32>(t * t, t, 1.0), ACES_SPLINE_M * cf);
+    } else {
+        logy = log10_f(10000.0);
+    }
+
+    return pow10(logy);
+}
+
+// ============================================================================
+// ACES 1.3 RRT
+// ============================================================================
+
+// ACES 1.3 RRT
+const RRT_GLOW_GAIN: f32 = 0.05;
+const RRT_GLOW_MID: f32 = 0.08;
+const RRT_RED_SCALE: f32 = 0.82;
+const RRT_RED_PIVOT: f32 = 0.03;
+const RRT_RED_HUE: f32 = 0.0;
+const RRT_RED_WIDTH: f32 = 135.0;
+
+// ============================================================================
+// ACES 2.0 Daniele Evo Tonescale
+// ============================================================================
+
+// Gamut Matrices — ALL TRANSPOSED from SDSL row-major to WGSL column-major
+// ============================================================================
+
+// Rec.709 → AP1 (includes D65→D60 Bradford)
+const Rec709_to_AP1 = mat3x3<f32>(
+    vec3<f32>( 0,6131324,  0,0701934,  0,0206155),
+    vec3<f32>( 0,3395381,  0,9163539,  0,1095697),
+    vec3<f32>( 0,0473296,  0,0134527,  0,8698148)
+);
+
+// AP1 → Rec.709 (includes D60→D65 Bradford)
+const AP1_to_Rec709 = mat3x3<f32>(
+    vec3<f32>( 1,7048590, -0,1300768, -0,0239640),
+    vec3<f32>(-0,6217160,  1,1407360, -0,1289755),
+    vec3<f32>(-0,0831426, -0,0106589,  1,1529400)
+);
+
+// AP0 → AP1
+const ACES_AP0_to_AP1 = mat3x3<f32>(
+    vec3<f32>( 1,4514390, -0,0765538,  0,0083161),
+    vec3<f32>(-0,2365108,  1,1762300, -0,0060325),
+    vec3<f32>(-0,2149286, -0,0996759,  0,9977163)
+);
+
+// AP1 → AP0
+const ACES_AP1_to_AP0 = mat3x3<f32>(
+    vec3<f32>( 0,6954522,  0,0447946, -0,0055259),
+    vec3<f32>( 0,1406787,  0,8596711,  0,0040252),
+    vec3<f32>( 0,1638691,  0,0955343,  1,0015010)
+);
+
+// Quadratic B-spline basis matrix
+const ACES_SPLINE_M = mat3x3<f32>(
+    vec3<f32>( 0.5, -1.0,  0.5),
+    vec3<f32>(-1.0,  1.0,  0.5),
+    vec3<f32>( 0.5,  0.0,  0.0)
+);
+
+// RRT desaturation (factor 0.96)
+const RRT_SAT_MAT = mat3x3<f32>(
+    vec3<f32>(0.9708890, 0.0108892, 0.0108892),
+    vec3<f32>(0.0269633, 0.9869630, 0.0269633),
+    vec3<f32>(0.00214758, 0.00214758, 0.96214800)
+);
+
+// ODT desaturation (factor 0.93)
+const ODT_SAT_MAT = mat3x3<f32>(
+    vec3<f32>(0.949056, 0.019056, 0.019056),
+    vec3<f32>(0.0471857, 0.9771860, 0.0471857),
+    vec3<f32>(0.00375827, 0.00375827, 0.93375800)
+);
+
+// ACES Fit: combined sRGB→AP1 + RRT_SAT (BT.709 path)
+const ACESInputMat = mat3x3<f32>(
+    vec3<f32>(0.59719, 0.07600, 0.02840),
+    vec3<f32>(0.35458, 0.90834, 0.13383),
+    vec3<f32>(0.04823, 0.01566, 0.83777)
+);
+
+// ACES Fit: combined ODT_SAT + AP1→sRGB (BT.709 path)
+const ACESOutputMat = mat3x3<f32>(
+    vec3<f32>( 1.60475, -0.10208, -0.00327),
+    vec3<f32>(-0.53108,  1.10813, -0.07276),
+    vec3<f32>(-0.07367, -0.00605,  1.07602)
+);
+
+// AgX: BT.709 → AgX primaries
+const agx_mat = mat3x3<f32>(
+    vec3<f32>(0.842479062253094,  0.0423282422610123, 0.0423756549057051),
+    vec3<f32>(0.0784335999999992, 0.878468636469772,  0.0784336),
+    vec3<f32>(0.0792237451477643, 0.0791661274605434, 0.879142973793104)
+);
+
+// AgX: AgX primaries → BT.709
+const agx_mat_inv = mat3x3<f32>(
+    vec3<f32>( 1.19687900512017,   -0.0980208811401368, -0.0990297440797205),
+    vec3<f32>(-0.0528968517574562,  1.15190312990417,   -0.0989611768448433),
+    vec3<f32>(-0.0529716355144438, -0.0980434501171241,  1.15107367264116)
+);
+
+// ============================================================================
+// ACES 1.3 Helper Functions
+// ============================================================================
+
+fn aces_rgb_2_saturation(rgb: vec3<f32>) -> f32 {
+    let mi = min(min(rgb.r, rgb.g), rgb.b);
+    let ma = max(max(rgb.r, rgb.g), rgb.b);
+    return (max(ma, 1e-4) - max(mi, 1e-4)) / max(ma, 1e-2);
+}
+
+fn aces_rgb_2_yc(rgb: vec3<f32>) -> f32 {
+    let ycRadiusWeight = 1.75;
+    let k = max(rgb.b * (rgb.b - rgb.g) + rgb.g * (rgb.g - rgb.r) + rgb.r * (rgb.r - rgb.b), 0.0);
+    return (rgb.b + rgb.g + rgb.r + ycRadiusWeight * sqrt(k)) / 3.0;
+}
+
+fn aces_rgb_2_hue(rgb: vec3<f32>) -> f32 {
+    var hue: f32;
+    if (rgb.r == rgb.g && rgb.g == rgb.b) {
+        hue = 0.0;
+    } else {
+        hue = (180.0 / 3.14159265) * atan2(
+            sqrt(3.0) * (rgb.g - rgb.b),
+            2.0 * rgb.r - rgb.g - rgb.b
+        );
+    }
+    if (hue < 0.0) { hue += 360.0; }
+    return hue;
+}
+
+fn aces_center_hue(hue: f32, centerH: f32) -> f32 {
+    var h = hue - centerH;
+    if (h < -180.0) { h += 360.0; }
+    else if (h > 180.0) { h -= 360.0; }
+    return h;
+}
+
+fn aces_sigmoid_shaper(x: f32) -> f32 {
+    let t = max(1.0 - abs(x / 2.0), 0.0);
+    return (1.0 + sign(x) * (1.0 - t * t)) / 2.0;
+}
+
+fn aces_glow_fwd(ycIn: f32, glowGainIn: f32, glowMid: f32) -> f32 {
+    if (ycIn <= 2.0 / 3.0 * glowMid) {
+        return glowGainIn;
+    } else if (ycIn >= 2.0 * glowMid) {
+        return 0.0;
+    } else {
+        return glowGainIn * (glowMid / ycIn - 0.5);
+    }
+}
+
+// ============================================================================
+// ACES 1.3 Segmented Spline C5 (RRT tone curve)
+// ============================================================================
+
+fn aces_spline_c5_fwd(x: f32) -> f32 {
+    var coefsLow = array<f32, 6>(
+        -4.0000000000, -4.0000000000, -3.1573765773,
+        -0.4852499958,  1.8477324706,  1.8477324706
+    );
+    var coefsHigh = array<f32, 6>(
+        -0.7185482425,  2.0810307172,  3.6681241237,
+         4.0000000000,  4.0000000000,  4.0000000000
+    );
+    let logMinX = log10_f(0.18 * exp2(-15.0));
+    let logMidX = log10_f(0.18);
+    let logMaxX = log10_f(0.18 * exp2(18.0));
+
+    let logx = log10_f(max(x, 1e-10));
+    var logy: f32;
+
+    if (logx <= logMinX) {
+        logy = log10_f(0.0001);
+    } else if (logx < logMidX) {
+        let knot_coord = 3.0 * (logx - logMinX) / (logMidX - logMinX);
+        let j = min(i32(knot_coord), 3);
+        let t = knot_coord - f32(j);
+        let cf = vec3<f32>(coefsLow[j], coefsLow[j + 1], coefsLow[j + 2]);
+        logy = dot(vec3<f32>(t * t, t, 1.0), ACES_SPLINE_M * cf);
+    } else if (logx < logMaxX) {
+        let knot_coord = 3.0 * (logx - logMidX) / (logMaxX - logMidX);
+        let j = min(i32(knot_coord), 3);
+        let t = knot_coord - f32(j);
+        let cf = vec3<f32>(coefsHigh[j], coefsHigh[j + 1], coefsHigh[j + 2]);
+        logy = dot(vec3<f32>(t * t, t, 1.0), ACES_SPLINE_M * cf);
+    } else {
+        logy = log10_f(10000.0);
+    }
+
+    return pow10(logy);
+}
+
+// ============================================================================
+// ACES 1.3 RRT
+// ============================================================================
+
+// ACES 1.3 RRT
+const RRT_GLOW_GAIN: f32 = 0.05;
+const RRT_GLOW_MID: f32 = 0.08;
+const RRT_RED_SCALE: f32 = 0.82;
+const RRT_RED_PIVOT: f32 = 0.03;
+const RRT_RED_HUE: f32 = 0.0;
+const RRT_RED_WIDTH: f32 = 135.0;
+
+// ============================================================================
+// ACES 2.0 Daniele Evo Tonescale
+// ============================================================================
+
 // Gamut Matrices — ALL TRANSPOSED from SDSL row-major to WGSL column-major
 // ============================================================================
 
@@ -361,8 +929,6 @@ fn ACES20_RRT(acescg: vec3<f32>, peakLuminance: f32) -> vec3<f32> {
 
 // ============================================================================
 // ACES Fit Tonemap (Stephen Hill / BakingLab)
-// Two paths: AP1 direct (ACEScg input) and BT.709 (all other inputs).
-// Always outputs Linear Rec.709.
 // ============================================================================
 
 fn ACESTonemap(color: vec3<f32>, inputSpace: i32) -> vec3<f32> {
@@ -552,8 +1118,6 @@ fn AgXTonemap(color_in: vec3<f32>) -> vec3<f32> {
 
 // ============================================================================
 // Tonemap Dispatcher
-// Input: Linear Rec.709 (from Stage 5, always inputSpace=0 in pipeline checker)
-// Output: Linear Rec.709 for all operators (ACES 1.3/2.0 handled separately)
 // ============================================================================
 
 fn ApplyTonemap(color: vec3<f32>, op: i32, exposure: f32, wp: f32) -> vec3<f32> {
@@ -575,6 +1139,9 @@ fn ApplyTonemap(color: vec3<f32>, op: i32, exposure: f32, wp: f32) -> vec3<f32> 
 // ============================================================================
 // Fragment Shader
 // ============================================================================
+
+
+
 
 @fragment
 fn fs(in: VertexOutput) -> @location(0) vec4<f32> {

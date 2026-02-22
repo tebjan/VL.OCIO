@@ -345,6 +345,7 @@ fn isRec2020Target(outputSpace: i32) -> bool {
 // ============================================================================
 
 
+
 @fragment
 fn fs(in: VertexOutput) -> @location(0) vec4<f32> {
     let texCoord = vec2<i32>(in.uv * vec2<f32>(textureDimensions(inputTexture)));

@@ -186,6 +186,7 @@ fn getACESPeakNits(tonemapOp: i32, outputSpace: i32, peakBrightness: f32) -> f32
 // ============================================================================
 
 
+
 @fragment
 fn fs(in: VertexOutput) -> @location(0) vec4<f32> {
     let texCoord = vec2<i32>(in.uv * vec2<f32>(textureDimensions(inputTexture)));

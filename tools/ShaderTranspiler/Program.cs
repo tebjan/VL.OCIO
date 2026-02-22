@@ -32,7 +32,7 @@ using System.Text.RegularExpressions;
 var repoRoot = FindRepoRoot();
 var shadersDir = Path.Combine(repoRoot, "shaders");
 var referenceWgslDir = Path.Combine(repoRoot, "pipeline-checker", "src", "shaders", "generated");
-var outputDir = Path.Combine(repoRoot, "shaders", "transpiled");
+var outputDir = Path.Combine(repoRoot, "pipeline-checker", "src", "shaders", "transpiled");
 var tempDir = Path.Combine(Path.GetTempPath(), "ShaderTranspiler");
 
 // Parse CLI args

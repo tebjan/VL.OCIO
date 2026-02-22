@@ -572,6 +572,7 @@ fn ApplyTonemap(color: vec3<f32>, op: i32, exposure: f32, wp: f32) -> vec3<f32> 
 // ============================================================================
 
 
+
 @fragment
 fn fs(in: VertexOutput) -> @location(0) vec4<f32> {
     let texCoord = vec2<i32>(in.uv * vec2<f32>(textureDimensions(inputTexture)));

@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { initWebGPU, type GPUContext } from './gpu/WebGPUContext';
 import { DropZone, generateSampleImage, halfToFloat, type LoadedFileType } from './components/DropZone';
 import { WebGPUCanvas } from './components/WebGPUCanvas';
-import { Filmstrip } from './components/Filmstrip';
+import { PipelineFilmstripArea } from './components/PipelineFilmstripArea';
 import { ControlsPanel } from './components/ControlsPanel';
 import { MainPreview } from './components/MainPreview';
 import { MetadataPanel, computeChannelStats, type ImageMetadata, type ChannelStats } from './components/MetadataPanel';
@@ -178,6 +178,7 @@ export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gpuRef = useRef<GPUContext | null>(null);
 
+  const [isDragging, setIsDragging] = useState(false);
   const manager = usePipelineManager();
 
   // Load a file into the pipeline manager — creates or replaces a pipeline
@@ -367,12 +368,9 @@ export default function App() {
     return getStageTexture(manager.selectedStageIndex);
   };
 
-  const stageTextures = useMemo((): (GPUTexture | null)[] => {
-    const sel = manager.selectedPipeline;
-    if (!sel) return [];
-    return manager.selectedStages.map((_, i) => getStageTexture(i, sel));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [manager.selectedPipeline, manager.renderVersion, manager.selectedStages, getStageTexture]);
+  const getStageTexturesForPipeline = useCallback((inst: { renderer: { getStageOutput(i: number): GPUTexture | null; getStages(): ReadonlyArray<unknown> }; sourceTexture: GPUTexture; stageStates: { enabled: boolean }[] }): (GPUTexture | null)[] => {
+    return inst.stageStates.map((_, i) => getStageTexture(i, inst));
+  }, [getStageTexture]);
 
   const gpu = state.kind === 'ready' ? state.gpu : null;
 
@@ -385,6 +383,7 @@ export default function App() {
           onExrBuffer={handleExrBuffer}
           onDdsLoaded={handleDdsLoaded}
           hasBC={gpuRef.current.hasBC}
+          onDragStateChange={setIsDragging}
         />
       )}
 
@@ -417,17 +416,18 @@ export default function App() {
 
       {gpu && manager.selectedPipeline && (
         <>
-          <Filmstrip
-            stages={manager.selectedStages}
-            selectedIndex={manager.selectedStageIndex}
-            onSelect={(i) => manager.selectStage(i)}
-            onToggle={(i, enabled) => manager.toggleStage(i, enabled)}
+          <PipelineFilmstripArea
+            pipelines={manager.pipelines}
+            selectedPipelineId={manager.selectedPipelineId}
+            onSelectPipeline={(id) => manager.selectPipeline(id)}
+            onRemovePipeline={(id) => manager.removePipeline(id)}
+            onStageSelect={(i, id) => manager.selectStage(i, id)}
+            onStageToggle={(i, enabled, id) => manager.toggleStage(i, enabled, id)}
             device={gpu.device}
             format={gpu.format}
-            stageTextures={stageTextures}
             renderVersion={manager.renderVersion}
-            applySRGB={manager.selectedSettings.applySRGB}
-            settings={manager.selectedSettings}
+            getStageTextures={getStageTexturesForPipeline}
+            isDragging={isDragging}
           />
 
           <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>

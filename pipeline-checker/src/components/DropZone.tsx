@@ -10,6 +10,8 @@ interface DropZoneProps {
   onDdsLoaded: (buffer: ArrayBuffer, fileName: string, fileHandle?: FileSystemFileHandle) => void;
   /** Whether the app has BC texture compression support. */
   hasBC: boolean;
+  /** Called when drag state changes (true when dragging over window). */
+  onDragStateChange?: (isDragging: boolean) => void;
 }
 
 /**
@@ -17,11 +19,16 @@ interface DropZoneProps {
  * Invisible by default, shows a visual indicator when files are dragged over.
  * Does NOT block pointer events on the underlying UI.
  */
-export function DropZone({ onExrBuffer, onDdsLoaded, hasBC }: DropZoneProps) {
+export function DropZone({ onExrBuffer, onDdsLoaded, hasBC, onDragStateChange }: DropZoneProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const dragCountRef = useRef(0);
+
+  // Notify parent of drag state changes
+  useEffect(() => {
+    onDragStateChange?.(isDragging);
+  }, [isDragging, onDragStateChange]);
 
   // Clear error after 8 seconds
   useEffect(() => {

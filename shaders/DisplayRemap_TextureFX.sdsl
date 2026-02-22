@@ -1,0 +1,34 @@
+// ============================================================================
+// DisplayRemap_TextureFX.sdsl
+// Stage 9: Display Remap -- maps [0,1] to [BlackLevel, WhiteLevel]
+// ============================================================================
+//
+// Per-stage TextureFX shader for the pipeline checker transpiler.
+// Wraps HDRTonemap.RemapDisplayRange() for display hardware compensation
+// (projectors, LED walls).
+//
+// Input:  Display-referred values in [0,1]
+// Output: Remapped values in [BlackLevel, WhiteLevel]
+//
+// NOTE: HDRTonemap inherits the full chain (TonemapOperators, ACES,
+// ColorSpaceConversion), but this shader only uses RemapDisplayRange().
+// The dead code from inherited mixins is acceptable in SDSL (Stride
+// resolves it). The transpiler in Phase 8 will extract only the needed
+// functions.
+//
+// ============================================================================
+
+shader DisplayRemap_TextureFX : FilterBase, HDRTonemap
+{
+    // Black level for display hardware compensation
+    float BlackLevel = 0.0;
+
+    // White level for display hardware compensation
+    float WhiteLevel = 1.0;
+
+    float4 Filter(float4 tex0col)
+    {
+        float3 result = RemapDisplayRange(tex0col.rgb, BlackLevel, WhiteLevel);
+        return float4(result, tex0col.a);
+    }
+};

@@ -41,6 +41,11 @@ Requirements for usability polish milestone. Each maps to roadmap phases.
 - [x] **TIPS-01**: Each pipeline stage thumbnail shows an explanatory tooltip describing what that stage does (appears after ~1s delay)
 - [x] **TIPS-02**: Each UI control in the pipeline/display panels shows an explanatory tooltip describing its function (appears after ~1s delay)
 
+### Session Persistence
+
+- [x] **PERS-01**: After dropping an image file and reloading the page, the same image is restored from IndexedDB and displayed
+- [x] **PERS-02**: The previously selected stage index is restored from localStorage after reload
+
 ## v1.2 Requirements
 
 Requirements for shader transpiler milestone. Ensures SDSL is the single source of truth.
@@ -53,9 +58,9 @@ Requirements for shader transpiler milestone. Ensures SDSL is the single source 
 
 ### Transpiler Tool
 
-- [ ] **TOOL-01**: .NET 8 console app at `tools/ShaderTranspiler/` references Stride NuGet packages for SDSL→HLSL
-- [ ] **TOOL-02**: Transpiler invokes DXC to convert HLSL→SPIR-V
-- [ ] **TOOL-03**: Transpiler invokes Naga to convert SPIR-V→WGSL
+- [ ] **TOOL-01**: .NET 8 console app at `tools/ShaderTranspiler/` references Stride NuGet packages for SDSL to HLSL
+- [ ] **TOOL-02**: Transpiler invokes DXC to convert HLSL to SPIR-V
+- [ ] **TOOL-03**: Transpiler invokes Naga to convert SPIR-V to WGSL
 - [ ] **TOOL-04**: Transpiler produces 6 ready-to-use WGSL files in `pipeline-checker/src/shaders/generated/`
 
 ### Verification
@@ -110,25 +115,27 @@ Requirements for shader transpiler milestone. Ensures SDSL is the single source 
 | DISP-03 | Phase 5 | Complete |
 | TIPS-01 | Phase 6 | Complete |
 | TIPS-02 | Phase 6 | Complete |
-| SDSL-01 | TBD | Pending |
-| SDSL-02 | TBD | Pending |
-| SDSL-03 | TBD | Pending |
-| TOOL-01 | TBD | Pending |
-| TOOL-02 | TBD | Pending |
-| TOOL-03 | TBD | Pending |
-| TOOL-04 | TBD | Pending |
-| VRFY-01 | TBD | Pending |
-| VRFY-02 | TBD | Pending |
-| INTG-01 | TBD | Pending |
-| INTG-02 | TBD | Pending |
+| PERS-01 | Phase 6.1 | Complete |
+| PERS-02 | Phase 6.1 | Complete |
+| SDSL-01 | Phase 7 | Pending |
+| SDSL-02 | Phase 7 | Pending |
+| SDSL-03 | Phase 7 | Pending |
+| TOOL-01 | Phase 8 | Pending |
+| TOOL-02 | Phase 8 | Pending |
+| TOOL-03 | Phase 8 | Pending |
+| TOOL-04 | Phase 8 | Pending |
+| VRFY-01 | Phase 9 | Pending |
+| VRFY-02 | Phase 9 | Pending |
+| INTG-01 | Phase 9 | Pending |
+| INTG-02 | Phase 9 | Pending |
 
 **Coverage:**
 
 - v1.2 requirements: 11 total
-- Mapped to phases: 0
-- Unmapped: 11 ⚠️
+- Mapped to phases: 11
+- Unmapped: 0
 
 ---
 
 *Requirements defined: 2026-02-22*
-*Last updated: 2026-02-22 after v1.2 requirements defined*
+*Last updated: 2026-02-22 after Phase 6.1 completion*

@@ -1,0 +1,55 @@
+// ============================================================================
+// OutputEncode_TextureFX.sdsl
+// Stage 8: Output Encoding -- converts Linear Rec.709 to any HDRColorSpace
+// ============================================================================
+//
+// Per-stage TextureFX shader for the pipeline checker transpiler.
+// Wraps ColorSpaceConversion.FromLinearRec709() with HDR output scaling
+// for PQ, HLG, and scRGB targets.
+//
+// Input:  Linear Rec.709
+// Output: Any HDRColorSpace with appropriate HDR scaling
+//
+// ============================================================================
+
+shader OutputEncode_TextureFX : FilterBase, ColorSpaceConversion
+{
+    // Target output color space
+    // 0=Linear709, 1=Linear2020, 2=ACEScg, 3=ACEScc, 4=ACEScct, 5=sRGB, 6=PQ2020, 7=HLG2020, 8=scRGB
+    [EnumType("VL.OCIO.HDRColorSpace, VL.OCIO")]
+    int OutputSpace = 5;  // Default to sRGB
+
+    // Paper white level in nits (cd/m2) for PQ/HLG/scRGB HDR scaling
+    float PaperWhite = 200.0;
+
+    // Peak brightness in nits for HLG peak
+    float PeakBrightness = 1000.0;
+
+    float4 Filter(float4 tex0col)
+    {
+        float3 color = tex0col.rgb;
+        float3 result;
+
+        if (OutputSpace == 6)       // PQ Rec.2020
+        {
+            float3 rec2020 = mul(Rec709_to_Rec2020, color);
+            result = LinearToPQ(rec2020 * PaperWhite / PQ_MAX_NITS);
+        }
+        else if (OutputSpace == 7)  // HLG Rec.2020
+        {
+            float3 rec2020 = mul(Rec709_to_Rec2020, color);
+            float peak = max(PeakBrightness, 1.0);
+            result = LinearToHLG(clamp(rec2020 * PaperWhite / peak, 0.0, 1.0));
+        }
+        else if (OutputSpace == 8)  // scRGB
+        {
+            result = color * (PaperWhite / 80.0);
+        }
+        else                        // Standard spaces (0-5): use hub conversion
+        {
+            result = FromLinearRec709(color, OutputSpace);
+        }
+
+        return float4(result, tex0col.a);
+    }
+};

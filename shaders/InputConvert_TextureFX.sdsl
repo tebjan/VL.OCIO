@@ -1,0 +1,26 @@
+// ============================================================================
+// InputConvert_TextureFX.sdsl
+// Stage 4: Input Interpretation -- converts any HDRColorSpace to Linear Rec.709
+// ============================================================================
+//
+// Per-stage TextureFX shader for the pipeline checker transpiler.
+// Thin wrapper around ColorSpaceConversion.ToLinearRec709().
+//
+// Input:  Texture in any HDRColorSpace
+// Output: Linear Rec.709
+//
+// ============================================================================
+
+shader InputConvert_TextureFX : FilterBase, ColorSpaceConversion
+{
+    // What color space is the input texture?
+    // 0=Linear709, 1=Linear2020, 2=ACEScg, 3=ACEScc, 4=ACEScct, 5=sRGB, 6=PQ2020, 7=HLG2020, 8=scRGB
+    [EnumType("VL.OCIO.HDRColorSpace, VL.OCIO")]
+    int InputSpace = 0;
+
+    float4 Filter(float4 tex0col)
+    {
+        float3 result = ToLinearRec709(tex0col.rgb, InputSpace);
+        return float4(result, tex0col.a);
+    }
+};

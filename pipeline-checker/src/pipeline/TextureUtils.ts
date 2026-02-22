@@ -72,18 +72,15 @@ const CONVERT_F32_TO_F16_WGSL = `
 }
 
 @fragment fn fs(@builtin(position) pos: vec4<f32>) -> @location(0) vec4<f32> {
-  let dims = textureDimensions(src);
-  return textureLoad(src, vec2<u32>(u32(pos.x), dims.y - 1u - u32(pos.y)), 0);
+  return textureLoad(src, vec2<u32>(u32(pos.x), u32(pos.y)), 0);
 }
 `;
 
 /**
  * Upload a Float32Array of RGBA pixel data to an rgba16float GPUTexture.
- * All conversion happens on the GPU — zero CPU pixel processing.
- *
- * 1. Upload Float32Array directly to a temporary rgba32float texture (DMA)
- * 2. GPU render pass: textureLoad from rgba32float → write to rgba16float
- * 3. Destroy temporary texture
+ * Flips rows to WebGPU convention (row 0 = top) since Three.js EXRLoader
+ * returns bottom-to-top data (OpenGL convention).
+ * GPU handles float32→float16 conversion via render pass.
  */
 export function uploadFloat32Texture(
   device: GPUDevice,
@@ -91,6 +88,18 @@ export function uploadFloat32Texture(
   width: number,
   height: number
 ): GPUTexture {
+  // Flip rows in-place: Three.js EXRLoader returns bottom-to-top (OpenGL order),
+  // WebGPU expects top-to-bottom (row 0 = image top).
+  const rowSize = width * 4; // 4 floats per pixel (RGBA)
+  const temp = new Float32Array(rowSize);
+  for (let y = 0; y < Math.floor(height / 2); y++) {
+    const topOffset = y * rowSize;
+    const bottomOffset = (height - 1 - y) * rowSize;
+    temp.set(data.subarray(topOffset, topOffset + rowSize));
+    data.set(data.subarray(bottomOffset, bottomOffset + rowSize), topOffset);
+    data.set(temp, bottomOffset);
+  }
+
   // 1. Upload float32 data to temporary rgba32float texture (no CPU conversion)
   const staging = device.createTexture({
     size: [width, height],
@@ -158,6 +167,47 @@ export function uploadFloat32Texture(
   device.queue.submit([encoder.finish()]);
 
   staging.destroy();
+  return output;
+}
+
+/**
+ * Upload a Uint16Array of half-float RGBA pixel data directly to an rgba16float GPUTexture.
+ * No staging texture or GPU conversion needed — the data is already in the native format.
+ */
+export function uploadFloat16Texture(
+  device: GPUDevice,
+  data: Uint16Array,
+  width: number,
+  height: number,
+): GPUTexture {
+  // Flip rows: Three.js EXRLoader returns bottom-to-top (OpenGL order),
+  // WebGPU expects top-to-bottom (row 0 = image top).
+  const rowSize = width * 4; // 4 x uint16 per pixel
+  const temp = new Uint16Array(rowSize);
+  for (let y = 0; y < Math.floor(height / 2); y++) {
+    const topOffset = y * rowSize;
+    const bottomOffset = (height - 1 - y) * rowSize;
+    temp.set(data.subarray(topOffset, topOffset + rowSize));
+    data.set(data.subarray(bottomOffset, bottomOffset + rowSize), topOffset);
+    data.set(temp, bottomOffset);
+  }
+
+  const output = device.createTexture({
+    size: [width, height],
+    format: 'rgba16float',
+    usage: GPUTextureUsage.TEXTURE_BINDING
+         | GPUTextureUsage.RENDER_ATTACHMENT
+         | GPUTextureUsage.COPY_SRC,
+    label: 'EXR Source (f16 direct)',
+  });
+
+  device.queue.writeTexture(
+    { texture: output },
+    data as Uint16Array<ArrayBuffer>,
+    { bytesPerRow: width * 8 },  // 8 bytes/pixel for rgba16float
+    { width, height },
+  );
+
   return output;
 }
 

@@ -13,7 +13,7 @@ fn vs(@builtin(vertex_index) i: u32) -> VertexOutput {
     let u = f32((i << 1u) & 2u);
     let v = f32(i & 2u);
     out.position = vec4<f32>(u * 2.0 - 1.0, v * 2.0 - 1.0, 0.0, 1.0);
-    out.uv = vec2<f32>(u, v);
+    out.uv = vec2<f32>(u, 1.0 - v);
     return out;
 }
 

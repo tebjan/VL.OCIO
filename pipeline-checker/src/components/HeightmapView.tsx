@@ -28,6 +28,8 @@ export interface HeightmapViewProps {
   renderVersion?: number;
   /** 3D heightmap display settings from HeightmapControls. */
   settings?: HeightmapSettings;
+  /** RGB color for the wireframe bounding box (pipeline color). */
+  wireframeColor?: [number, number, number];
 }
 
 // ---- Raw WebGPU compute shader (bypasses Three.js TSL which fails on shared devices) ----
@@ -281,6 +283,8 @@ class HeightmapScene {
   private currentAspect = 1;
   /** Current height scale for camera/wireframe */
   private currentHeightScale = 0.25;
+  /** Current wireframe color */
+  private currentWireframeColor: [number, number, number] | undefined;
   /** Bound event handlers for cleanup */
   private boundDblClick: (() => void) | null = null;
   private boundKeyDown: ((e: KeyboardEvent) => void) | null = null;
@@ -389,7 +393,7 @@ class HeightmapScene {
 
     const aspect = fullHeight / fullWidth;
     this.currentAspect = aspect;
-    this.updateWireframe(aspect, this.currentHeightScale);
+    this.updateWireframe(aspect, this.currentHeightScale, this.currentWireframeColor);
 
     const cellW = 1.0 / dsW;
     const cellD = aspect / dsH;
@@ -505,7 +509,7 @@ class HeightmapScene {
   updateSettings(settings: HeightmapSettings): void {
     if (settings.heightScale !== this.currentHeightScale) {
       this.currentHeightScale = settings.heightScale;
-      this.updateWireframe(this.currentAspect, this.currentHeightScale);
+      this.updateWireframe(this.currentAspect, this.currentHeightScale, this.currentWireframeColor);
     }
     // MSAA — recreate renderer (WebGPU bakes sampleCount into render pipelines,
     // runtime switching without full recreation causes validation errors)
@@ -586,7 +590,7 @@ class HeightmapScene {
   /**
    * Create or rebuild the wireframe bounding box.
    */
-  updateWireframe(aspect: number, heightScale: number): void {
+  updateWireframe(aspect: number, heightScale: number, wireframeColor?: [number, number, number]): void {
     if (this.wireframeBox) {
       this.scene.remove(this.wireframeBox);
       this.wireframeBox.geometry.dispose();
@@ -596,11 +600,19 @@ class HeightmapScene {
 
     const geometry = new BoxGeometry(1.0, heightScale, aspect);
     const edges = new EdgesGeometry(geometry);
-    const material = new LineBasicMaterial({ color: 0x444444 });
+    const color = wireframeColor
+      ? new Color(wireframeColor[0], wireframeColor[1], wireframeColor[2])
+      : new Color(0x444444);
+    const material = new LineBasicMaterial({ color });
     this.wireframeBox = new LineSegments(edges, material);
     this.wireframeBox.position.set(0, heightScale * 0.5, 0);
     this.scene.add(this.wireframeBox);
     geometry.dispose();
+  }
+
+  setWireframeColor(color: [number, number, number] | undefined): void {
+    this.currentWireframeColor = color;
+    this.updateWireframe(this.currentAspect, this.currentHeightScale, color);
   }
 
   computeAutoDistance(): number {
@@ -709,7 +721,7 @@ class HeightmapScene {
  * React component wrapping the Three.js WebGPU heightmap scene.
  * Fully GPU-driven: compute shader → shared buffers → instanced render.
  */
-export function HeightmapView({ stageTexture, device, active, renderVersion, settings }: HeightmapViewProps) {
+export function HeightmapView({ stageTexture, device, active, renderVersion, settings, wireframeColor }: HeightmapViewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<HeightmapScene | null>(null);
@@ -821,6 +833,13 @@ export function HeightmapView({ stageTexture, device, active, renderVersion, set
     if (!scene || !settings) return;
     scene.updateSettings(settings);
   }, [settings]);
+
+  // Wireframe color changes
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+    scene.setWireframeColor(wireframeColor);
+  }, [wireframeColor]);
 
   return (
     <div

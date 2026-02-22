@@ -30,7 +30,7 @@ const MAX_LAYERS = 4;
 /** Uniform struct size: 13 x f32 = 52 bytes. */
 const UNIFORM_SIZE = 52;
 /** Selected pipeline border width in local UV space. */
-const SELECTED_BORDER_WIDTH = 0.008;
+const SELECTED_BORDER_WIDTH = 0.003;
 
 export function Preview2D({ device, format, layers, renderVersion }: Preview2DProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);

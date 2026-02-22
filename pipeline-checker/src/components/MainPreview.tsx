@@ -110,6 +110,10 @@ export function MainPreview({
     [],
   );
 
+  // Extract selected pipeline's wireframe color (only when multiple layers)
+  const selectedLayer = layers.find((l) => l.isSelected);
+  const wireframeColor = layers.length > 1 && selectedLayer ? selectedLayer.borderColor : undefined;
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {/* Tab bar */}
@@ -193,6 +197,7 @@ export function MainPreview({
                 active={mode === '3d'}
                 renderVersion={renderVersion}
                 settings={heightmapSettings}
+                wireframeColor={wireframeColor}
               />
             </Suspense>
           </HeightmapErrorBoundary>

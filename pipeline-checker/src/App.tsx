@@ -386,7 +386,7 @@ export default function App() {
         return {
           texture,
           borderColor: [color.rgb[0], color.rgb[1], color.rgb[2]] as [number, number, number],
-          isSelected: pipeline.id === manager.selectedPipelineId,
+          isSelected: manager.pipelines.length > 1 && pipeline.id === manager.selectedPipelineId,
           applySRGB: isLastStage ? true : (pipeline.settings.applySRGB ?? true),
         };
       })

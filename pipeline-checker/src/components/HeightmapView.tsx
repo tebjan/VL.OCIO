@@ -1,114 +1,292 @@
-import { useRef, useEffect, useCallback, useState } from 'react';
-import { alignedBytesPerRow, copyAlignedToContiguous } from '../pipeline/TextureUtils';
+import { useRef, useEffect, useState } from 'react';
 import {
   WebGPURenderer,
   Scene,
   PerspectiveCamera,
   Color,
-  DataTexture,
-  RGBAFormat,
-  FloatType,
-  NearestFilter,
-  ClampToEdgeWrapping,
-  LinearSRGBColorSpace,
-  SpriteNodeMaterial,
-  Sprite,
+  PlaneGeometry,
   BoxGeometry,
   EdgesGeometry,
   LineBasicMaterial,
   LineSegments,
+  Mesh,
+  MeshBasicNodeMaterial,
+  InstancedBufferGeometry,
+  InstancedBufferAttribute,
 } from 'three/webgpu';
 import type { Material } from 'three/webgpu';
-import {
-  instancedArray,
-  Fn,
-  instanceIndex,
-  textureLoad,
-  uniform,
-  ivec2,
-  vec2,
-  vec3,
-  float,
-  int,
-  select,
-  dot,
-  clamp,
-  max,
-  pow,
-  log2,
-} from 'three/tsl';
+import { attribute, positionLocal } from 'three/tsl';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import type ComputeNode from 'three/src/nodes/gpgpu/ComputeNode.js';
-import type StorageBufferNode from 'three/src/nodes/accessors/StorageBufferNode.js';
-import type UniformNode from 'three/src/nodes/core/UniformNode.js';
-import type { ShaderNodeObject } from 'three/src/nodes/tsl/TSLCore.js';
 import type { HeightmapSettings } from '../types/pipeline';
 
 export interface HeightmapViewProps {
   stageTexture: GPUTexture | null;
-  /** The pipeline's GPUDevice — needed for GPU readback of stage textures. */
+  /** The pipeline's GPUDevice — needed for compute shader dispatch. */
   device: GPUDevice | null;
   active: boolean;
-  /** Incremented after each pipeline render to trigger readback refresh. */
+  /** Incremented after each pipeline render to trigger refresh. */
   renderVersion?: number;
   /** 3D heightmap display settings from HeightmapControls. */
   settings?: HeightmapSettings;
 }
 
+// ---- Raw WebGPU compute shader (bypasses Three.js TSL which fails on shared devices) ----
+
+const HEIGHTMAP_COMPUTE_WGSL = /* wgsl */`
+struct Params {
+  dsWidth:        u32,
+  dsHeight:       u32,
+  aspect:         f32,
+  heightScale:    f32,
+  exponent:       f32,
+  heightMode:     u32,
+  rangeMin:       f32,
+  rangeMax:       f32,
+  fullWidth:      u32,
+  fullHeight:     u32,
+  stopsMode:      u32,
+  perceptualMode: u32,
+};
+
+@group(0) @binding(0) var<uniform> p: Params;
+@group(0) @binding(1) var<storage, read_write> positions: array<vec4<f32>>;
+@group(0) @binding(2) var<storage, read_write> colors:    array<vec4<f32>>;
+@group(0) @binding(3) var srcTex: texture_2d<f32>;
+
+@compute @workgroup_size(64)
+fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+  let idx = gid.x;
+  if (idx >= p.dsWidth * p.dsHeight) { return; }
+
+  let gx = idx % p.dsWidth;
+  let gy = idx / p.dsWidth;
+
+  // Map downsampled grid to full-resolution texture coordinates
+  let srcX = gx * p.fullWidth / p.dsWidth;
+  let srcY = gy * p.fullHeight / p.dsHeight;
+  let pixel = textureLoad(srcTex, vec2<u32>(srcX, srcY), 0);
+  let r = pixel.r;
+  let g = pixel.g;
+  let b = pixel.b;
+
+  // Height mode selection
+  var h: f32;
+  switch (p.heightMode) {
+    case 0u: { h = sqrt(r * r + g * g + b * b) / sqrt(3.0); }
+    case 1u: { h = 0.2126 * r + 0.7152 * g + 0.0722 * b; }
+    case 2u: { h = r; }
+    case 3u: { h = g; }
+    case 4u: { h = b; }
+    case 5u: { h = max(r, max(g, b)); }
+    case 6u: { h = 0.2722287 * r + 0.6740818 * g + 0.0536895 * b; }
+    default: { h = 0.2126 * r + 0.7152 * g + 0.0722 * b; }
+  }
+
+  // Range remap — no clamping, exact values for scientific display
+  let range = max(p.rangeMax - p.rangeMin, 0.0001);
+  h = (h - p.rangeMin) / range;
+
+  // Stops mode: -log2
+  if (p.stopsMode != 0u) {
+    h = -log2(max(h, 0.00001)) / 20.0;
+  }
+
+  // Exponent (sign-preserving) + scale
+  let sign = select(-1.0, 1.0, h >= 0.0);
+  h = sign * pow(abs(h), p.exponent) * p.heightScale;
+
+  // Grid position
+  let x = (f32(gx) + 0.5) / f32(p.dsWidth) - 0.5;
+  let z = ((f32(gy) + 0.5) / f32(p.dsHeight) - 0.5) * p.aspect;
+
+  positions[idx] = vec4<f32>(x, h, z, 1.0);
+  colors[idx]    = vec4<f32>(r, g, b, 1.0);
+}
+`;
+
+/**
+ * Raw WebGPU compute pipeline for heightmap data.
+ * Writes directly to shared GPU buffers (STORAGE|VERTEX) — no readback.
+ * The same buffers are read by Three.js as vertex instance attributes.
+ */
+/** Uniform buffer layout — 48 bytes (12 x u32/f32), 16-byte aligned */
+const UNIFORM_SIZE = 48;
+
+class HeightmapCompute {
+  private device: GPUDevice;
+  private pipeline: GPUComputePipeline | null = null;
+  private bindGroup: GPUBindGroup | null = null;
+  private uniformBuffer: GPUBuffer | null = null;
+  private count = 0;
+  // Cached references for re-binding when texture changes
+  private posBuffer: GPUBuffer | null = null;
+  private colBuffer: GPUBuffer | null = null;
+
+  constructor(device: GPUDevice) {
+    this.device = device;
+  }
+
+  /** Create pipeline (once) and bind storage buffers + texture. */
+  setup(
+    dsWidth: number, dsHeight: number, aspect: number,
+    fullWidth: number, fullHeight: number,
+    positionBuffer: GPUBuffer, colorBuffer: GPUBuffer,
+    texture: GPUTexture,
+    settings: HeightmapSettings,
+  ): void {
+    this.count = dsWidth * dsHeight;
+    this.posBuffer = positionBuffer;
+    this.colBuffer = colorBuffer;
+
+    this.uniformBuffer?.destroy();
+    this.uniformBuffer = this.device.createBuffer({
+      size: UNIFORM_SIZE,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+      label: 'hm-params',
+    });
+
+    this.writeUniforms(dsWidth, dsHeight, aspect, fullWidth, fullHeight, settings);
+
+    // Create pipeline once (cached across setup() calls)
+    if (!this.pipeline) {
+      const module = this.device.createShaderModule({
+        code: HEIGHTMAP_COMPUTE_WGSL,
+        label: 'hm-compute',
+      });
+      this.pipeline = this.device.createComputePipeline({
+        layout: 'auto',
+        compute: { module, entryPoint: 'main' },
+      });
+    }
+
+    this.rebindTexture(texture);
+  }
+
+  /** Rebind with a (potentially new) texture view — call after pipeline render. */
+  rebindTexture(texture: GPUTexture): void {
+    if (!this.pipeline || !this.uniformBuffer || !this.posBuffer || !this.colBuffer) return;
+
+    this.bindGroup = this.device.createBindGroup({
+      layout: this.pipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: { buffer: this.uniformBuffer } },
+        { binding: 1, resource: { buffer: this.posBuffer } },
+        { binding: 2, resource: { buffer: this.colBuffer } },
+        { binding: 3, resource: texture.createView() },
+      ],
+    });
+  }
+
+  /** Update uniforms without recreating buffers/pipeline. */
+  updateSettings(
+    dsWidth: number, dsHeight: number, aspect: number,
+    fullWidth: number, fullHeight: number,
+    settings: HeightmapSettings,
+  ): void {
+    this.writeUniforms(dsWidth, dsHeight, aspect, fullWidth, fullHeight, settings);
+  }
+
+  private writeUniforms(
+    dsWidth: number, dsHeight: number, aspect: number,
+    fullWidth: number, fullHeight: number,
+    settings: HeightmapSettings,
+  ): void {
+    if (!this.uniformBuffer) return;
+    const buf = new ArrayBuffer(UNIFORM_SIZE);
+    const u = new Uint32Array(buf);
+    const f = new Float32Array(buf);
+    // Offset 0: dsWidth (u32)
+    u[0] = dsWidth;
+    // Offset 4: dsHeight (u32)
+    u[1] = dsHeight;
+    // Offset 8: aspect (f32)
+    f[2] = aspect;
+    // Offset 12: heightScale (f32)
+    f[3] = settings.heightScale;
+    // Offset 16: exponent (f32)
+    f[4] = settings.exponent;
+    // Offset 20: heightMode (u32)
+    u[5] = settings.heightMode;
+    // Offset 24: rangeMin (f32)
+    f[6] = settings.rangeMin;
+    // Offset 28: rangeMax (f32)
+    f[7] = settings.rangeMax;
+    // Offset 32: fullWidth (u32)
+    u[8] = fullWidth;
+    // Offset 36: fullHeight (u32)
+    u[9] = fullHeight;
+    // Offset 40: stopsMode (u32)
+    u[10] = settings.stopsMode ? 1 : 0;
+    // Offset 44: perceptualMode (u32)
+    u[11] = settings.perceptualMode ? 1 : 0;
+    this.device.queue.writeBuffer(this.uniformBuffer, 0, buf);
+  }
+
+  /** Dispatch compute — writes directly to bound GPU buffers, no readback. */
+  dispatch(): void {
+    if (!this.pipeline || !this.bindGroup) {
+      throw new Error('HeightmapCompute not set up');
+    }
+    const encoder = this.device.createCommandEncoder({ label: 'hm-compute-enc' });
+    const pass = encoder.beginComputePass();
+    pass.setPipeline(this.pipeline);
+    pass.setBindGroup(0, this.bindGroup);
+    pass.dispatchWorkgroups(Math.ceil(this.count / 64));
+    pass.end();
+    this.device.queue.submit([encoder.finish()]);
+  }
+
+  destroy(): void {
+    this.uniformBuffer?.destroy();
+  }
+}
+
 /**
  * Manages Three.js WebGPU renderer, scene, camera, controls, and
- * the TSL compute shader that builds heightmap instance data on the GPU.
- * Instantiated once on first activation; persists across tab switches.
+ * instanced geometry that renders the heightmap point cloud.
+ *
+ * GPU-only path: compute shader writes vec4 position/color to storage buffers
+ * that are simultaneously used as vertex instance attributes by Three.js —
+ * no CPU readback or data transfer.
  */
 class HeightmapScene {
   renderer: WebGPURenderer;
   scene: Scene;
   camera: PerspectiveCamera;
   controls: OrbitControls;
+  ready = false;
   private animationId = 0;
-  private disposed = false;
-  computeFailed = false;
+  disposed = false;
   /** Callback invoked on unrecoverable errors (render loop, device loss). */
   onError: ((message: string) => void) | null = null;
 
-  // --- TSL compute state ---
-  /** GPU storage buffer: per-instance vec3 positions */
-  positionBuffer: ShaderNodeObject<StorageBufferNode> | null = null;
-  /** GPU storage buffer: per-instance vec3 colors */
-  colorBuffer: ShaderNodeObject<StorageBufferNode> | null = null;
-  /** TSL compute node dispatched before each render */
-  computeNode: ShaderNodeObject<ComputeNode> | null = null;
-  /** Three.js DataTexture wrapping the stage pixel data (RGBA32F) */
-  sourceTexture: DataTexture | null = null;
   /** Current downsampled dimensions */
   dsWidth = 0;
   dsHeight = 0;
   /** Current instance count */
   instanceCount = 0;
-  /** Billboard sprite (instanced via .count with SpriteNodeMaterial for billboarding) */
-  private billboardMesh: Sprite | null = null;
+  /** Instanced mesh rendering the heightmap points */
+  private pointsMesh: Mesh | null = null;
   /** Wireframe bounding box */
   private wireframeBox: LineSegments | null = null;
   /** Current aspect ratio (height/width) for camera/wireframe */
   private currentAspect = 1;
   /** Current height scale for camera/wireframe */
-  private currentHeightScale = 0.1;
+  private currentHeightScale = 0.25;
   /** Bound event handlers for cleanup */
   private boundDblClick: (() => void) | null = null;
   private boundKeyDown: ((e: KeyboardEvent) => void) | null = null;
   private canvasEl: HTMLCanvasElement | null = null;
 
-  // Uniforms (updated from HeightmapSettings)
-  private uDsWidth: ShaderNodeObject<UniformNode<number>> | null = null;
-  private uDsHeight: ShaderNodeObject<UniformNode<number>> | null = null;
-  private uAspect: ShaderNodeObject<UniformNode<number>> | null = null;
-  private uHeightScale: ShaderNodeObject<UniformNode<number>> | null = null;
-  private uHeightMode: ShaderNodeObject<UniformNode<number>> | null = null;
-  private uExponent: ShaderNodeObject<UniformNode<number>> | null = null;
-  private uRangeMin: ShaderNodeObject<UniformNode<number>> | null = null;
-  private uRangeMax: ShaderNodeObject<UniformNode<number>> | null = null;
-  private uStopsMode: ShaderNodeObject<UniformNode<number>> | null = null;
-  private uPerceptualMode: ShaderNodeObject<UniformNode<number>> | null = null;
+  // GPU buffers shared between compute (storage) and render (vertex)
+  private offsetGpuBuffer: GPUBuffer | null = null;
+  private colorGpuBuffer: GPUBuffer | null = null;
+  private device: GPUDevice | null = null;
+  private compute: HeightmapCompute | null = null;
+  // Cached references for re-dispatch
+  private currentTexture: GPUTexture | null = null;
+  private fullWidth = 0;
+  private fullHeight = 0;
 
   constructor() {
     this.renderer = null!;
@@ -119,13 +297,12 @@ class HeightmapScene {
   }
 
   async init(canvas: HTMLCanvasElement, sharedDevice: GPUDevice): Promise<void> {
-    // Share the pipeline's GPUDevice to avoid creating a second device
-    // (dual WebGPU devices cause device loss / page blackout on many drivers)
+    this.device = sharedDevice;
     this.renderer = new WebGPURenderer({ canvas, antialias: true, device: sharedDevice } as any);
     await this.renderer.init();
     this.renderer.setPixelRatio(window.devicePixelRatio);
+    this.compute = new HeightmapCompute(sharedDevice);
 
-    // Monitor for device loss
     sharedDevice.lost.then((info: GPUDeviceLostInfo) => {
       if (info.reason !== 'destroyed') {
         console.error('[HeightmapView] GPU device lost:', info.message);
@@ -141,11 +318,9 @@ class HeightmapScene {
     this.controls.minDistance = 0.05;
     this.controls.maxDistance = 10;
 
-    // Double-click to reset camera
     this.boundDblClick = () => this.resetCamera();
     canvas.addEventListener('dblclick', this.boundDblClick);
 
-    // F key to frame object
     this.boundKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'f' || e.key === 'F') {
         if (document.activeElement === canvas || canvas.contains(document.activeElement)) {
@@ -156,215 +331,160 @@ class HeightmapScene {
     window.addEventListener('keydown', this.boundKeyDown);
 
     this.resetCamera();
+    this.ready = true;
   }
 
   /**
-   * Set up (or rebuild) the TSL compute pipeline for a given texture resolution.
-   * Creates instancedArray buffers, uniforms, and the Fn() compute shader.
-   * Called when the stage texture resolution or downsample factor changes.
+   * Set up dimensions for a given texture resolution.
+   * Returns true if dimensions changed.
    */
-  setupCompute(
+  setupDimensions(
     fullWidth: number,
     fullHeight: number,
     downsample: number,
-  ): void {
+  ): boolean {
     const dsW = Math.max(1, Math.floor(fullWidth / downsample));
     const dsH = Math.max(1, Math.floor(fullHeight / downsample));
 
-    // Skip if dimensions haven't changed
-    if (dsW === this.dsWidth && dsH === this.dsHeight) return;
+    if (dsW === this.dsWidth && dsH === this.dsHeight) return false;
 
     this.dsWidth = dsW;
     this.dsHeight = dsH;
-    const count = dsW * dsH;
-    this.instanceCount = count;
-    const aspect = fullHeight / fullWidth;
-
-    // Create or recreate source DataTexture (RGBA32F)
-    if (this.sourceTexture) this.sourceTexture.dispose();
-    const placeholderData = new Float32Array(dsW * dsH * 4);
-    this.sourceTexture = new DataTexture(
-      placeholderData,
-      dsW,
-      dsH,
-      RGBAFormat,
-      FloatType,
-    );
-    this.sourceTexture.minFilter = NearestFilter;
-    this.sourceTexture.magFilter = NearestFilter;
-    this.sourceTexture.wrapS = ClampToEdgeWrapping;
-    this.sourceTexture.wrapT = ClampToEdgeWrapping;
-    this.sourceTexture.colorSpace = LinearSRGBColorSpace;
-    this.sourceTexture.needsUpdate = true;
-
-    // GPU storage buffers — data never leaves the GPU
-    this.positionBuffer = instancedArray(count, 'vec3');
-    this.colorBuffer = instancedArray(count, 'vec3');
-
-    // Uniforms
-    this.uDsWidth = uniform(dsW);
-    this.uDsHeight = uniform(dsH);
-    this.uAspect = uniform(aspect);
-    this.uHeightScale = uniform(0.1);
-    this.uHeightMode = uniform(0);
-    this.uExponent = uniform(1.0);
-    this.uRangeMin = uniform(0.0);
-    this.uRangeMax = uniform(1.0);
-    this.uStopsMode = uniform(0);
-    this.uPerceptualMode = uniform(0);
-
-    // Capture refs for the closure
-    const posBuf = this.positionBuffer;
-    const colBuf = this.colorBuffer;
-    const srcTex = this.sourceTexture;
-    const uDsW = this.uDsWidth;
-    const uDsH = this.uDsHeight;
-    const uAsp = this.uAspect;
-    const uHS = this.uHeightScale;
-    const uHM = this.uHeightMode;
-    const uExp = this.uExponent;
-    const uRMin = this.uRangeMin;
-    const uRMax = this.uRangeMax;
-    const uStop = this.uStopsMode;
-    const uPerc = this.uPerceptualMode;
-
-    // Luminance weight vectors
-    const luminanceRec709 = vec3(0.2126, 0.7152, 0.0722);
-    const luminanceAP1 = vec3(0.2722287, 0.6740818, 0.0536895);
-    const SQRT3_INV = float(1.0 / Math.sqrt(3.0));
-
-    // Build the TSL compute shader
-    this.computeNode = Fn(() => {
-      const idx = instanceIndex;
-      const gx = idx.mod(uDsW);
-      const gy = idx.div(uDsW);
-
-      // textureLoad with integer coords — no sampler needed, valid in compute shaders
-      const pixel = textureLoad(srcTex, ivec2(int(gx), int(gy)));
-
-      // --- Height mode selection (GPU-side select() chain) ---
-      const h = select(uHM.equal(0),
-        pixel.rgb.length().mul(SQRT3_INV),
-        select(uHM.equal(1),
-          dot(pixel.rgb, luminanceRec709),
-          select(uHM.equal(2), pixel.r,
-          select(uHM.equal(3), pixel.g,
-          select(uHM.equal(4), pixel.b,
-          select(uHM.equal(5),
-            max(pixel.r, max(pixel.g, pixel.b)),
-            dot(pixel.rgb, luminanceAP1),
-          )))))).toVar();
-
-      // --- Modifier pipeline ---
-      // 1. Range remap: [rangeMin, rangeMax] → [0, 1]
-      h.assign(h.sub(uRMin).div(uRMax.sub(uRMin)).clamp(0.0, 1.0));
-
-      // 2. Stops mode: -log2(h)
-      h.assign(select(uStop.equal(1),
-        log2(max(h, float(1e-10))).negate(), h));
-
-      // 3. Perceptual mode: pow(h, 1/2.2)
-      h.assign(select(uPerc.equal(1),
-        pow(max(h, float(0.0)), float(1.0 / 2.2)), h));
-
-      // 4. Exponent
-      h.assign(pow(max(h, float(0.0)), uExp));
-
-      // --- Grid position (centered, aspect-correct, height-scaled Y) ---
-      const x = gx.add(0.5).div(uDsW).sub(0.5);
-      const z = gy.add(0.5).div(uDsH).sub(0.5).mul(uAsp);
-      const y = h.mul(uHS);
-
-      // Write to GPU storage buffers
-      posBuf.element(idx).assign(vec3(x, y, z));
-      return colBuf.element(idx).assign(clamp(pixel.rgb, 0.0, 1.0));
-    })().compute(count, [64]);
+    this.instanceCount = dsW * dsH;
+    return true;
   }
 
   /**
-   * Create or rebuild the billboard sprite mesh that renders the heightmap.
-   * Must be called after setupCompute() so storage buffers exist.
-   * Uses SpriteNodeMaterial for camera-facing billboards reading
-   * position and color from the TSL compute storage buffers.
+   * Create or rebuild the instanced geometry and GPU buffers.
+   * GPU buffers are created with STORAGE|VERTEX so they can be written by
+   * compute and read as vertex attributes — zero CPU involvement.
    */
-  setupMesh(fullWidth: number, fullHeight: number): void {
-    if (!this.positionBuffer || !this.colorBuffer) return;
-
-    // Remove previous sprite
-    if (this.billboardMesh) {
-      this.scene.remove(this.billboardMesh);
-      (this.billboardMesh.material as SpriteNodeMaterial).dispose();
-      this.billboardMesh = null;
+  setupMesh(fullWidth: number, fullHeight: number, texture: GPUTexture, settings: HeightmapSettings): void {
+    // Remove previous mesh
+    if (this.pointsMesh) {
+      this.scene.remove(this.pointsMesh);
+      this.pointsMesh.geometry.dispose();
+      (this.pointsMesh.material as Material).dispose();
+      this.pointsMesh = null;
     }
+
+    // Destroy old GPU buffers
+    this.offsetGpuBuffer?.destroy();
+    this.colorGpuBuffer?.destroy();
+    this.offsetGpuBuffer = null;
+    this.colorGpuBuffer = null;
+
+    const dsW = this.dsWidth;
+    const dsH = this.dsHeight;
+    const count = this.instanceCount;
+    if (count === 0 || !this.device) return;
 
     const aspect = fullHeight / fullWidth;
     this.currentAspect = aspect;
-
-    // Update wireframe to match new aspect ratio
     this.updateWireframe(aspect, this.currentHeightScale);
-    const cellW = 1.0 / this.dsWidth;
-    const cellD = aspect / this.dsHeight;
 
-    // SpriteNodeMaterial reads storage buffers:
-    //   positionNode uses .toAttribute() — exposes buffer as per-instance vertex attribute
-    //   colorNode uses .element(instanceIndex) — works in fragment shader context
-    // (Pattern from Three.js webgpu_compute_particles.html)
-    const material = new SpriteNodeMaterial();
-    // @ts-expect-error Three.js WebGPU API: toAttribute() exists at runtime but missing from @types/three
-    material.positionNode = this.positionBuffer.toAttribute();
-    material.colorNode = this.colorBuffer.element(instanceIndex);
-    material.scaleNode = vec2(cellW, cellD);
-    material.depthWrite = true;
-    material.depthTest = true;
-    material.sizeAttenuation = true;
-    material.transparent = false;
+    const cellW = 1.0 / dsW;
+    const cellD = aspect / dsH;
 
-    // Sprite provides internal billboard quad; .count enables instanced rendering
-    const sprite = new Sprite(material);
-    // @ts-expect-error Three.js WebGPU API: Sprite.count exists at runtime but missing from @types/three
-    sprite.count = this.instanceCount;
-    sprite.frustumCulled = false;
+    // ---- GPU buffers shared between compute and render ----
+    const byteSize = count * 16; // vec4<f32> = 16 bytes per instance
+    this.offsetGpuBuffer = this.device.createBuffer({
+      size: byteSize,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.VERTEX
+           | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
+      label: 'hm-offset',
+    });
+    this.colorGpuBuffer = this.device.createBuffer({
+      size: byteSize,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.VERTEX
+           | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
+      label: 'hm-color',
+    });
 
-    this.billboardMesh = sprite;
-    this.scene.add(sprite);
+    // ---- Instanced geometry ----
+    const baseGeo = new PlaneGeometry(cellW, cellD);
+    baseGeo.rotateX(-Math.PI / 2);
+
+    const geo = new InstancedBufferGeometry();
+    geo.index = baseGeo.index;
+    geo.setAttribute('position', baseGeo.getAttribute('position'));
+    geo.instanceCount = count;
+
+    // Instance attributes — CPU arrays are dummy; compute fills the GPU buffers directly
+    const offsetAttr = new InstancedBufferAttribute(new Float32Array(count * 4), 4);
+    const colorAttr = new InstancedBufferAttribute(new Float32Array(count * 4), 4);
+    geo.setAttribute('aOffset', offsetAttr);
+    geo.setAttribute('aColor', colorAttr);
+
+    // Pre-register our GPU buffers with Three.js backend.
+    // Backend.get() returns a data map entry keyed by the attribute object.
+    // Setting .buffer before the first render makes Three.js skip its own
+    // buffer creation and use ours instead (which have STORAGE usage).
+    const backend = (this.renderer as any).backend;
+    backend.get(offsetAttr).buffer = this.offsetGpuBuffer;
+    backend.get(colorAttr).buffer = this.colorGpuBuffer;
+
+    // ---- Node material ----
+    // TSL attribute() reads from the named geometry attribute.
+    // positionLocal = base vertex position; we add the per-instance offset.
+    const material = new MeshBasicNodeMaterial();
+    (material as any).positionNode = positionLocal.add(
+      attribute('aOffset', 'vec4').xyz,
+    );
+    (material as any).colorNode = attribute('aColor', 'vec4').xyz;
+
+    const mesh = new Mesh(geo, material);
+    mesh.frustumCulled = false;
+    this.pointsMesh = mesh;
+    this.scene.add(mesh);
+
+    // ---- Dispatch compute to fill buffers from texture ----
+    this.currentTexture = texture;
+    // settings consumed via compute uniforms
+    this.fullWidth = fullWidth;
+    this.fullHeight = fullHeight;
+    this.compute!.setup(
+      dsW, dsH, aspect, fullWidth, fullHeight,
+      this.offsetGpuBuffer, this.colorGpuBuffer,
+      texture, settings,
+    );
+    this.compute!.dispatch();
   }
 
   /**
-   * Update the source DataTexture with readback pixel data.
-   * Called after CPU readback from the pipeline's raw GPUTexture.
-   * @param data Float32Array of RGBA pixels (dsWidth * dsHeight * 4 floats)
+   * Re-dispatch compute with new texture content (same dimensions).
+   * Called when renderVersion changes but texture size hasn't.
    */
-  updateSourceTexture(data: Float32Array): void {
-    if (!this.sourceTexture) return;
-    const img = this.sourceTexture.image;
-    // DataTexture image.data type is Uint8Array but is actually Float32Array
-    // when constructed with FloatType
-    (img as unknown as { data: Float32Array }).data = data;
-    this.sourceTexture.needsUpdate = true;
+  redispatch(texture: GPUTexture): void {
+    if (!this.compute || !this.offsetGpuBuffer || !this.colorGpuBuffer) return;
+    this.currentTexture = texture;
+    this.compute.rebindTexture(texture);
+    this.compute.dispatch();
   }
 
   /**
-   * Update uniforms from HeightmapSettings (called when settings change).
+   * Update settings from HeightmapControls.
+   * For mock data only the wireframe reacts; texture-based height will
+   * re-dispatch compute with updated uniforms.
    */
   updateSettings(settings: HeightmapSettings): void {
-    if (this.uHeightMode) this.uHeightMode.value = settings.heightMode;
-    if (this.uHeightScale) this.uHeightScale.value = settings.heightScale;
-    if (this.uExponent) this.uExponent.value = settings.exponent;
-    if (this.uRangeMin) this.uRangeMin.value = settings.rangeMin;
-    if (this.uRangeMax) this.uRangeMax.value = settings.rangeMax;
-    if (this.uStopsMode) this.uStopsMode.value = settings.stopsMode ? 1 : 0;
-    if (this.uPerceptualMode) this.uPerceptualMode.value = settings.perceptualMode ? 1 : 0;
-
-    // Update wireframe if height scale changed
     if (settings.heightScale !== this.currentHeightScale) {
       this.currentHeightScale = settings.heightScale;
       this.updateWireframe(this.currentAspect, this.currentHeightScale);
     }
+    // Re-dispatch compute with updated uniforms
+    // settings consumed via compute uniforms
+    if (this.compute && this.offsetGpuBuffer && this.currentTexture) {
+      this.compute.updateSettings(
+        this.dsWidth, this.dsHeight, this.currentAspect,
+        this.fullWidth, this.fullHeight, settings,
+      );
+      this.compute.dispatch();
+    }
   }
 
   /**
-   * Create or rebuild the wireframe bounding box surrounding the heightmap grid.
-   * Width=1.0, Depth=aspect, Height=heightScale, centered at (0, heightScale*0.5, 0).
+   * Create or rebuild the wireframe bounding box.
    */
   updateWireframe(aspect: number, heightScale: number): void {
     if (this.wireframeBox) {
@@ -380,12 +500,9 @@ class HeightmapScene {
     this.wireframeBox = new LineSegments(edges, material);
     this.wireframeBox.position.set(0, heightScale * 0.5, 0);
     this.scene.add(this.wireframeBox);
-    geometry.dispose(); // EdgesGeometry copies the data; original can be freed
+    geometry.dispose();
   }
 
-  /**
-   * Compute camera distance to fit the entire bounding box in view with 20% padding.
-   */
   computeAutoDistance(): number {
     const diagonal = Math.sqrt(
       1.0 + this.currentAspect * this.currentAspect +
@@ -396,8 +513,8 @@ class HeightmapScene {
   }
 
   resetCamera(): void {
-    const elev = Math.PI / 4; // 45 degrees
-    const azim = Math.PI / 6; // 30 degrees
+    const elev = Math.PI / 4;
+    const azim = Math.PI / 6;
     const dist = this.computeAutoDistance();
     this.camera.position.set(
       dist * Math.cos(elev) * Math.sin(azim),
@@ -410,9 +527,6 @@ class HeightmapScene {
     }
   }
 
-  /**
-   * Frame the entire object: keep current orbit angles, adjust distance to fit bounding box.
-   */
   frameObject(): void {
     if (!this.controls) return;
     const diagonal = Math.sqrt(
@@ -440,21 +554,10 @@ class HeightmapScene {
       if (this.disposed) return;
       try {
         if (this.controls) this.controls.update();
-        // Run TSL compute to update position/color buffers, then render
-        if (this.computeNode && !this.computeFailed && this.renderer) {
-          try {
-            await this.renderer.computeAsync(this.computeNode);
-          } catch (computeErr) {
-            console.error('[HeightmapView] Compute shader failed:', computeErr);
-            this.computeFailed = true;
-            this.onError?.('3D compute shader failed — scene will render without heightmap data');
-          }
-        }
-        // Re-check disposed after await — cleanup may have run during compute
         if (this.disposed || !this.renderer) return;
         await this.renderer.renderAsync(this.scene, this.camera);
       } catch (err) {
-        if (this.disposed) return; // Error during shutdown is expected
+        if (this.disposed) return;
         console.error('[HeightmapView] Render loop error:', err);
         this.onError?.(`3D render error: ${(err as Error).message}`);
         return;
@@ -474,7 +577,6 @@ class HeightmapScene {
     this.disposed = true;
     this.stopRenderLoop();
 
-    // Remove event listeners
     if (this.canvasEl && this.boundDblClick) {
       this.canvasEl.removeEventListener('dblclick', this.boundDblClick);
     }
@@ -482,12 +584,10 @@ class HeightmapScene {
       window.removeEventListener('keydown', this.boundKeyDown);
     }
 
-    // Wrap GPU resource cleanup in try/catch — dispose can be called while
-    // async init is still in flight, leaving Three.js objects partially
-    // constructed. Errors here are non-fatal (resources will be GC'd).
     try {
-      if (this.billboardMesh) {
-        (this.billboardMesh.material as SpriteNodeMaterial).dispose();
+      if (this.pointsMesh) {
+        this.pointsMesh.geometry.dispose();
+        (this.pointsMesh.material as Material).dispose();
       }
     } catch { /* safe to ignore */ }
     try {
@@ -497,24 +597,27 @@ class HeightmapScene {
       }
     } catch { /* safe to ignore */ }
     try { if (this.controls) this.controls.dispose(); } catch { /* safe to ignore */ }
-    try { if (this.sourceTexture) this.sourceTexture.dispose(); } catch { /* safe to ignore */ }
     try { if (this.renderer) this.renderer.dispose(); } catch { /* safe to ignore */ }
+
+    this.compute?.destroy();
+    this.offsetGpuBuffer?.destroy();
+    this.colorGpuBuffer?.destroy();
   }
 }
 
 /**
  * React component wrapping the Three.js WebGPU heightmap scene.
- * Creates its own canvas; the scene persists across tab switches.
+ * Fully GPU-driven: compute shader → shared buffers → instanced render.
  */
 export function HeightmapView({ stageTexture, device, active, renderVersion, settings }: HeightmapViewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<HeightmapScene | null>(null);
   const initRef = useRef(false);
-  const readbackIdRef = useRef(0);
   const [error, setError] = useState<string | null>(null);
+  const [sceneReady, setSceneReady] = useState(false);
 
-  // Initialize scene on first activation
+  // Initialise Three.js scene + renderer
   useEffect(() => {
     if (!active || initRef.current || !canvasRef.current) return;
     initRef.current = true;
@@ -528,21 +631,18 @@ export function HeightmapView({ stageTexture, device, active, renderVersion, set
       return;
     }
 
-    // Track whether cleanup ran before init finished (React Strict Mode / HMR)
     let cancelled = false;
 
     scene.init(canvasRef.current, device)
       .then(() => {
-        // Don't proceed if component was unmounted during async init
-        // @ts-expect-error HeightmapScene.disposed is accessed for cleanup check; private access is intentional
         if (cancelled || scene.disposed) return;
-        // Initial size
         const container = containerRef.current;
         if (container) {
           const rect = container.getBoundingClientRect();
           scene.resize(rect.width, rect.height);
         }
         scene.startRenderLoop();
+        setSceneReady(true);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -555,21 +655,21 @@ export function HeightmapView({ stageTexture, device, active, renderVersion, set
       scene.dispose();
       sceneRef.current = null;
       initRef.current = false;
+      setSceneReady(false);
     };
   }, [active, device]);
 
-  // GPU readback: read stage texture pixels and feed to Three.js DataTexture
-  const doReadback = useCallback(async (
-    pipelineDevice: GPUDevice,
-    tex: GPUTexture,
-    scene: HeightmapScene,
-    readbackId: number,
-  ) => {
-    const { width, height } = tex;
-    // Downsample to max ~256 on longest side for 3D view (caps instance count at ~65K)
+  // Setup mesh when texture dimensions or downsample change; re-dispatch on renderVersion
+  useEffect(() => {
+    if (!active || !stageTexture || !device || !sceneReady || !settings) return;
+    const scene = sceneRef.current;
+    if (!scene) return;
+
+    const { width, height } = stageTexture;
     const MAX_SIDE = 256;
     const minDownsample = Math.max(1, Math.floor(Math.max(width, height) / MAX_SIDE));
-    const downsample = Math.max(minDownsample, 1);
+    const downsample = Math.max(minDownsample, settings.downsample);
+
     const dsW = Math.max(1, Math.floor(width / downsample));
     const dsH = Math.max(1, Math.floor(height / downsample));
 
@@ -578,78 +678,16 @@ export function HeightmapView({ stageTexture, device, active, renderVersion, set
       return;
     }
 
-    const bytesPerRow = alignedBytesPerRow(width);
-    const bufferSize = bytesPerRow * height;
-
-    const stagingBuffer = pipelineDevice.createBuffer({
-      size: bufferSize,
-      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
-      label: 'Heightmap readback',
-    });
-
-    const encoder = pipelineDevice.createCommandEncoder();
-    encoder.copyTextureToBuffer(
-      { texture: tex },
-      { buffer: stagingBuffer, bytesPerRow, rowsPerImage: height },
-      { width, height },
-    );
-    pipelineDevice.queue.submit([encoder.finish()]);
-
-    // Timeout prevents infinite hang if GPU stalls
-    const mapPromise = stagingBuffer.mapAsync(GPUMapMode.READ);
-    const timeout = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('GPU readback timeout (5s)')), 5000),
-    );
-    await Promise.race([mapPromise, timeout]);
-
-    // Abort if a newer readback started while we were waiting
-    if (readbackIdRef.current !== readbackId) {
-      stagingBuffer.unmap();
-      stagingBuffer.destroy();
-      return;
+    const changed = scene.setupDimensions(width, height, downsample);
+    if (changed) {
+      scene.setupMesh(width, height, stageTexture, settings);
+    } else {
+      // Dimensions unchanged — just re-dispatch with (possibly new) texture content
+      scene.redispatch(stageTexture);
     }
+  }, [active, stageTexture, device, renderVersion, settings?.downsample, sceneReady]);
 
-    const fullData = copyAlignedToContiguous(
-      stagingBuffer.getMappedRange(),
-      width, height, bytesPerRow,
-    );
-    stagingBuffer.unmap();
-    stagingBuffer.destroy();
-
-    // Downsample to target resolution (nearest-neighbor)
-    const dsData = new Float32Array(dsW * dsH * 4);
-    for (let y = 0; y < dsH; y++) {
-      const srcY = y * downsample;
-      for (let x = 0; x < dsW; x++) {
-        const srcX = x * downsample;
-        const srcIdx = (srcY * width + srcX) * 4;
-        const dstIdx = (y * dsW + x) * 4;
-        dsData[dstIdx] = fullData[srcIdx];
-        dsData[dstIdx + 1] = fullData[srcIdx + 1];
-        dsData[dstIdx + 2] = fullData[srcIdx + 2];
-        dsData[dstIdx + 3] = fullData[srcIdx + 3];
-      }
-    }
-
-    // Setup compute/mesh if dimensions changed, then update texture data
-    scene.setupCompute(width, height, downsample);
-    scene.setupMesh(width, height);
-    scene.updateSourceTexture(dsData);
-  }, []);
-
-  // Trigger readback when stage texture or render version changes
-  useEffect(() => {
-    if (!active || !stageTexture || !device) return;
-    const scene = sceneRef.current;
-    if (!scene || !initRef.current) return;
-
-    const id = ++readbackIdRef.current;
-    doReadback(device, stageTexture, scene, id).catch((err) => {
-      console.warn('[HeightmapView] Readback failed:', err);
-    });
-  }, [active, stageTexture, device, renderVersion, doReadback]);
-
-  // Start/stop render loop on active change
+  // Render loop start/stop on visibility
   useEffect(() => {
     const scene = sceneRef.current;
     if (!scene) return;
@@ -660,7 +698,7 @@ export function HeightmapView({ stageTexture, device, active, renderVersion, set
     }
   }, [active]);
 
-  // Resize observer
+  // Container resize
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -677,7 +715,7 @@ export function HeightmapView({ stageTexture, device, active, renderVersion, set
     return () => observer.disconnect();
   }, []);
 
-  // Forward HeightmapSettings to the scene
+  // Settings changes
   useEffect(() => {
     const scene = sceneRef.current;
     if (!scene || !settings) return;
@@ -717,10 +755,7 @@ export function HeightmapView({ stageTexture, device, active, renderVersion, set
               onClick={() => {
                 setError(null);
                 const scene = sceneRef.current;
-                if (scene) {
-                  scene.computeFailed = false;
-                  scene.startRenderLoop();
-                }
+                if (scene) scene.startRenderLoop();
               }}
               style={{
                 padding: '6px 16px',

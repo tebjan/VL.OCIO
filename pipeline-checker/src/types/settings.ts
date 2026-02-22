@@ -106,6 +106,9 @@ export interface PipelineSettings {
   outputPeakBrightness: number;
   outputBlackLevel: number;
   outputWhiteLevel: number;
+
+  // Preview display
+  applySRGB: boolean;
 }
 
 export function createDefaultSettings(): PipelineSettings {
@@ -132,7 +135,7 @@ export function createDefaultSettings(): PipelineSettings {
     gradeShadowSoftClip: 0,
     gradeHighlightKnee: 1,
     gradeShadowKnee: 0.1,
-    tonemapOperator: 1,  // ACES (Fit) — visible tonemap so stages show differences
+    tonemapOperator: 2,  // ACES 1.3 — reference ACES RRT+ODT pipeline
     rrtEnabled: true,
     odtEnabled: true,
     odtTarget: 0,
@@ -144,5 +147,6 @@ export function createDefaultSettings(): PipelineSettings {
     outputPeakBrightness: 100,     // SDR peak brightness
     outputBlackLevel: 0,
     outputWhiteLevel: 1,
+    applySRGB: true,
   };
 }

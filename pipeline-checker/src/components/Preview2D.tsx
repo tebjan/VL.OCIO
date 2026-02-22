@@ -7,6 +7,8 @@ export interface Preview2DProps {
   stageTexture: GPUTexture | null;
   /** Incremented after each pipeline render to trigger preview refresh. */
   renderVersion?: number;
+  /** Whether to apply linear→sRGB conversion in the preview shader. Default true. */
+  applySRGB?: boolean;
 }
 
 interface DragState {
@@ -16,7 +18,7 @@ interface DragState {
   panY: number;
 }
 
-export function Preview2D({ device, format, stageTexture, renderVersion }: Preview2DProps) {
+export function Preview2D({ device, format, stageTexture, renderVersion, applySRGB = true }: Preview2DProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const gpuRef = useRef<{
@@ -65,7 +67,7 @@ export function Preview2D({ device, format, stageTexture, renderVersion }: Previ
     });
 
     const uniformBuffer = device.createBuffer({
-      size: 20, // 5 x f32: viewExposure, zoom, panX, panY, applySRGB
+      size: 28, // 7 x f32: viewExposure, zoom, panX, panY, applySRGB, canvasAspect, textureAspect
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
 
@@ -121,8 +123,10 @@ export function Preview2D({ device, format, stageTexture, renderVersion }: Previ
       if (!canvas || canvas.width === 0 || canvas.height === 0) return;
 
       try {
-        // Write uniforms
-        const data = new Float32Array([0, zoom, panX, panY, 1.0]);
+        // Write uniforms: viewExposure, zoom, panX, panY, applySRGB, canvasAspect, textureAspect
+        const canvasAspect = canvas.width / canvas.height;
+        const textureAspect = stageTexture.width / stageTexture.height;
+        const data = new Float32Array([0, zoom, panX, panY, applySRGB ? 1.0 : 0.0, canvasAspect, textureAspect]);
         device.queue.writeBuffer(gpu.uniformBuffer, 0, data);
 
         // Create bind group for current stage texture
@@ -155,7 +159,7 @@ export function Preview2D({ device, format, stageTexture, renderVersion }: Previ
     });
 
     return () => cancelAnimationFrame(frameRef.current);
-  }, [device, stageTexture, zoom, panX, panY, renderVersion, canvasSize]);
+  }, [device, stageTexture, zoom, panX, panY, applySRGB, renderVersion, canvasSize]);
 
   // Mouse wheel zoom (centered on cursor).
   // Uses a native event listener with { passive: false } to ensure preventDefault()
@@ -240,6 +244,7 @@ export function Preview2D({ device, format, stageTexture, renderVersion }: Previ
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onDoubleClick={handleDoubleClick}
+        onContextMenu={(e) => e.preventDefault()}
       />
       {!stageTexture && (
         <div

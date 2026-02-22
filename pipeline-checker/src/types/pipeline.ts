@@ -40,22 +40,20 @@ export interface HeightmapSettings {
   exponent: number;             // 0.1 - 5.0, default 1.0
   stopsMode: boolean;           // default false
   perceptualMode: boolean;      // default false
-  rangeMin: number;             // 0.0 - 1.0, default 0.0
-  rangeMax: number;             // 0.0 - 1.0, default 1.0
+  rangeMin: number;             // -1.0 - 10.0, default 0.0
+  rangeMax: number;             // 0.01 - 100.0, default 1.0
   downsample: DownsampleFactor; // 1 | 2 | 4 | 8 | 16, default 4
-  columnMode: boolean;          // default true
 }
 
 export function createDefaultHeightmapSettings(): HeightmapSettings {
   return {
     heightMode: HeightMode.RGBLength,
-    heightScale: 0.1,
+    heightScale: 0.25,
     exponent: 1.0,
     stopsMode: false,
     perceptualMode: false,
     rangeMin: 0.0,
     rangeMax: 1.0,
     downsample: 4,
-    columnMode: true,
   };
 }

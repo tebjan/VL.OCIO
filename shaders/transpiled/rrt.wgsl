@@ -7,14 +7,15 @@
 // 12 tonemap operators: None, ACES Fit, ACES 1.3, ACES 2.0, AgX, Gran Turismo,
 //   Uncharted 2, Khronos PBR, Lottes, Reinhard, Reinhard Extended, Hejl-Burgess.
 
+
 // ============================================================================
 // Uniforms — reads from shared PipelineUniforms buffer
 // ============================================================================
 
 struct Uniforms {
-    // Stage 4 (not used by RRT)
+    // Stage 4 (not used)
     _inputSpace: i32,             // byte 0
-    // Stage 5 scalars (not used by RRT)
+    // Stage 5 scalars (not used)
     _gradingSpace: i32,           // byte 4
     _gradeExposure: f32,          // byte 8
     _contrast: f32,               // byte 12
@@ -26,7 +27,7 @@ struct Uniforms {
     _vibrance: f32,               // byte 36
     _pad0a: f32,                  // byte 40
     _pad0b: f32,                  // byte 44
-    // Stage 5 vec3 fields (not used by RRT)
+    // Stage 5 vec3 fields (not used)
     _lift: vec3<f32>,             // byte 48
     _pad1: f32,                   // byte 60
     _gamma: vec3<f32>,            // byte 64
@@ -97,9 +98,9 @@ const DANIELE_R_HIT_MAX: f32 = 896.0;
 
 // Rec.709 → AP1 (includes D65→D60 Bradford)
 const Rec709_to_AP1 = mat3x3<f32>(
-    vec3<f32>(0.6131324, 0.0701934, 0.0206155),
-    vec3<f32>(0.3395381, 0.9163539, 0.1095697),
-    vec3<f32>(0.0473296, 0.0134527, 0.8698148)
+    vec3<f32>( 0.6131324,  0.0701934,  0.0206155),
+    vec3<f32>( 0.3395381,  0.9163539,  0.1095697),
+    vec3<f32>( 0.0473296,  0.0134527,  0.8698148)
 );
 
 // AP1 → Rec.709 (includes D60→D65 Bradford)
@@ -267,8 +268,6 @@ fn aces_spline_c5_fwd(x: f32) -> f32 {
 
 // ============================================================================
 // ACES 1.3 RRT
-// Input: ACEScg (linear AP1)
-// Output: RRT-processed values in AP1 (ready for ODT in Stage 7)
 // ============================================================================
 
 fn ACES13_RRT(acescg: vec3<f32>) -> vec3<f32> {
@@ -361,8 +360,6 @@ fn ACES20_RRT(acescg: vec3<f32>, peakLuminance: f32) -> vec3<f32> {
 
 // ============================================================================
 // ACES Fit Tonemap (Stephen Hill / BakingLab)
-// Two paths: AP1 direct (ACEScg input) and BT.709 (all other inputs).
-// Always outputs Linear Rec.709.
 // ============================================================================
 
 fn ACESTonemap(color: vec3<f32>, inputSpace: i32) -> vec3<f32> {
@@ -552,8 +549,6 @@ fn AgXTonemap(color_in: vec3<f32>) -> vec3<f32> {
 
 // ============================================================================
 // Tonemap Dispatcher
-// Input: Linear Rec.709 (from Stage 5, always inputSpace=0 in pipeline checker)
-// Output: Linear Rec.709 for all operators (ACES 1.3/2.0 handled separately)
 // ============================================================================
 
 fn ApplyTonemap(color: vec3<f32>, op: i32, exposure: f32, wp: f32) -> vec3<f32> {
@@ -575,6 +570,7 @@ fn ApplyTonemap(color: vec3<f32>, op: i32, exposure: f32, wp: f32) -> vec3<f32> 
 // ============================================================================
 // Fragment Shader
 // ============================================================================
+
 
 @fragment
 fn fs(in: VertexOutput) -> @location(0) vec4<f32> {

@@ -9,6 +9,8 @@ export interface ThumbnailCanvasProps {
   height: number;
   /** Incremented after each pipeline render to trigger thumbnail refresh. */
   renderVersion?: number;
+  /** Whether to apply linear→sRGB conversion. Default true. */
+  applySRGB?: boolean;
 }
 
 /**
@@ -49,12 +51,13 @@ function getOrCreateSharedGPU(device: GPUDevice, format: GPUTextureFormat): Shar
     primitive: { topology: 'triangle-list' },
   });
 
-  // Uniform buffer: exposure=0, zoom=1, pan=0,0, applySRGB=1 (no adjustment for thumbnails)
+  // Uniform buffer: exposure=0, zoom=1, pan=0,0, applySRGB=1, canvasAspect=1, textureAspect=1
+  // canvasAspect and textureAspect are updated per-render since texture sizes vary
   const uniformBuffer = device.createBuffer({
-    size: 20,
+    size: 28,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
-  device.queue.writeBuffer(uniformBuffer, 0, new Float32Array([0.0, 1.0, 0.0, 0.0, 1.0]));
+  device.queue.writeBuffer(uniformBuffer, 0, new Float32Array([0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0]));
 
   const sampler = device.createSampler({
     magFilter: 'linear',
@@ -71,7 +74,7 @@ function getOrCreateSharedGPU(device: GPUDevice, format: GPUTextureFormat): Shar
  * Uses the same preview-blit shader as Preview2D but with fixed zoom/pan.
  * All instances share a single render pipeline and uniform buffer.
  */
-export function ThumbnailCanvas({ device, format, texture, width, height, renderVersion }: ThumbnailCanvasProps) {
+export function ThumbnailCanvas({ device, format, texture, width, height, renderVersion, applySRGB = true }: ThumbnailCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const ctxRef = useRef<GPUCanvasContext | null>(null);
 
@@ -100,6 +103,11 @@ export function ThumbnailCanvas({ device, format, texture, width, height, render
     try {
       const shared = getOrCreateSharedGPU(device, format);
 
+      // Update uniforms: applySRGB + aspect ratios for correct proportions
+      const canvasAspect = width / height;
+      const textureAspect = texture.width / texture.height;
+      device.queue.writeBuffer(shared.uniformBuffer, 16, new Float32Array([applySRGB ? 1.0 : 0.0, canvasAspect, textureAspect]));
+
       const bindGroup = device.createBindGroup({
         layout: shared.bindGroupLayout,
         entries: [
@@ -126,7 +134,7 @@ export function ThumbnailCanvas({ device, format, texture, width, height, render
     } catch {
       // getCurrentTexture() can throw during resize — safe to skip this frame
     }
-  }, [device, format, texture, renderVersion]);
+  }, [device, format, texture, renderVersion, applySRGB]);
 
   return (
     <canvas

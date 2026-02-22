@@ -72,7 +72,8 @@ const CONVERT_F32_TO_F16_WGSL = `
 }
 
 @fragment fn fs(@builtin(position) pos: vec4<f32>) -> @location(0) vec4<f32> {
-  return textureLoad(src, vec2<u32>(u32(pos.x), u32(pos.y)), 0);
+  let dims = textureDimensions(src);
+  return textureLoad(src, vec2<u32>(u32(pos.x), dims.y - 1u - u32(pos.y)), 0);
 }
 `;
 

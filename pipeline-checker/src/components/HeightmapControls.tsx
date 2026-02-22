@@ -83,23 +83,23 @@ export function HeightmapControls({ settings, onChange }: HeightmapControlsProps
       </Section>
 
       <Section title="Range" defaultOpen>
-        <div title="Minimum value mapped to zero height">
+        <div title="Minimum value mapped to zero height (negative for HDR data)">
           <Slider
             label="Min"
             value={settings.rangeMin}
-            min={0}
-            max={1}
+            min={-1}
+            max={10}
             step={0.01}
             defaultValue={0.0}
             onChange={(v) => patch({ rangeMin: v })}
           />
         </div>
-        <div title="Maximum value mapped to full height">
+        <div title="Maximum value mapped to full height (increase for HDR content)">
           <Slider
             label="Max"
             value={settings.rangeMax}
-            min={0}
-            max={1}
+            min={0.01}
+            max={100}
             step={0.01}
             defaultValue={1.0}
             onChange={(v) => patch({ rangeMax: v })}

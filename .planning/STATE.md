@@ -4,34 +4,35 @@
 
 See: .planning/PROJECT.md (updated 2026-02-22)
 
-**Core value:** Every pipeline stage must render correctly and be verified by automated tests with real data
-**Current focus:** Phase 2: Grading UI Integration
+**Core value:** The user should always know what they're looking at and be able to inspect any stage without accidental interactions
+**Current focus:** Phase 4 - Interaction Clarity
 
 ## Current Position
 
-Phase: 2 of 3 (Grading UI Integration)
-Plan: 2 of 2 in current phase
-Status: Phase Complete
-Last activity: 2026-02-22 -- Completed 02-02-PLAN.md
+Phase: 4 of 6 (Interaction Clarity) -- COMPLETE
+Plan: 1 of 1 in current phase
+Status: Phase complete
+Last activity: 2026-02-22 -- Completed 04-01 interaction clarity fixes
 
-Progress: [████████░░] 80%
+Progress: [#############.......] 67% (4/6 phases complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4
+- Total plans completed: 5
 - Average duration: 5 min
-- Total execution time: 0.32 hours
+- Total execution time: 0.37 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-pipeline-rendering | 2 | 12 min | 6 min |
-| 02-grading-ui-integration | 2 | 7 min | 3.5 min  |
+| 02-grading-ui-integration | 2 | 7 min | 3.5 min |
+| 04-interaction-clarity | 1 | 3 min | 3 min |
 
 **Recent Trend:**
-- Last 5 plans: 7 min, 5 min, 4 min, 3 min
+- Last 5 plans: 7 min, 5 min, 4 min, 3 min, 3 min
 - Trend: Fast
 
 *Updated after each plan completion*
@@ -43,16 +44,11 @@ Progress: [████████░░] 80%
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
-- Use textureLoad instead of textureSample for all pipeline stage shaders (unfilterable-float constraint)
-- Remove sampler from bind group layout entirely (2 bindings instead of 3)
-- Use shared GPU pipeline (WeakMap<GPUDevice>) for all ThumbnailCanvas instances to avoid 10 separate pipelines
-- Use native wheel event listener with passive:false instead of React onWheel for reliable scroll prevention
-- Set initial canvas size synchronously from getBoundingClientRect before ResizeObserver fires
-- Added Vector3 type alias in Task 1 instead of Task 2 to avoid compilation failure (Rule 3 auto-fix)
-- Used Tailwind v4 @theme directive for surface palette instead of CSS custom properties for proper utility class support
-- Used inline select for pipeline-specific numeric dropdowns (BC Format, ODT Target) since grading/Select is string-generic
-- Used individual R/G/B Sliders for Vec3 params without ColorWheel equivalent
-- Converted HeightmapControls numeric selects to string-based for grading/Select compatibility
+- Blue frame for active stage (not just brighter gray) -- must be instantly distinguishable without biasing color perception
+- Used muted steel-blue #4488cc for active stage border -- visible but desaturated enough to avoid biasing color perception
+- Thumbnail area is a button, outer card is a plain div -- cleanest click target separation
+- Used Tailwind v4 @theme directive for surface palette
+- Used inline select for pipeline-specific numeric dropdowns since grading/Select is string-generic
 
 ### Pending Todos
 
@@ -65,5 +61,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-22
-Stopped at: Completed 02-02-PLAN.md (Phase 2 complete)
+Stopped at: Completed 04-01-PLAN.md (interaction clarity fixes)
 Resume file: None

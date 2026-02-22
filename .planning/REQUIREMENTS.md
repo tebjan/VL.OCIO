@@ -1,9 +1,9 @@
-# Requirements: Pipeline Checker Fix & Integration
+# Requirements: Pipeline Checker
 
 **Defined:** 2026-02-22
-**Core Value:** Every pipeline stage must render correctly and be verified by automated tests with real data
+**Core Value:** The user should always know what they're looking at and be able to inspect any stage without accidental interactions
 
-## v1 Requirements
+## v1.0 Requirements (Validated)
 
 ### Pipeline Fix
 
@@ -20,31 +20,47 @@
 - [x] **UI-03**: Color grading parameter names, ranges, and defaults match the existing `ui/` settings types
 - [x] **UI-04**: Remove all duplicated/custom grading UI code from pipeline-checker
 
-### Testing Framework
+## v1.1 Requirements
 
-- [ ] **TEST-01**: Testing framework can load an EXR test image and run it through the full pipeline
-- [ ] **TEST-02**: Each pipeline stage (input convert, color grade, RRT, ODT, output encode, display remap) is tested individually
-- [ ] **TEST-03**: Tests perform pixel readback from GPU and compare against expected values
-- [ ] **TEST-04**: Tests include visual heuristics (not just exact pixel matching) — e.g., brightness in expected range, no NaN/Inf, color channels within bounds
-- [ ] **TEST-05**: Tests run end-to-end pipeline and verify final output is visually correct
-- [ ] **TEST-06**: Test runner reports pass/fail per module with diagnostic output on failure
+Requirements for usability polish milestone. Each maps to roadmap phases.
 
-## v2 Requirements
+### Interaction
 
-### Extended Testing
+- [x] **INTX-01**: User can click stage enable/disable checkbox without accidentally selecting that stage as the active view
+- [x] **INTX-02**: User can identify the active stage at a glance via a blue border highlight on its card
+- [x] **INTX-03**: User can see the name of the currently viewed stage in the preview header (next to the 2D/3D buttons)
 
-- **TEST-07**: Automated visual regression testing with reference screenshots
-- **TEST-08**: Performance benchmarks per pipeline stage
-- **TEST-09**: BC compression quality metrics testing
+### Display Logic
+
+- [ ] **DISP-01**: Final Display stage always renders with sRGB curve applied, regardless of the vvvv viewer toggle state
+- [ ] **DISP-02**: The vvvv viewer toggle only affects stages before Final Display
+- [ ] **DISP-03**: When a DDS file is loaded, stages 0 (EXR Load) and 1 (BC Compress) are visually grayed out and unavailable
+
+### Tooltips
+
+- [ ] **TIPS-01**: Each pipeline stage thumbnail shows an explanatory tooltip describing what that stage does (appears after ~1s delay)
+- [ ] **TIPS-02**: Each UI control in the pipeline/display panels shows an explanatory tooltip describing its function (appears after ~1s delay)
+
+## Future Requirements
+
+### Testing Framework (deferred from v1.0)
+
+- **TEST-01**: Testing framework can load an EXR test image and run it through the full pipeline
+- **TEST-02**: Each pipeline stage is tested individually
+- **TEST-03**: Tests perform pixel readback from GPU and compare against expected values
+- **TEST-04**: Tests include visual heuristics (brightness range, no NaN/Inf, channel bounds)
+- **TEST-05**: Tests run end-to-end pipeline and verify final output
+- **TEST-06**: Test runner reports pass/fail per module with diagnostic output
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| WebSocket connection to vvvv backend | Pipeline-checker is standalone, not connected to C# server |
-| Preset save/load system | Belongs to the `ui/` project's backend integration |
-| Multi-instance support | Not needed for standalone pipeline verification |
-| Mobile layout | Pipeline-checker is a desktop dev tool |
+| GPU testing framework | Deferred from v1.0, separate milestone |
+| New pipeline stages | Improve existing, don't add new |
+| Grading UI redesign | Already integrated in v1.0 Phase 2 |
+| Performance optimization | Not a usability concern for this milestone |
+| Mobile/touch support | Desktop-only tool |
 
 ## Traceability
 
@@ -59,18 +75,22 @@
 | UI-02 | Phase 2 | Complete |
 | UI-03 | Phase 2 | Complete |
 | UI-04 | Phase 2 | Complete |
-| TEST-01 | Phase 3 | Pending |
-| TEST-02 | Phase 3 | Pending |
-| TEST-03 | Phase 3 | Pending |
-| TEST-04 | Phase 3 | Pending |
-| TEST-05 | Phase 3 | Pending |
-| TEST-06 | Phase 3 | Pending |
+| INTX-01 | Phase 4 | Complete |
+| INTX-02 | Phase 4 | Complete |
+| INTX-03 | Phase 4 | Complete |
+| DISP-01 | Phase 5 | Pending |
+| DISP-02 | Phase 5 | Pending |
+| DISP-03 | Phase 5 | Pending |
+| TIPS-01 | Phase 6 | Pending |
+| TIPS-02 | Phase 6 | Pending |
 
 **Coverage:**
-- v1 requirements: 15 total
-- Mapped to phases: 15
+
+- v1.1 requirements: 8 total
+- Mapped to phases: 8
 - Unmapped: 0
 
 ---
+
 *Requirements defined: 2026-02-22*
-*Last updated: 2026-02-22 after Phase 1 completion*
+*Last updated: 2026-02-22 after v1.1 roadmap created*

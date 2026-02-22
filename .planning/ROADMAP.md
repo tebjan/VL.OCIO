@@ -2,7 +2,12 @@
 
 ## Overview
 
-Fix the broken pipeline-checker rendering so all 10 stages produce visible output, replace the duplicated color grading controls with the existing `ui/` project's components, and build a real GPU testing framework that runs each pipeline module with actual image data and validates results through pixel readback and visual heuristics.
+Fix the broken pipeline-checker rendering so all 10 stages produce visible output, replace the duplicated color grading controls with the existing `ui/` project's components, and polish usability with better interaction handling, smarter display logic, and contextual help.
+
+## Milestones
+
+- [x] **v1.0 Pipeline Fix & UI Integration** - Phases 1-3 (shipped 2026-02-22)
+- [ ] **v1.1 Usability Polish** - Phases 4-6 (in progress)
 
 ## Phases
 
@@ -12,11 +17,23 @@ Fix the broken pipeline-checker rendering so all 10 stages produce visible outpu
 
 Decimal phases appear between their surrounding integers in numeric order.
 
+<details>
+<summary>v1.0 Pipeline Fix & UI Integration (Phases 1-3) - SHIPPED 2026-02-22</summary>
+
 - [x] **Phase 1: Pipeline Rendering** - Fix all 10 pipeline stages to render visible output with correct texture chaining, toggles, and previews
-- [ ] **Phase 2: Grading UI Integration** - Replace duplicated grading controls with the existing `ui/` project's components and styling
-- [ ] **Phase 3: GPU Testing Framework** - Build test runner that executes real WebGPU pipeline stages with pixel readback and visual heuristics
+- [x] **Phase 2: Grading UI Integration** - Replace duplicated grading controls with the existing `ui/` project's components and styling
+- [ ] **Phase 3: GPU Testing Framework** - Build test runner that executes real WebGPU pipeline stages with pixel readback and visual heuristics (deferred)
+
+</details>
+
+- [ ] **Phase 4: Interaction Clarity** - Fix click areas, add blue active-stage highlight, show stage name in preview header
+- [ ] **Phase 5: Display Logic** - Final Display always sRGB, toggle scoping, DDS stage graying
+- [ ] **Phase 6: Tooltips** - Explanatory tooltips on all pipeline stages and UI controls
 
 ## Phase Details
+
+<details>
+<summary>v1.0 Phase Details (Phases 1-3)</summary>
 
 ### Phase 1: Pipeline Rendering
 **Goal**: User loads an EXR and sees correct, visible output at every pipeline stage
@@ -30,8 +47,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 2 plans
 
 Plans:
-- [x] 01-01-PLAN.md — Debug and fix GPU pipeline rendering (shader compilation, texture binding, uniform alignment, stage chaining)
-- [x] 01-02-PLAN.md — Fix Preview2D display, filmstrip thumbnails, zoom/pan, and stage interaction
+- [x] 01-01-PLAN.md -- Debug and fix GPU pipeline rendering
+- [x] 01-02-PLAN.md -- Fix Preview2D display, filmstrip thumbnails, zoom/pan, and stage interaction
 
 ### Phase 2: Grading UI Integration
 **Goal**: Color grading controls in the pipeline-checker are the real `ui/` project components, not duplicates
@@ -39,37 +56,77 @@ Plans:
 **Requirements**: UI-01, UI-02, UI-03, UI-04
 **Success Criteria** (what must be TRUE):
   1. The pipeline-checker's color grading panel uses Slider, Select, ColorWheel, LiftGammaGain, and Section components imported from or matching the `ui/` project exactly
-  2. The grading controls' visual appearance (colors, spacing, fonts) matches the existing `ui/` project's Tailwind theme
-  3. All parameter names, value ranges, and defaults in the pipeline-checker match those defined in `ui/src/types/settings.ts`
+  2. The grading controls' visual appearance matches the existing `ui/` project's Tailwind theme
+  3. All parameter names, value ranges, and defaults match those defined in `ui/src/types/settings.ts`
   4. No duplicated or custom grading UI code remains in the pipeline-checker source
 **Plans**: 2 plans
 
 Plans:
-- [ ] 02-01-PLAN.md — Copy ui/ components, install deps, configure Tailwind v4 surface palette, create enum mapping layer
-- [ ] 02-02-PLAN.md — Rewrite ControlsPanel with ui/ grading components, update peripheral imports, delete old ui/ directory
+- [x] 02-01-PLAN.md -- Copy ui/ components, install deps, configure Tailwind v4 surface palette, create enum mapping layer
+- [x] 02-02-PLAN.md -- Rewrite ControlsPanel with ui/ grading components, update peripheral imports, delete old ui/ directory
 
 ### Phase 3: GPU Testing Framework
 **Goal**: Every pipeline module is verified by automated tests that actually run WebGPU shaders and validate output
 **Depends on**: Phase 1
 **Requirements**: TEST-01, TEST-02, TEST-03, TEST-04, TEST-05, TEST-06
+**Status**: Deferred to future milestone
+**Plans**: TBD
+
+</details>
+
+### v1.1 Usability Polish (In Progress)
+
+**Milestone Goal:** Improve pipeline-checker interaction clarity -- reduce accidental clicks, strengthen visual feedback, add contextual help, and handle DDS files more intelligently.
+
+### Phase 4: Interaction Clarity
+**Goal**: User can always identify and select the active stage without accidental interactions
+**Depends on**: Phase 2
+**Requirements**: INTX-01, INTX-02, INTX-03
 **Success Criteria** (what must be TRUE):
-  1. Running the test suite loads a real EXR image, executes the full pipeline through WebGPU, and reports pass/fail for the end-to-end run
-  2. Each pipeline module (input convert, color grade, RRT, ODT, output encode, display remap) has its own test that runs the module's shader independently and validates its output via GPU pixel readback
-  3. Tests apply visual heuristics beyond exact pixel matching -- checking brightness ranges, NaN/Inf absence, and color channel bounds -- and these heuristics catch intentionally broken inputs
-  4. The test runner prints a per-module pass/fail report with diagnostic details (actual vs. expected values, which heuristic failed) on any failure
+  1. User can click a stage's enable/disable checkbox without the main preview switching to that stage
+  2. User can instantly identify the active stage in the filmstrip by its distinct blue border (not a subtle gray)
+  3. User can read the name of the currently viewed stage in the preview header area, next to the 2D/3D view buttons
 **Plans**: TBD
 
 Plans:
-- [ ] 03-01: Test scaffolding and per-module GPU tests
-- [ ] 03-02: End-to-end pipeline test and heuristics
+- [ ] 04-01: Fix click areas, add blue highlight, show stage name in header
+
+### Phase 5: Display Logic
+**Goal**: Pipeline display behavior is correct for both EXR and DDS workflows without manual adjustment
+**Depends on**: Phase 2
+**Requirements**: DISP-01, DISP-02, DISP-03
+**Success Criteria** (what must be TRUE):
+  1. Final Display stage output always shows sRGB-curved values regardless of the vvvv viewer toggle position
+  2. Toggling the vvvv viewer toggle visibly changes stages before Final Display but has no effect on Final Display itself
+  3. When a DDS file is loaded, stages 0 (EXR Load) and 1 (BC Compress) appear grayed out and cannot be selected as the active view
+**Plans**: TBD
+
+Plans:
+- [ ] 05-01: sRGB scoping for Final Display, DDS stage graying
+
+### Phase 6: Tooltips
+**Goal**: User can discover what each pipeline stage and UI control does without external documentation
+**Depends on**: Phase 4
+**Requirements**: TIPS-01, TIPS-02
+**Success Criteria** (what must be TRUE):
+  1. Hovering over any pipeline stage thumbnail for ~1 second shows a tooltip describing what that stage does in the pipeline
+  2. Hovering over any UI control (toggles, dropdowns, buttons) for ~1 second shows a tooltip explaining its function
+  3. Tooltips do not obscure the main preview area or interfere with color perception
+**Plans**: TBD
+
+Plans:
+- [ ] 06-01: Add tooltips to pipeline stages and UI controls
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3
+Phases execute in numeric order: 4 -> 5 -> 6
 
-| Phase | Plans Complete | Status | Completed |
-|-------|----------------|--------|-----------|
-| 1. Pipeline Rendering | 2/2 | Complete | 2026-02-22 |
-| 2. Grading UI Integration | 0/2 | Not started | - |
-| 3. GPU Testing Framework | 0/2 | Not started | - |
+| Phase | Milestone | Plans Complete | Status | Completed |
+|-------|-----------|----------------|--------|-----------|
+| 1. Pipeline Rendering | v1.0 | 2/2 | Complete | 2026-02-22 |
+| 2. Grading UI Integration | v1.0 | 2/2 | Complete | 2026-02-22 |
+| 3. GPU Testing Framework | v1.0 | 0/2 | Deferred | - |
+| 4. Interaction Clarity | v1.1 | 0/1 | Not started | - |
+| 5. Display Logic | v1.1 | 0/1 | Not started | - |
+| 6. Tooltips | v1.1 | 0/1 | Not started | - |

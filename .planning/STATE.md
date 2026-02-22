@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-02-22)
 
 **Core value:** Every pipeline stage must render correctly -- SDSL shaders are the single source of truth for both Stride and the pipeline-checker
-**Current focus:** Milestone v1.2 - Shader Transpiler, Phase 9
+**Current focus:** Milestone v1.2 - Shader Transpiler -- COMPLETE
 
 ## Current Position
 
-Phase: 8 of 9 (Transpiler Tool) -- COMPLETE
+Phase: 9 of 9 (Verification & Integration) -- COMPLETE
 Plan: 1 of 1 in current phase
-Status: Phase 8 complete, ready for Phase 9 verification
-Last activity: 2026-02-22 -- Completed Phase 8 Transpiler Tool
+Status: v1.2 Shader Transpiler milestone complete
+Last activity: 2026-02-22 -- Completed Phase 9 Verification & Integration
 
 ## Performance Metrics
 
@@ -68,5 +68,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-22
-Stopped at: Phase 8 complete, ready for Phase 9
+Stopped at: v1.2 Shader Transpiler milestone complete
 Resume file: None

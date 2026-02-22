@@ -5,6 +5,7 @@
 // black is not 0 and white is not 1. With default values
 // (blackLevel=0, whiteLevel=1) this is a no-op.
 
+
 // ============================================================================
 // Uniforms — reads from shared PipelineUniforms buffer
 // ============================================================================
@@ -65,6 +66,7 @@ struct Uniforms {
 fn RemapDisplayRange(color: vec3<f32>, blackLevel: f32, whiteLevel: f32) -> vec3<f32> {
     return blackLevel + color * (whiteLevel - blackLevel);
 }
+
 
 // ============================================================================
 // Fragment Shader

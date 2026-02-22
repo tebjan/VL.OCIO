@@ -3,6 +3,7 @@
 // ALL matrices TRANSPOSED for WGSL column-major layout.
 // Pipeline: Linear Rec.709 → Linear AP1 → Grading → Linear AP1 → Linear Rec.709
 
+
 // ============================================================================
 // Uniforms — reads from shared PipelineUniforms buffer
 // Must match PipelineUniforms.ts byte offsets exactly.
@@ -79,9 +80,9 @@ const HLG_c: f32 = 0.55991073;
 
 // Rec.709 → AP1 (includes D65→D60 Bradford)
 const Rec709_to_AP1 = mat3x3<f32>(
-    vec3<f32>(0.6131324, 0.0701934, 0.0206155),
-    vec3<f32>(0.3395381, 0.9163539, 0.1095697),
-    vec3<f32>(0.0473296, 0.0134527, 0.8698148)
+    vec3<f32>( 0.6131324,  0.0701934,  0.0206155),
+    vec3<f32>( 0.3395381,  0.9163539,  0.1095697),
+    vec3<f32>( 0.0473296,  0.0134527,  0.8698148)
 );
 
 // AP1 → Rec.709 (includes D60→D65 Bradford)
@@ -98,11 +99,11 @@ const Rec2020_to_Rec709 = mat3x3<f32>(
     vec3<f32>(-0.0728499, -0.0083494,  1.1187297)
 );
 
+
 // ============================================================================
 // Transfer Functions
 // ============================================================================
 
-// sRGB (IEC 61966-2-1)
 fn sRGBToLinear_channel(s: f32) -> f32 {
     if (s <= 0.04045) { return s / 12.92; }
     return pow((s + 0.055) / 1.055, 2.4);
@@ -111,16 +112,21 @@ fn sRGBToLinear(srgb: vec3<f32>) -> vec3<f32> {
     return vec3<f32>(sRGBToLinear_channel(srgb.r), sRGBToLinear_channel(srgb.g), sRGBToLinear_channel(srgb.b));
 }
 
-// ACEScc (S-2014-003)
+fn LinearToSRGB_channel(l: f32) -> f32 {
+    if (l <= 0.0031308) { return l * 12.92; }
+    return 1.055 * pow(l, 1.0 / 2.4) - 0.055;
+}
+fn LinearToSRGB(lin: vec3<f32>) -> vec3<f32> {
+    return vec3<f32>(LinearToSRGB_channel(lin.r), LinearToSRGB_channel(lin.g), LinearToSRGB_channel(lin.b));
+}
 fn LinearToACEScc(lin: vec3<f32>) -> vec3<f32> {
     let linClamped = max(lin, vec3<f32>(1e-10));
     return (log2(linClamped) + 9.72) / 17.52;
 }
 fn ACESccToLinear(cc: vec3<f32>) -> vec3<f32> {
-    return clamp(exp2(cc * 17.52 - 9.72), vec3<f32>(0.0), vec3<f32>(65504.0));
+    let lin = exp2(cc * 17.52 - 9.72);
+    return clamp(lin, vec3<f32>(0.0), vec3<f32>(65504.0));
 }
-
-// ACEScct (S-2016-001)
 fn LinearToACEScct(lin: vec3<f32>) -> vec3<f32> {
     let linClamped = max(lin, vec3<f32>(1e-10));
     let linearSeg = ACEScct_A * linClamped + ACEScct_B;
@@ -132,16 +138,13 @@ fn ACEScctToLinear(cct: vec3<f32>) -> vec3<f32> {
     let linearSeg = (cct - ACEScct_B) / ACEScct_A;
     let logSeg = exp2(cct * 17.52 - 9.72);
     let useLog = step(vec3<f32>(ACEScct_CUT_LOG), cct);
-    return clamp(mix(linearSeg, logSeg, useLog), vec3<f32>(0.0), vec3<f32>(65504.0));
+    let lin = mix(linearSeg, logSeg, useLog);
+    return clamp(lin, vec3<f32>(0.0), vec3<f32>(65504.0));
 }
-
-// PQ (ST.2084)
 fn PQToLinear(N: vec3<f32>) -> vec3<f32> {
     let Nm2 = pow(max(N, vec3<f32>(0.0)), vec3<f32>(1.0 / PQ_m2));
     return pow(max(Nm2 - PQ_c1, vec3<f32>(0.0)) / (PQ_c2 - PQ_c3 * Nm2), vec3<f32>(1.0 / PQ_m1));
 }
-
-// HLG (BT.2100)
 fn HLGToLinear(V: vec3<f32>) -> vec3<f32> {
     let sqrtSeg = (V * V) / 3.0;
     let logSeg = (exp((V - HLG_c) / HLG_a) + HLG_b) / 12.0;

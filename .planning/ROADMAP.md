@@ -175,7 +175,10 @@ Plans:
   2. Pipeline checker renders identically when using generated WGSL compared to the current hand-ported WGSL
   3. Generated WGSL files replace the hand-ported files and the pipeline checker builds and runs successfully
   4. Generated WGSL files are committed to git as on-demand output (transpiler is not part of the build process)
-**Plans**: TBD
+**Plans**: 1 plan
+
+Plans:
+- [ ] 09-01-PLAN.md -- Verify SDSL/WGSL parity, fix transpiler duplicates, replace hand-ported WGSL, build/test, commit
 
 ## Progress
 

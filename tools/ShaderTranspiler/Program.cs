@@ -31,7 +31,8 @@ using System.Text.RegularExpressions;
 
 var repoRoot = FindRepoRoot();
 var shadersDir = Path.Combine(repoRoot, "shaders");
-var outputDir = Path.Combine(repoRoot, "pipeline-checker", "src", "shaders", "generated");
+var referenceWgslDir = Path.Combine(repoRoot, "pipeline-checker", "src", "shaders", "generated");
+var outputDir = Path.Combine(repoRoot, "shaders", "transpiled");
 var tempDir = Path.Combine(Path.GetTempPath(), "ShaderTranspiler");
 
 // Parse CLI args
@@ -181,7 +182,7 @@ string TranspileDirectly(StageDefinition stage, Dictionary<string, string> sourc
 {
     Console.Write("  SDSL → WGSL: ");
 
-    var transpiler = new SdslToWgslTranspiler(sources, outputDir);
+    var transpiler = new SdslToWgslTranspiler(sources, referenceWgslDir);
     var wgsl = stage.WgslName switch
     {
         "input-convert"  => transpiler.TranspileInputConvert(),
@@ -1559,13 +1560,12 @@ const agx_mat_inv = mat3x3<f32>(
     void EmitRrtFragment(StringBuilder sb)
     {
         var rrtWgsl = ReadExistingWgsl("rrt.wgsl");
-        // Extract from "Fragment Shader" to end
-        var startMarker = "// Fragment Shader";
-        var startIdx = rrtWgsl.IndexOf(startMarker, StringComparison.Ordinal);
+        // Extract from "Fragment Shader" to end using proper section header search
+        var startIdx = FindSectionHeader(rrtWgsl, "Fragment Shader");
         if (startIdx >= 0)
         {
             // Find the end of the section header (===)
-            var headerEnd = rrtWgsl.IndexOf('\n', rrtWgsl.IndexOf("====", startIdx + startMarker.Length));
+            var headerEnd = rrtWgsl.IndexOf('\n', rrtWgsl.IndexOf("====", startIdx + "// Fragment Shader".Length));
             if (headerEnd >= 0)
             {
                 sb.AppendLine(rrtWgsl[(headerEnd + 1)..].TrimEnd());
@@ -1836,48 +1836,82 @@ fn getACESPeakNits(tonemapOp: i32, outputSpace: i32, peakBrightness: f32) -> f32
         return File.ReadAllText(wgslPath);
     }
 
+    /// <summary>
+    /// Finds a proper section header in the source — one that is preceded by a line of "// ====".
+    /// This avoids matching subsection comments like "// ACES 1.3 RRT" inside the "ACES Constants" block.
+    /// Returns the index of the "// {sectionName}" line, or -1 if not found.
+    /// </summary>
+    int FindSectionHeader(string source, string sectionName, int searchFrom = 0)
+    {
+        var marker = $"// {sectionName}";
+        var idx = searchFrom;
+        while (true)
+        {
+            idx = source.IndexOf(marker, idx, StringComparison.Ordinal);
+            if (idx < 0) return -1;
+
+            // Check if this is a proper section header by looking for "// ====" on the line before
+            var lineStart = source.LastIndexOf('\n', Math.Max(idx - 1, 0));
+            if (lineStart < 0) lineStart = 0; else lineStart++;
+
+            // Look at the previous non-empty line to see if it's a separator
+            var prevLineEnd = lineStart > 1 ? lineStart - 1 : 0; // points to '\n' before this line
+            if (prevLineEnd > 0)
+            {
+                var prevLineStart = source.LastIndexOf('\n', Math.Max(prevLineEnd - 1, 0));
+                if (prevLineStart < 0) prevLineStart = 0; else prevLineStart++;
+                var prevLine = source[prevLineStart..prevLineEnd].Trim();
+                if (prevLine.StartsWith("// ===="))
+                    return idx;
+            }
+
+            // Not a proper section header, keep searching
+            idx += marker.Length;
+        }
+    }
+
     void EmitVerifiedSection(StringBuilder sb, string source, string startSection, string endSection)
     {
-        // Extract text between two section markers
-        var startMarker = $"// {startSection}";
-        var endMarker = $"// {endSection}";
-
-        var startIdx = source.IndexOf(startMarker, StringComparison.Ordinal);
+        // Extract text between two proper section headers (preceded by "// ====")
+        var startIdx = FindSectionHeader(source, startSection);
         if (startIdx < 0)
         {
             sb.AppendLine($"// WARNING: Could not find section '{startSection}'");
             return;
         }
 
-        var endIdx = source.IndexOf(endMarker, startIdx + startMarker.Length, StringComparison.Ordinal);
+        var endIdx = FindSectionHeader(source, endSection, startIdx + 1);
         if (endIdx < 0)
         {
             // Take everything from start to end
             endIdx = source.Length;
         }
 
-        // Skip the section header (find the line after the === markers)
-        var headerEnd = source.IndexOf('\n', source.IndexOf("====", startIdx + startMarker.Length));
+        // Skip the section header (find the line after the === closing markers)
+        var closingEquals = source.IndexOf("====", startIdx + $"// {startSection}".Length);
+        var headerEnd = closingEquals >= 0 ? source.IndexOf('\n', closingEquals) : -1;
         if (headerEnd < 0 || headerEnd >= endIdx)
             headerEnd = startIdx;
         else
             headerEnd++; // skip the newline
 
-        // Find the section header of the end marker
+        // Find the start of the end section's header block (the "// ====" line before the end marker)
         var bodyEnd = endIdx;
-        // Walk back to find the start of the end section's header block
-        var headerStart = source.LastIndexOf("\n//", endIdx - 1, endIdx - headerEnd);
-        if (headerStart > headerEnd)
+        if (endIdx < source.Length)
         {
-            // Check if this is the section separator (line of ====)
-            var prevNewline = source.LastIndexOf('\n', headerStart - 1, headerStart - headerEnd);
-            if (prevNewline >= 0)
+            // Walk back from endIdx to find the "// ====" separator line that precedes it
+            var headerStart = source.LastIndexOf("\n//", endIdx - 1, endIdx - headerEnd);
+            if (headerStart > headerEnd)
             {
-                var line = source.Substring(prevNewline + 1, headerStart - prevNewline - 1).Trim();
-                if (line.StartsWith("// ===="))
-                    bodyEnd = prevNewline;
-                else
-                    bodyEnd = headerStart;
+                var prevNewline = source.LastIndexOf('\n', headerStart - 1, headerStart - headerEnd);
+                if (prevNewline >= 0)
+                {
+                    var line = source.Substring(prevNewline + 1, headerStart - prevNewline - 1).Trim();
+                    if (line.StartsWith("// ===="))
+                        bodyEnd = prevNewline;
+                    else
+                        bodyEnd = headerStart;
+                }
             }
         }
 

@@ -9,14 +9,15 @@
 // For tonemapOp 2 (ACES 1.3): C9 spline + dim surround + ODT desat + gamut convert.
 // For tonemapOp 3 (ACES 2.0): simple gamut matrix (AP1 → display).
 
+
 // ============================================================================
 // Uniforms — reads from shared PipelineUniforms buffer
 // ============================================================================
 
 struct Uniforms {
-    // Stage 4 (not used by ODT)
+    // Stage 4 (not used)
     _inputSpace: i32,             // byte 0
-    // Stage 5 scalars (not used by ODT)
+    // Stage 5 scalars (not used)
     _gradingSpace: i32,           // byte 4
     _gradeExposure: f32,          // byte 8
     _contrast: f32,               // byte 12
@@ -28,7 +29,7 @@ struct Uniforms {
     _vibrance: f32,               // byte 36
     _pad0a: f32,                  // byte 40
     _pad0b: f32,                  // byte 44
-    // Stage 5 vec3 fields (not used by ODT)
+    // Stage 5 vec3 fields (not used)
     _lift: vec3<f32>,             // byte 48
     _pad1: f32,                   // byte 60
     _gamma: vec3<f32>,            // byte 64
@@ -120,6 +121,7 @@ const AP1_to_Rec2020 = mat3x3<f32>(
     vec3<f32>(-0.0130790,  1.0220618, -0.0292020),
     vec3<f32>(-0.0081028, -0.0133563,  1.0346800)
 );
+
 
 // ============================================================================
 // ACES Segmented Spline C5 (needed by C9 for reference points)
@@ -271,8 +273,6 @@ fn aces_darkSurround_to_dimSurround(linearCV: vec3<f32>) -> vec3<f32> {
 
 // ============================================================================
 // ACES 1.3 ODT — Rec.709 100 nits (SDR)
-// Input: RRT output in AP1
-// Output: LINEAR Rec.709
 // ============================================================================
 
 fn ACES13_ODT_Rec709_100nits(rrtOutput: vec3<f32>) -> vec3<f32> {
@@ -298,8 +298,6 @@ fn ACES13_ODT_Rec709_100nits(rrtOutput: vec3<f32>) -> vec3<f32> {
 
 // ============================================================================
 // ACES 1.3 ODT — Rec.2020 1000 nits (HDR)
-// Input: RRT output in AP1
-// Output: LINEAR Rec.2020 (normalized: 1.0 = 1000 nits)
 // ============================================================================
 
 fn ACES13_ODT_Rec2020_1000nits(rrtOutput: vec3<f32>) -> vec3<f32> {
@@ -322,8 +320,6 @@ fn ACES13_ODT_Rec2020_1000nits(rrtOutput: vec3<f32>) -> vec3<f32> {
 
 // ============================================================================
 // ACES 2.0 ODT — Simple gamut conversion (no Hellwig CAM)
-// Input: Normalized AP1 [0-1] from ACES20_RRT
-// Output: LINEAR in target display gamut
 // ============================================================================
 
 fn ACES20_ODT_Rec709(ap1: vec3<f32>) -> vec3<f32> {
@@ -347,6 +343,7 @@ fn isRec2020Target(outputSpace: i32) -> bool {
 // ============================================================================
 // Fragment Shader
 // ============================================================================
+
 
 @fragment
 fn fs(in: VertexOutput) -> @location(0) vec4<f32> {

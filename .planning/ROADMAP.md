@@ -160,7 +160,11 @@ Plans:
   2. The transpiler uses Stride NuGet packages to compile SDSL to HLSL (not manual parser init)
   3. The transpiler invokes DXC (HLSL to SPIR-V) and Naga (SPIR-V to WGSL) as part of its pipeline
   4. Generated WGSL files are syntactically valid and contain the expected entry points and bindings
-**Plans**: TBD
+**Plans**: 1 plan
+
+Plans:
+
+- [ ] 08-01-PLAN.md -- Create transpiler console app with full SDSL-HLSL-SPIRV-WGSL pipeline and generate 6 WGSL files
 
 ### Phase 9: Verification & Integration
 **Goal**: Generated WGSL is proven mathematically identical to hand-ported WGSL and replaces it in the pipeline checker

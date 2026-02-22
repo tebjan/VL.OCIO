@@ -21,6 +21,8 @@ export interface PipelineInstance {
   fileName: string | null;
   fileType: LoadedFileType;
   fileHandle?: FileSystemFileHandle;
+  /** DDS format label (e.g. "BC6H", "BC7") — stored so reset can determine scene-linearity. */
+  ddsFormatLabel?: string;
   renderer: PipelineRenderer;
   sourceTexture: GPUTexture;
   settings: PipelineSettings;

@@ -8,9 +8,9 @@ import { MainPreview } from './components/MainPreview';
 import { MetadataPanel, computeChannelStats, type ImageMetadata, type ChannelStats } from './components/MetadataPanel';
 import { usePipelineManager } from './hooks/usePipelineManager';
 import { uploadFloat32Texture, uploadFloat16Texture, uploadDDSTexture } from './pipeline/TextureUtils';
-import { MAX_PIPELINES, PIPELINE_COLORS } from './types/PipelineInstance';
-import { STAGE_NAMES } from './pipeline/types/StageInfo';
+import { type PipelineId, MAX_PIPELINES, PIPELINE_COLORS } from './types/PipelineInstance';
 import type { PreviewLayer } from './components/Preview2D';
+import type { HeightmapLayer } from './components/HeightmapView';
 import { parseDDS } from './pipeline/DDSParser';
 import {
   serializeUniforms,
@@ -18,6 +18,11 @@ import {
 } from './pipeline/PipelineUniforms';
 import type { PipelineSettings } from './types/settings';
 import { saveFileHandle, loadFileHandle, saveViewState, loadViewState } from './lib/sessionStore';
+
+/** Extensions decodable by the browser via createImageBitmap. */
+const BROWSER_IMAGE_EXTS = new Set([
+  'jpg', 'jpeg', 'jpe', 'png', 'bmp', 'webp', 'avif', 'gif', 'ico', 'svg',
+]);
 
 type AppState =
   | { kind: 'initializing' }
@@ -163,6 +168,32 @@ function downsampleRGBA<T extends Float32Array | Uint16Array>(
   return dst;
 }
 
+/**
+ * Decode a JPEG/PNG file to Float32 RGBA, preserving sRGB encoding.
+ * The Color Grade shader's DecodeInput() handles sRGB→linear conversion.
+ */
+async function decodeImageToFloat32(
+  file: File,
+): Promise<{ data: Float32Array; width: number; height: number }> {
+  const bitmap = await createImageBitmap(file);
+  const { width, height } = bitmap;
+  const canvas = new OffscreenCanvas(width, height);
+  const ctx = canvas.getContext('2d')!;
+  ctx.drawImage(bitmap, 0, 0);
+  bitmap.close();
+  const imageData = ctx.getImageData(0, 0, width, height);
+  const src = imageData.data; // Uint8ClampedArray, sRGB
+  const dst = new Float32Array(width * height * 4);
+  for (let i = 0; i < src.length; i += 4) {
+    // Keep sRGB values — shader handles linearization via DecodeInput
+    dst[i] = src[i] / 255;
+    dst[i + 1] = src[i + 1] / 255;
+    dst[i + 2] = src[i + 2] / 255;
+    dst[i + 3] = src[i + 3] / 255;
+  }
+  return { data: dst, width, height };
+}
+
 /** Convert a float32 value to IEEE 754 half-float (uint16). */
 function floatToHalf(v: number): number {
   const buf = new ArrayBuffer(4);
@@ -184,24 +215,40 @@ export default function App() {
   const [isDragging, setIsDragging] = useState(false);
   const manager = usePipelineManager();
 
-  // Load a file into the pipeline manager — adds a new pipeline or replaces selected if at capacity
+  // Loading / error toast state
+  const [dropLoading, setDropLoading] = useState(false);
+  const [dropError, setDropError] = useState<string | null>(null);
+
+  // Auto-clear error toast after 5 seconds
+  useEffect(() => {
+    if (!dropError) return;
+    const t = setTimeout(() => setDropError(null), 5000);
+    return () => clearTimeout(t);
+  }, [dropError]);
+
+  // Load a file into the pipeline manager.
+  // targetPipelineId = specific pipeline to replace; null = add new (or replace selected if at capacity).
   const loadFile = useCallback(
-    (gpu: GPUContext, sourceTexture: GPUTexture, width: number, height: number, stats: ChannelStats | null, fileSizeMB: string, fileType: LoadedFileType, fileName?: string, fileHandle?: FileSystemFileHandle) => {
+    (gpu: GPUContext, sourceTexture: GPUTexture, width: number, height: number, stats: ChannelStats | null, fileSizeMB: string, fileType: LoadedFileType, fileName?: string, fileHandle?: FileSystemFileHandle, targetPipelineId?: PipelineId | null, ddsFormatLabel?: string) => {
       const metadata: ImageMetadata = {
         width,
         height,
-        channels: fileType === 'dds' ? 'BC Compressed' : 'RGBA Float16',
+        channels: fileType === 'dds' ? 'BC Compressed' : fileType === 'image' ? 'RGBA 8-bit (sRGB)' : 'RGBA Float16',
         fileSizeMB,
         fileName,
         stats,
       };
 
-      if (manager.pipelines.length < MAX_PIPELINES) {
-        manager.addPipeline(gpu.device, sourceTexture, width, height, metadata, fileType, fileName, fileHandle);
+      if (targetPipelineId) {
+        // Replace a specific pipeline
+        manager.replacePipelineSource(targetPipelineId, gpu.device, sourceTexture, width, height, metadata, fileType, fileName, fileHandle, ddsFormatLabel);
+      } else if (manager.pipelines.length < MAX_PIPELINES) {
+        // Add new pipeline
+        manager.addPipeline(gpu.device, sourceTexture, width, height, metadata, fileType, fileName, fileHandle, ddsFormatLabel);
       } else {
         // At capacity — replace the currently selected pipeline
-        const targetId = manager.selectedPipelineId ?? manager.pipelines[0].id;
-        manager.replacePipelineSource(targetId, gpu.device, sourceTexture, width, height, metadata, fileType, fileName, fileHandle);
+        const fallbackId = manager.selectedPipelineId ?? manager.pipelines[0].id;
+        manager.replacePipelineSource(fallbackId, gpu.device, sourceTexture, width, height, metadata, fileType, fileName, fileHandle, ddsFormatLabel);
       }
 
       setState({ kind: 'ready', gpu });
@@ -247,11 +294,22 @@ export default function App() {
               const dds = parseDDS(buffer);
               const sourceTexture = uploadDDSTexture(gpu.device, dds);
               const sizeMB = (buffer.byteLength / (1024 * 1024)).toFixed(2);
-              loadFile(gpu, sourceTexture, dds.width, dds.height, null, sizeMB, 'dds', stored.fileName);
+              loadFile(gpu, sourceTexture, dds.width, dds.height, null, sizeMB, 'dds', stored.fileName, undefined, null, dds.formatLabel);
               const savedStage = loadViewState();
               if (savedStage !== null) {
                 setTimeout(() => manager.selectStage(savedStage), 0);
               }
+              return;
+            } else if (stored.fileType === 'image') {
+              const restoredFile = await stored.handle.getFile();
+              const decoded = await decodeImageToFloat32(restoredFile);
+              if (cancelled) return;
+              const stats = computeChannelStats(decoded.data, decoded.width, decoded.height);
+              const sourceTexture = uploadFloat32Texture(gpu.device, decoded.data, decoded.width, decoded.height, true);
+              const sizeMB = (buffer.byteLength / (1024 * 1024)).toFixed(2);
+              loadFile(gpu, sourceTexture, decoded.width, decoded.height, stats, sizeMB, 'image', stored.fileName);
+              const savedStage = loadViewState();
+              if (savedStage !== null) manager.selectStage(savedStage);
               return;
             }
           } catch (err) {
@@ -274,43 +332,73 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Handle EXR buffer from drop
-  const handleExrBuffer = useCallback(
-    async (buffer: ArrayBuffer, fileName: string, fileHandle?: FileSystemFileHandle) => {
+  /**
+   * Unified file drop handler.
+   * Detects file type from extension, parses, uploads, and routes to the correct pipeline.
+   * targetPipelineId: specific pipeline to replace, or null to add a new one.
+   */
+  const handleFileDrop = useCallback(
+    async (file: File, fileHandle: FileSystemFileHandle | undefined, targetPipelineId: PipelineId | null) => {
       const gpu = gpuRef.current;
       if (!gpu) return;
 
-      const parsed = await parseAndUploadExr(gpu.device, buffer);
-      if (!parsed) throw new Error(`Failed to parse EXR file "${fileName}": no image data returned.`);
+      const fileName = file.name;
+      const ext = fileName.split('.').pop()?.toLowerCase() ?? '';
 
-      const sizeMB = (buffer.byteLength / (1024 * 1024)).toFixed(2);
-      loadFile(gpu, parsed.sourceTexture, parsed.width, parsed.height, parsed.stats, sizeMB, 'exr', fileName, fileHandle);
-
-      if (fileHandle) saveFileHandle(fileHandle, 'exr', fileName);
-    },
-    [loadFile],
-  );
-
-  // Handle DDS file loaded from drop
-  const handleDdsLoaded = useCallback(
-    (buffer: ArrayBuffer, fileName: string, fileHandle?: FileSystemFileHandle) => {
-      const gpu = gpuRef.current;
-      if (!gpu) return;
+      setDropLoading(true);
+      setDropError(null);
 
       try {
-        const dds = parseDDS(buffer);
-        console.log(`[App] Parsed DDS: ${fileName} (${dds.width}x${dds.height}, ${dds.formatLabel})`);
-        const sourceTexture = uploadDDSTexture(gpu.device, dds);
+        const buffer = await file.arrayBuffer();
         const sizeMB = (buffer.byteLength / (1024 * 1024)).toFixed(2);
-        loadFile(gpu, sourceTexture, dds.width, dds.height, null, sizeMB, 'dds', fileName, fileHandle);
 
-        if (fileHandle) saveFileHandle(fileHandle, 'dds', fileName);
+        if (ext === 'exr') {
+          const parsed = await parseAndUploadExr(gpu.device, buffer);
+          if (!parsed) throw new Error(`Failed to parse EXR file "${fileName}": no image data returned.`);
+          loadFile(gpu, parsed.sourceTexture, parsed.width, parsed.height, parsed.stats, sizeMB, 'exr', fileName, fileHandle, targetPipelineId);
+          if (fileHandle) saveFileHandle(fileHandle, 'exr', fileName);
+        } else if (ext === 'dds') {
+          const dds = parseDDS(buffer);
+          console.log(`[App] Parsed DDS: ${fileName} (${dds.width}x${dds.height}, ${dds.formatLabel})`);
+          const sourceTexture = uploadDDSTexture(gpu.device, dds);
+          loadFile(gpu, sourceTexture, dds.width, dds.height, null, sizeMB, 'dds', fileName, fileHandle, targetPipelineId, dds.formatLabel);
+          if (fileHandle) saveFileHandle(fileHandle, 'dds', fileName);
+        } else if (BROWSER_IMAGE_EXTS.has(ext)) {
+          const decoded = await decodeImageToFloat32(file);
+          const stats = computeChannelStats(decoded.data, decoded.width, decoded.height);
+          const sourceTexture = uploadFloat32Texture(gpu.device, decoded.data, decoded.width, decoded.height, true);
+          loadFile(gpu, sourceTexture, decoded.width, decoded.height, stats, sizeMB, 'image', fileName, fileHandle, targetPipelineId);
+          if (fileHandle) saveFileHandle(fileHandle, 'image', fileName);
+        } else {
+          throw new Error(`Unsupported file type: .${ext}`);
+        }
       } catch (err) {
-        console.error(`[App] DDS load error for "${fileName}":`, err);
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`[App] File drop error for "${fileName}":`, msg);
+        setDropError(msg);
+      } finally {
+        setDropLoading(false);
       }
     },
     [loadFile],
   );
+
+  // Tab key cycles selected pipeline
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Tab' && manager.pipelines.length > 1) {
+        e.preventDefault();
+        const ids = manager.pipelines.map((p) => p.id);
+        const curIdx = ids.indexOf(manager.selectedPipelineId ?? '');
+        const nextIdx = e.shiftKey
+          ? (curIdx - 1 + ids.length) % ids.length
+          : (curIdx + 1) % ids.length;
+        manager.selectPipeline(ids[nextIdx]);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [manager.pipelines, manager.selectedPipelineId, manager.selectPipeline]);
 
   // Persist selected stage index to localStorage whenever it changes.
   useEffect(() => {
@@ -367,30 +455,44 @@ export default function App() {
     return inst.renderer.getStageOutput(rendererIndex) ?? inst.sourceTexture;
   }, [manager.selectedPipeline]);
 
-  const getSelectedTexture = (): GPUTexture | null => {
-    return getStageTexture(manager.selectedStageIndex);
-  };
-
   const getStageTexturesForPipeline = useCallback((inst: { renderer: { getStageOutput(i: number): GPUTexture | null; getStages(): ReadonlyArray<unknown> }; sourceTexture: GPUTexture; stageStates: { enabled: boolean }[] }): (GPUTexture | null)[] => {
     return inst.stageStates.map((_, i) => getStageTexture(i, inst));
   }, [getStageTexture]);
 
   const buildPreviewLayers = useCallback((): PreviewLayer[] => {
-    const lastStageIdx = STAGE_NAMES.length - 1;
     return manager.pipelines
       .map((pipeline) => {
         const texture = getStageTexture(pipeline.selectedStageIndex, pipeline);
         if (!texture) return null;
         const color = PIPELINE_COLORS[pipeline.colorIndex];
-        const isLastStage = pipeline.selectedStageIndex === lastStageIdx;
         return {
           texture,
           borderColor: [color.rgb[0], color.rgb[1], color.rgb[2]] as [number, number, number],
           isSelected: manager.pipelines.length > 1 && pipeline.id === manager.selectedPipelineId,
-          applySRGB: isLastStage ? true : (pipeline.settings.applySRGB ?? true),
+          applySRGB: (pipeline.selectedStageIndex < 3 && pipeline.settings.inputColorSpace === 5)
+            ? false
+            : (pipeline.settings.applySRGB ?? true),
         };
       })
       .filter((l): l is PreviewLayer => l !== null);
+  }, [manager.pipelines, manager.selectedPipelineId, getStageTexture]);
+
+  const buildHeightmapLayers = useCallback((): HeightmapLayer[] => {
+    const multi = manager.pipelines.length > 1;
+    return manager.pipelines
+      .map((pipeline) => {
+        const texture = getStageTexture(pipeline.selectedStageIndex, pipeline);
+        if (!texture) return null;
+        const color = PIPELINE_COLORS[pipeline.colorIndex];
+        return {
+          texture,
+          wireframeColor: multi
+            ? [color.rgb[0], color.rgb[1], color.rgb[2]] as [number, number, number]
+            : [0.267, 0.267, 0.267] as [number, number, number],
+          isSelected: multi && pipeline.id === manager.selectedPipelineId,
+        };
+      })
+      .filter((l): l is HeightmapLayer => l !== null);
   }, [manager.pipelines, manager.selectedPipelineId, getStageTexture]);
 
   const gpu = state.kind === 'ready' ? state.gpu : null;
@@ -401,9 +503,7 @@ export default function App() {
 
       {gpuRef.current && (
         <DropZone
-          onExrBuffer={handleExrBuffer}
-          onDdsLoaded={handleDdsLoaded}
-          hasBC={gpuRef.current.hasBC}
+          onFileDrop={(file, fileHandle) => handleFileDrop(file, fileHandle, null)}
           onDragStateChange={setIsDragging}
         />
       )}
@@ -449,6 +549,7 @@ export default function App() {
             renderVersion={manager.renderVersion}
             getStageTextures={getStageTexturesForPipeline}
             isDragging={isDragging}
+            onFileDrop={handleFileDrop}
           />
 
           <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
@@ -457,7 +558,7 @@ export default function App() {
                 device={gpu.device}
                 format={gpu.format}
                 layers={buildPreviewLayers()}
-                stageTexture={getSelectedTexture()}
+                heightmapLayers={buildHeightmapLayers()}
                 renderVersion={manager.renderVersion}
                 stageName={manager.selectedStages[manager.selectedStageIndex]?.name}
               />
@@ -465,6 +566,7 @@ export default function App() {
 
             <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
               <ControlsPanel
+                key={manager.selectedPipelineId}
                 settings={manager.selectedSettings}
                 onSettingsChange={(patch) => manager.updateSettings(patch)}
                 onReset={() => manager.resetAll()}
@@ -475,6 +577,31 @@ export default function App() {
             </div>
           </div>
         </>
+      )}
+
+      {/* Loading / error toasts */}
+      {dropLoading && (
+        <div style={{
+          position: 'fixed', bottom: '16px', left: '50%', transform: 'translateX(-50%)',
+          background: 'var(--surface-700, #333)', color: 'var(--color-text, #ccc)',
+          padding: '8px 20px', borderRadius: '6px', fontSize: '13px',
+          boxShadow: '0 2px 12px rgba(0,0,0,0.4)', zIndex: 100,
+        }}>
+          Loading file...
+        </div>
+      )}
+      {dropError && (
+        <div
+          onClick={() => setDropError(null)}
+          style={{
+            position: 'fixed', bottom: '16px', left: '50%', transform: 'translateX(-50%)',
+            background: '#4a1c1c', color: '#f08080', border: '1px solid #6a2c2c',
+            padding: '8px 20px', borderRadius: '6px', fontSize: '13px',
+            boxShadow: '0 2px 12px rgba(0,0,0,0.4)', zIndex: 100, cursor: 'pointer',
+          }}
+        >
+          {dropError}
+        </div>
       )}
     </div>
   );

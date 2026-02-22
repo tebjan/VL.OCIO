@@ -83,26 +83,30 @@ const CONVERT_F32_TO_F16_WGSL = `
 
 /**
  * Upload a Float32Array of RGBA pixel data to an rgba16float GPUTexture.
- * Flips rows to WebGPU convention (row 0 = top) since Three.js EXRLoader
- * returns bottom-to-top data (OpenGL convention).
+ * By default flips rows to WebGPU convention (row 0 = top) since Three.js
+ * EXRLoader returns bottom-to-top data. Set `skipFlip` for data that is
+ * already top-to-bottom (e.g. canvas getImageData, browser image decode).
  * GPU handles float32→float16 conversion via render pass.
  */
 export function uploadFloat32Texture(
   device: GPUDevice,
   data: Float32Array,
   width: number,
-  height: number
+  height: number,
+  skipFlip?: boolean,
 ): GPUTexture {
-  // Flip rows in-place: Three.js EXRLoader returns bottom-to-top (OpenGL order),
-  // WebGPU expects top-to-bottom (row 0 = image top).
-  const rowSize = width * 4; // 4 floats per pixel (RGBA)
-  const temp = new Float32Array(rowSize);
-  for (let y = 0; y < Math.floor(height / 2); y++) {
-    const topOffset = y * rowSize;
-    const bottomOffset = (height - 1 - y) * rowSize;
-    temp.set(data.subarray(topOffset, topOffset + rowSize));
-    data.set(data.subarray(bottomOffset, bottomOffset + rowSize), topOffset);
-    data.set(temp, bottomOffset);
+  if (!skipFlip) {
+    // Flip rows in-place: Three.js EXRLoader returns bottom-to-top (OpenGL order),
+    // WebGPU expects top-to-bottom (row 0 = image top).
+    const rowSize = width * 4; // 4 floats per pixel (RGBA)
+    const temp = new Float32Array(rowSize);
+    for (let y = 0; y < Math.floor(height / 2); y++) {
+      const topOffset = y * rowSize;
+      const bottomOffset = (height - 1 - y) * rowSize;
+      temp.set(data.subarray(topOffset, topOffset + rowSize));
+      data.set(data.subarray(bottomOffset, bottomOffset + rowSize), topOffset);
+      data.set(temp, bottomOffset);
+    }
   }
 
   // 1. Upload float32 data to temporary rgba32float texture (no CPU conversion)

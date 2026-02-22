@@ -16,7 +16,7 @@ export interface StageCardProps {
 
 /**
  * A single pipeline stage card for the filmstrip.
- * Fixed size: 160x132px (160x90 thumbnail + label rows).
+ * Compact size: 120x88px (114x66 thumbnail + label row).
  * Renders a live GPU thumbnail of the stage's output texture.
  */
 export function StageCard({ stage, isSelected, onSelect, onToggle, device, format, stageTexture, renderVersion, applySRGB, colorSpaceLabel }: StageCardProps) {
@@ -29,18 +29,18 @@ export function StageCard({ stage, isSelected, onSelect, onToggle, device, forma
     : !isEnabled ? 0.4
     : 1;
 
-  const bg = isSelected ? 'var(--surface-700)' : 'var(--surface-800)';
+  const bg = isSelected ? 'var(--surface-700)' : 'transparent';
   const border = isSelected
-    ? '2px solid var(--color-stage-active)'
-    : '1px solid var(--surface-600)';
+    ? '1px solid var(--color-stage-active)'
+    : '1px solid var(--surface-700)';
 
   return (
     <div
       style={{
         background: bg,
         border,
-        borderRadius: '6px',
-        padding: '4px',
+        borderRadius: '4px',
+        padding: '3px',
         opacity,
         transition: 'opacity 0.15s, border-color 0.15s',
         display: 'flex',
@@ -84,7 +84,7 @@ export function StageCard({ stage, isSelected, onSelect, onToggle, device, forma
           />
         ) : !isAvailable ? (
           <span style={{ color: 'var(--surface-500)', fontSize: '11px' }}>
-            Not Available
+            N/A
           </span>
         ) : (
           <span style={{ color: 'var(--surface-600)', fontSize: '11px' }}>
@@ -123,12 +123,14 @@ export function StageCard({ stage, isSelected, onSelect, onToggle, device, forma
         <span
           style={{
             color: 'var(--surface-300)',
-            fontSize: '11px',
+            fontSize: '10px',
             whiteSpace: 'nowrap',
-            flexShrink: 0,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            minWidth: 0,
           }}
         >
-          {stage.name}
+          {stage.shortName}
         </span>
 
         {colorSpaceLabel && (

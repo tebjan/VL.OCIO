@@ -6,6 +6,7 @@ import {
   type HeightmapSettings,
   createDefaultHeightmapSettings,
 } from '../types/pipeline';
+import type { HeightmapLayer } from './HeightmapView';
 
 /**
  * Error boundary that catches render/lifecycle errors from HeightmapView
@@ -72,8 +73,8 @@ export interface MainPreviewProps {
   format: GPUTextureFormat;
   /** Multi-pipeline layers for 2D side-by-side rendering. */
   layers: PreviewLayer[];
-  /** Single texture for 3D heightmap (selected pipeline only). */
-  stageTexture: GPUTexture | null;
+  /** Multi-pipeline layers for 3D heightmap side-by-side rendering. */
+  heightmapLayers: HeightmapLayer[];
   renderVersion?: number;
   stageName?: string;
 }
@@ -90,7 +91,7 @@ export function MainPreview({
   device,
   format,
   layers,
-  stageTexture,
+  heightmapLayers,
   renderVersion,
   stageName,
 }: MainPreviewProps) {
@@ -109,10 +110,6 @@ export function MainPreview({
     (settings: HeightmapSettings) => setHeightmapSettings(settings),
     [],
   );
-
-  // Extract selected pipeline's wireframe color (only when multiple layers)
-  const selectedLayer = layers.find((l) => l.isSelected);
-  const wireframeColor = layers.length > 1 && selectedLayer ? selectedLayer.borderColor : undefined;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -192,12 +189,11 @@ export function MainPreview({
               </div>
             }>
               <LazyHeightmapView
-                stageTexture={stageTexture}
+                layers={heightmapLayers}
                 device={device}
                 active={mode === '3d'}
                 renderVersion={renderVersion}
                 settings={heightmapSettings}
-                wireframeColor={wireframeColor}
               />
             </Suspense>
           </HeightmapErrorBoundary>

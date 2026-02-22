@@ -1,6 +1,8 @@
-import { type StageInfo, STAGE_NAMES } from '../pipeline/types/StageInfo';
+import { type StageInfo } from '../pipeline/types/StageInfo';
 import { type PipelineSettings, getStageColorSpace } from '../types/settings';
+import { getStageVolume } from '../lib/colorSpaceVolume';
 import { StageCard } from './StageCard';
+import { GamutCone } from './GamutCone';
 
 export interface FilmstripProps {
   stages: StageInfo[];
@@ -23,34 +25,28 @@ export function Filmstrip({ stages, selectedIndex, onSelect, onToggle, device, f
     <div
       style={{
         background: 'var(--surface-900)',
-        borderBottom: '1px solid var(--surface-700)',
-        padding: '8px 12px',
+        padding: '4px 6px',
         overflowX: 'auto',
         display: 'flex',
         alignItems: 'center',
-        gap: '4px',
+        gap: '2px',
         flexShrink: 0,
       }}
     >
       {stages.map((stage, i) => {
-        // Final Display (last stage) always renders with sRGB gamma applied
-        const effectiveApplySRGB = (i === STAGE_NAMES.length - 1) ? true : applySRGB;
+        // Stages 0-2 show raw source data. For sRGB input, data is still
+        // gamma-encoded → don't apply extra sRGB curve in the viewer.
+        const isInputSRGB = settings.inputColorSpace === 5;
+        const effectiveApplySRGB = (i < 3 && isInputSRGB) ? false : applySRGB;
         const colorSpace = getStageColorSpace(i, settings, isEnabled);
         return (
-          <div key={stage.index} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            {/* Arrow connector before each card (except first) */}
+          <div key={stage.index} style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+            {/* Gamut/range cone between adjacent stages */}
             {i > 0 && (
-              <span
-                style={{
-                  color: 'var(--surface-600)',
-                  fontSize: '18px',
-                  lineHeight: 1,
-                  userSelect: 'none',
-                  flexShrink: 0,
-                }}
-              >
-                &rsaquo;
-              </span>
+              <GamutCone
+                leftVolume={getStageVolume(i - 1, settings, isEnabled)}
+                rightVolume={getStageVolume(i, settings, isEnabled)}
+              />
             )}
 
             <StageCard

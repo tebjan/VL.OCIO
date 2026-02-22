@@ -32,7 +32,7 @@ export const HEIGHT_MODE_LABELS: Record<HeightMode, string> = {
   [HeightMode.AP1Luminance]: 'AP1 Luminance',
 };
 
-export type DownsampleFactor = 1 | 2 | 4 | 8 | 16;
+export type DownsampleFactor = 1 | 2 | 4 | 8 | 16 | 32 | 64;
 export type MSAASamples = 0 | 2 | 4;
 
 export interface HeightmapSettings {

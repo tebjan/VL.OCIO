@@ -1,5 +1,6 @@
 import {
   type HeightmapSettings,
+  type DownsampleFactor,
   HeightMode,
   HEIGHT_MODE_LABELS,
 } from '../types/pipeline';
@@ -14,6 +15,8 @@ const DOWNSAMPLE_OPTIONS = [
   { value: '4', label: '4x' },
   { value: '8', label: '8x' },
   { value: '16', label: '16x' },
+  { value: '32', label: '32x' },
+  { value: '64', label: '64x' },
 ];
 
 const MSAA_OPTIONS = [
@@ -136,7 +139,7 @@ export function HeightmapControls({ settings, onChange }: HeightmapControlsProps
   return (
     <div
       style={{
-        padding: '6px 12px',
+        padding: '6px 12px 14px',
         borderTop: '1px solid var(--surface-800)',
         background: 'var(--surface-950)',
         display: 'flex',
@@ -185,7 +188,7 @@ export function HeightmapControls({ settings, onChange }: HeightmapControlsProps
           <CompactSelect
             value={String(settings.downsample)}
             options={DOWNSAMPLE_OPTIONS}
-            onChange={(v) => patch({ downsample: Number(v) as 1 | 2 | 4 | 8 | 16 })}
+            onChange={(v) => patch({ downsample: Number(v) as DownsampleFactor })}
           />
         </Field>
         <Field label="MSAA" title="Multisample anti-aliasing" minWidth="90px">

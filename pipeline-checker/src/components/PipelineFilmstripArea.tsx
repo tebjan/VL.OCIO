@@ -16,6 +16,8 @@ export interface PipelineFilmstripAreaProps {
   renderVersion: number;
   getStageTextures: (pipeline: PipelineInstance) => (GPUTexture | null)[];
   isDragging?: boolean;
+  /** Called when a file is dropped on a row (replace) or ghost row (add new). null id = new pipeline. */
+  onFileDrop?: (file: File, fileHandle: FileSystemFileHandle | undefined, targetPipelineId: PipelineId | null) => void;
 }
 
 /** Derive StageInfo[] from a PipelineInstance's state */
@@ -43,6 +45,7 @@ export function PipelineFilmstripArea({
   renderVersion,
   getStageTextures,
   isDragging,
+  onFileDrop,
 }: PipelineFilmstripAreaProps) {
   const canRemove = pipelines.length > 1;
 
@@ -62,10 +65,15 @@ export function PipelineFilmstripArea({
           renderVersion={renderVersion}
           onStageSelect={(i) => onStageSelect(i, pipeline.id)}
           onStageToggle={(i, enabled) => onStageToggle(i, enabled, pipeline.id)}
+          onFileDrop={onFileDrop ? (file, handle) => onFileDrop(file, handle, pipeline.id) : undefined}
+          isDraggingFile={isDragging}
         />
       ))}
       {pipelines.length < MAX_PIPELINES && (
-        <GhostRow isDragOver={isDragging} />
+        <GhostRow
+          isDragOver={isDragging}
+          onFileDrop={onFileDrop ? (file, handle) => onFileDrop(file, handle, null) : undefined}
+        />
       )}
     </div>
   );

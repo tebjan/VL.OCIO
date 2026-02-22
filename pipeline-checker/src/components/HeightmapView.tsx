@@ -19,8 +19,14 @@ import { attribute, positionLocal, modelViewMatrix, uv, float, fwidth, smoothste
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import type { HeightmapSettings } from '../types/pipeline';
 
+export interface HeightmapLayer {
+  texture: GPUTexture;
+  wireframeColor: [number, number, number];
+  isSelected: boolean;
+}
+
 export interface HeightmapViewProps {
-  stageTexture: GPUTexture | null;
+  layers: HeightmapLayer[];
   /** The pipeline's GPUDevice — needed for compute shader dispatch. */
   device: GPUDevice | null;
   active: boolean;
@@ -28,8 +34,6 @@ export interface HeightmapViewProps {
   renderVersion?: number;
   /** 3D heightmap display settings from HeightmapControls. */
   settings?: HeightmapSettings;
-  /** RGB color for the wireframe bounding box (pipeline color). */
-  wireframeColor?: [number, number, number];
 }
 
 // ---- Raw WebGPU compute shader (bypasses Three.js TSL which fails on shared devices) ----
@@ -112,11 +116,6 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 }
 `;
 
-/**
- * Raw WebGPU compute pipeline for heightmap data.
- * Writes directly to shared GPU buffers (STORAGE|VERTEX) — no readback.
- * The same buffers are read by Three.js as vertex instance attributes.
- */
 /** Uniform buffer layout — 48 bytes (12 x u32/f32), 16-byte aligned */
 const UNIFORM_SIZE = 48;
 
@@ -126,7 +125,6 @@ class HeightmapCompute {
   private bindGroup: GPUBindGroup | null = null;
   private uniformBuffer: GPUBuffer | null = null;
   private count = 0;
-  // Cached references for re-binding when texture changes
   private posBuffer: GPUBuffer | null = null;
   private colBuffer: GPUBuffer | null = null;
 
@@ -134,7 +132,6 @@ class HeightmapCompute {
     this.device = device;
   }
 
-  /** Create pipeline (once) and bind storage buffers + texture. */
   setup(
     dsWidth: number, dsHeight: number, aspect: number,
     fullWidth: number, fullHeight: number,
@@ -155,7 +152,6 @@ class HeightmapCompute {
 
     this.writeUniforms(dsWidth, dsHeight, aspect, fullWidth, fullHeight, settings);
 
-    // Create pipeline once (cached across setup() calls)
     if (!this.pipeline) {
       const module = this.device.createShaderModule({
         code: HEIGHTMAP_COMPUTE_WGSL,
@@ -170,7 +166,6 @@ class HeightmapCompute {
     this.rebindTexture(texture);
   }
 
-  /** Rebind with a (potentially new) texture view — call after pipeline render. */
   rebindTexture(texture: GPUTexture): void {
     if (!this.pipeline || !this.uniformBuffer || !this.posBuffer || !this.colBuffer) return;
 
@@ -185,7 +180,6 @@ class HeightmapCompute {
     });
   }
 
-  /** Update uniforms without recreating buffers/pipeline. */
   updateSettings(
     dsWidth: number, dsHeight: number, aspect: number,
     fullWidth: number, fullHeight: number,
@@ -203,34 +197,21 @@ class HeightmapCompute {
     const buf = new ArrayBuffer(UNIFORM_SIZE);
     const u = new Uint32Array(buf);
     const f = new Float32Array(buf);
-    // Offset 0: dsWidth (u32)
     u[0] = dsWidth;
-    // Offset 4: dsHeight (u32)
     u[1] = dsHeight;
-    // Offset 8: aspect (f32)
     f[2] = aspect;
-    // Offset 12: heightScale (f32)
     f[3] = settings.heightScale;
-    // Offset 16: exponent (f32)
     f[4] = settings.exponent;
-    // Offset 20: heightMode (u32)
     u[5] = settings.heightMode;
-    // Offset 24: rangeMin (f32)
     f[6] = settings.rangeMin;
-    // Offset 28: rangeMax (f32)
     f[7] = settings.rangeMax;
-    // Offset 32: fullWidth (u32)
     u[8] = fullWidth;
-    // Offset 36: fullHeight (u32)
     u[9] = fullHeight;
-    // Offset 40: stopsMode (u32)
     u[10] = settings.stopsMode ? 1 : 0;
-    // Offset 44: perceptualMode (u32)
     u[11] = settings.perceptualMode ? 1 : 0;
     this.device.queue.writeBuffer(this.uniformBuffer, 0, buf);
   }
 
-  /** Dispatch compute — writes directly to bound GPU buffers, no readback. */
   dispatch(): void {
     if (!this.pipeline || !this.bindGroup) {
       throw new Error('HeightmapCompute not set up');
@@ -249,14 +230,28 @@ class HeightmapCompute {
   }
 }
 
-/**
- * Manages Three.js WebGPU renderer, scene, camera, controls, and
- * instanced geometry that renders the heightmap point cloud.
- *
- * GPU-only path: compute shader writes vec4 position/color to storage buffers
- * that are simultaneously used as vertex instance attributes by Three.js —
- * no CPU readback or data transfer.
- */
+// ---- Multi-layer heightmap scene ----
+
+const LAYER_GAP = 0.05;
+
+interface LayerEntry {
+  mesh: Mesh;
+  wireframe: LineSegments;
+  offsetGpuBuffer: GPUBuffer;
+  colorGpuBuffer: GPUBuffer;
+  compute: HeightmapCompute;
+  dsWidth: number;
+  dsHeight: number;
+  instanceCount: number;
+  fullWidth: number;
+  fullHeight: number;
+  aspect: number;
+  xOffset: number;
+  texture: GPUTexture;
+  color: [number, number, number];
+  isSelected: boolean;
+}
+
 class HeightmapScene {
   renderer: WebGPURenderer;
   scene: Scene;
@@ -265,40 +260,20 @@ class HeightmapScene {
   ready = false;
   private animationId = 0;
   disposed = false;
-  /** Callback invoked on unrecoverable errors (render loop, device loss). */
   onError: ((message: string) => void) | null = null;
 
-  /** Current downsampled dimensions */
-  dsWidth = 0;
-  dsHeight = 0;
-  /** Current instance count */
-  instanceCount = 0;
-  /** Instanced mesh rendering the heightmap points */
-  private pointsMesh: Mesh | null = null;
-  /** Material reference for runtime alpha mode updates */
-  private pointsMaterial: MeshBasicNodeMaterial | null = null;
-  /** Wireframe bounding box */
-  private wireframeBox: LineSegments | null = null;
-  /** Current aspect ratio (height/width) for camera/wireframe */
-  private currentAspect = 1;
-  /** Current height scale for camera/wireframe */
+  private layerEntries: LayerEntry[] = [];
+  private sharedMaterial: MeshBasicNodeMaterial | null = null;
   private currentHeightScale = 0.25;
-  /** Current wireframe color */
-  private currentWireframeColor: [number, number, number] | undefined;
-  /** Bound event handlers for cleanup */
+  private totalWidth = 1;
+  private maxAspect = 1;
+
   private boundDblClick: (() => void) | null = null;
   private boundKeyDown: ((e: KeyboardEvent) => void) | null = null;
   private canvasEl: HTMLCanvasElement | null = null;
-
-  // GPU buffers shared between compute (storage) and render (vertex)
-  private offsetGpuBuffer: GPUBuffer | null = null;
-  private colorGpuBuffer: GPUBuffer | null = null;
   private device: GPUDevice | null = null;
-  private compute: HeightmapCompute | null = null;
-  // Cached references for re-dispatch
-  private currentTexture: GPUTexture | null = null;
-  private fullWidth = 0;
-  private fullHeight = 0;
+
+  get layerCount(): number { return this.layerEntries.length; }
 
   constructor() {
     this.renderer = null!;
@@ -313,7 +288,6 @@ class HeightmapScene {
     this.renderer = new WebGPURenderer({ canvas, antialias: true, device: sharedDevice } as any);
     await this.renderer.init();
     this.renderer.setPixelRatio(window.devicePixelRatio);
-    this.compute = new HeightmapCompute(sharedDevice);
 
     sharedDevice.lost.then((info: GPUDeviceLostInfo) => {
       if (info.reason !== 'destroyed') {
@@ -346,100 +320,8 @@ class HeightmapScene {
     this.ready = true;
   }
 
-  /**
-   * Set up dimensions for a given texture resolution.
-   * Returns true if dimensions changed.
-   */
-  setupDimensions(
-    fullWidth: number,
-    fullHeight: number,
-    downsample: number,
-  ): boolean {
-    const dsW = Math.max(1, Math.floor(fullWidth / downsample));
-    const dsH = Math.max(1, Math.floor(fullHeight / downsample));
-
-    if (dsW === this.dsWidth && dsH === this.dsHeight) return false;
-
-    this.dsWidth = dsW;
-    this.dsHeight = dsH;
-    this.instanceCount = dsW * dsH;
-    return true;
-  }
-
-  /**
-   * Create or rebuild the instanced geometry and GPU buffers.
-   * GPU buffers are created with STORAGE|VERTEX so they can be written by
-   * compute and read as vertex attributes — zero CPU involvement.
-   */
-  setupMesh(fullWidth: number, fullHeight: number, texture: GPUTexture, settings: HeightmapSettings): void {
-    // Remove previous mesh
-    if (this.pointsMesh) {
-      this.scene.remove(this.pointsMesh);
-      this.pointsMesh.geometry.dispose();
-      (this.pointsMesh.material as Material).dispose();
-      this.pointsMesh = null;
-    }
-
-    // Destroy old GPU buffers
-    this.offsetGpuBuffer?.destroy();
-    this.colorGpuBuffer?.destroy();
-    this.offsetGpuBuffer = null;
-    this.colorGpuBuffer = null;
-
-    const dsW = this.dsWidth;
-    const dsH = this.dsHeight;
-    const count = this.instanceCount;
-    if (count === 0 || !this.device) return;
-
-    const aspect = fullHeight / fullWidth;
-    this.currentAspect = aspect;
-    this.updateWireframe(aspect, this.currentHeightScale, this.currentWireframeColor);
-
-    const cellW = 1.0 / dsW;
-    const cellD = aspect / dsH;
-    const dotSize = Math.max(cellW, cellD);
-
-    // ---- GPU buffers shared between compute and render ----
-    const byteSize = count * 16; // vec4<f32> = 16 bytes per instance
-    this.offsetGpuBuffer = this.device.createBuffer({
-      size: byteSize,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.VERTEX
-           | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
-      label: 'hm-offset',
-    });
-    this.colorGpuBuffer = this.device.createBuffer({
-      size: byteSize,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.VERTEX
-           | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
-      label: 'hm-color',
-    });
-
-    // ---- Instanced geometry (XY plane quad, no rotation — billboard handles orientation) ----
-    const baseGeo = new PlaneGeometry(dotSize, dotSize);
-
-    const geo = new InstancedBufferGeometry();
-    geo.index = baseGeo.index;
-    geo.setAttribute('position', baseGeo.getAttribute('position'));
-    geo.setAttribute('uv', baseGeo.getAttribute('uv'));
-    geo.instanceCount = count;
-
-    // Instance attributes — CPU arrays are dummy; compute fills the GPU buffers directly
-    const offsetAttr = new InstancedBufferAttribute(new Float32Array(count * 4), 4);
-    const colorAttr = new InstancedBufferAttribute(new Float32Array(count * 4), 4);
-    geo.setAttribute('aOffset', offsetAttr);
-    geo.setAttribute('aColor', colorAttr);
-
-    // Pre-register our GPU buffers with Three.js backend.
-    // Setting .buffer before the first render makes Three.js skip its own
-    // buffer creation and use ours instead (which have STORAGE usage).
-    const backend = (this.renderer as any).backend;
-    backend.get(offsetAttr).buffer = this.offsetGpuBuffer;
-    backend.get(colorAttr).buffer = this.colorGpuBuffer;
-
-    // ---- Billboard node material ----
-    // Extract camera right/up from modelViewMatrix (= viewMatrix since model is identity).
-    // Row 0 = camera right, Row 1 = camera up in world space.
-    // Column-major: row i component j = element(j)[i].
+  /** Create the billboard node material (shared across all layer meshes). */
+  private createMaterial(msaaOn: boolean): MeshBasicNodeMaterial {
     const camRight = vec3(
       modelViewMatrix.element(0).x,
       modelViewMatrix.element(1).x,
@@ -451,7 +333,6 @@ class HeightmapScene {
       modelViewMatrix.element(2).y,
     );
 
-    // Billboard: quad offset in camera-aligned frame
     const instancePos = attribute('aOffset', 'vec4').xyz;
     const local = positionLocal;
     const billboardPos = instancePos
@@ -462,97 +343,280 @@ class HeightmapScene {
     (material as any).positionNode = billboardPos;
     (material as any).colorNode = attribute('aColor', 'vec4').xyz;
 
-    // Antialiased round dot via SDF + fwidth
-    // SDF: distance from circle edge (negative inside, positive outside)
     const uvCentered = uv().sub(float(0.5));
     const dist = uvCentered.length().sub(float(0.5));
     const halfPx = fwidth(dist).mul(float(0.5));
-    // smoothstep(-halfPx, halfPx, dist) → 0 inside, 1 outside; invert for alpha
     (material as any).opacityNode = float(1.0).sub(smoothstep(halfPx.negate(), halfPx, dist));
     material.depthWrite = true;
-    this.pointsMaterial = material;
-    this.applyAlphaMode(settings.msaa > 0);
-
-    const mesh = new Mesh(geo, material);
-    mesh.frustumCulled = false;
-    this.pointsMesh = mesh;
-    this.scene.add(mesh);
-
-    // ---- Dispatch compute to fill buffers from texture ----
-    this.currentTexture = texture;
-    // settings consumed via compute uniforms
-    this.fullWidth = fullWidth;
-    this.fullHeight = fullHeight;
-    this.compute!.setup(
-      dsW, dsH, aspect, fullWidth, fullHeight,
-      this.offsetGpuBuffer, this.colorGpuBuffer,
-      texture, settings,
-    );
-    this.compute!.dispatch();
+    this.applyAlphaMode(material, msaaOn);
+    return material;
   }
 
-  /**
-   * Re-dispatch compute with new texture content (same dimensions).
-   * Called when renderVersion changes but texture size hasn't.
-   */
-  redispatch(texture: GPUTexture): void {
-    if (!this.compute || !this.offsetGpuBuffer || !this.colorGpuBuffer) return;
-    this.currentTexture = texture;
-    this.compute.rebindTexture(texture);
-    this.compute.dispatch();
-  }
-
-  /**
-   * Update settings from HeightmapControls.
-   * Re-dispatches compute with updated uniforms and handles MSAA changes.
-   */
-  updateSettings(settings: HeightmapSettings): void {
-    if (settings.heightScale !== this.currentHeightScale) {
-      this.currentHeightScale = settings.heightScale;
-      this.updateWireframe(this.currentAspect, this.currentHeightScale, this.currentWireframeColor);
+  private applyAlphaMode(material: MeshBasicNodeMaterial, msaaOn: boolean): void {
+    if (msaaOn) {
+      material.alphaToCoverage = true;
+      material.alphaTest = 0;
+    } else {
+      material.alphaToCoverage = false;
+      material.alphaTest = 0.5;
     }
-    // MSAA — recreate renderer (WebGPU bakes sampleCount into render pipelines,
-    // runtime switching without full recreation causes validation errors)
+    material.needsUpdate = true;
+  }
+
+  /** Compute X offsets for N layers placed side by side. */
+  private computeLayout(n: number): { totalWidth: number; offsets: number[] } {
+    const totalWidth = n + (n - 1) * LAYER_GAP;
+    const offsets: number[] = [];
+    for (let i = 0; i < n; i++) {
+      offsets.push(i * (1.0 + LAYER_GAP) - totalWidth / 2 + 0.5);
+    }
+    return { totalWidth, offsets };
+  }
+
+  /** Create a wireframe bounding box for a layer. */
+  private createWireframe(
+    aspect: number,
+    heightScale: number,
+    color: [number, number, number],
+    xOffset: number,
+    isSelected: boolean,
+  ): LineSegments {
+    const geometry = new BoxGeometry(1.0, heightScale, aspect);
+    const edges = new EdgesGeometry(geometry);
+    const material = new LineBasicMaterial({
+      color: new Color(color[0], color[1], color[2]),
+      opacity: isSelected ? 1.0 : 0.5,
+      transparent: true,
+    });
+    const wireframe = new LineSegments(edges, material);
+    wireframe.position.set(xOffset, heightScale * 0.5, 0);
+    geometry.dispose();
+    return wireframe;
+  }
+
+  /** Remove all layer entries and free GPU resources. */
+  clearLayers(): void {
+    for (const entry of this.layerEntries) {
+      this.scene.remove(entry.mesh);
+      entry.mesh.geometry.dispose();
+      this.scene.remove(entry.wireframe);
+      entry.wireframe.geometry.dispose();
+      (entry.wireframe.material as Material).dispose();
+      entry.offsetGpuBuffer.destroy();
+      entry.colorGpuBuffer.destroy();
+      entry.compute.destroy();
+    }
+    this.layerEntries = [];
+    if (this.sharedMaterial) {
+      this.sharedMaterial.dispose();
+      this.sharedMaterial = null;
+    }
+  }
+
+  /**
+   * Build all layers: meshes, wireframes, GPU buffers, compute.
+   * Called when layer count or dimensions change.
+   */
+  setupLayers(layerData: HeightmapLayer[], settings: HeightmapSettings): void {
+    this.clearLayers();
+    if (layerData.length === 0 || !this.device) return;
+
+    const n = layerData.length;
+    const { totalWidth, offsets } = this.computeLayout(n);
+    this.totalWidth = totalWidth;
+    this.currentHeightScale = settings.heightScale;
+
+    // Compute per-layer info
+    let maxAspect = 0;
+    const infos: Array<{
+      dsW: number; dsH: number; count: number; aspect: number;
+      fullW: number; fullH: number; dotSize: number;
+    }> = [];
+
+    for (let i = 0; i < n; i++) {
+      const tex = layerData[i].texture;
+      const fullW = tex.width;
+      const fullH = tex.height;
+      const aspect = fullH / fullW;
+      if (aspect > maxAspect) maxAspect = aspect;
+
+      // Auto-increase downsample if instance count would exceed budget
+      const MAX_INSTANCES = 10_000_000;
+      let ds = settings.downsample;
+      let dsW = Math.max(1, Math.floor(fullW / ds));
+      let dsH = Math.max(1, Math.floor(fullH / ds));
+      while (dsW * dsH > MAX_INSTANCES && ds < 128) {
+        ds *= 2;
+        dsW = Math.max(1, Math.floor(fullW / ds));
+        dsH = Math.max(1, Math.floor(fullH / ds));
+      }
+      const count = dsW * dsH;
+
+      const cellW = 1.0 / dsW;
+      const cellD = aspect / dsH;
+      const dotSize = Math.max(cellW, cellD);
+
+      infos.push({ dsW, dsH, count, aspect, fullW, fullH, dotSize });
+    }
+    this.maxAspect = maxAspect;
+
+    // Create shared material
+    this.sharedMaterial = this.createMaterial(settings.msaa > 0);
+
+    // Create layer entries
+    for (let i = 0; i < infos.length; i++) {
+      const info = infos[i];
+      const tex = layerData[i].texture;
+      const color = layerData[i].wireframeColor;
+      const isSelected = layerData[i].isSelected;
+      const xOffset = offsets[i];
+
+      // GPU buffers shared between compute (storage) and render (vertex)
+      const byteSize = info.count * 16;
+      const offsetGpuBuffer = this.device.createBuffer({
+        size: byteSize,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.VERTEX
+             | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
+        label: `hm-offset-${i}`,
+      });
+      const colorGpuBuffer = this.device.createBuffer({
+        size: byteSize,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.VERTEX
+             | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
+        label: `hm-color-${i}`,
+      });
+
+      // Instanced geometry
+      const baseGeo = new PlaneGeometry(info.dotSize, info.dotSize);
+      const geo = new InstancedBufferGeometry();
+      geo.index = baseGeo.index;
+      geo.setAttribute('position', baseGeo.getAttribute('position'));
+      geo.setAttribute('uv', baseGeo.getAttribute('uv'));
+      geo.instanceCount = info.count;
+
+      const offsetAttr = new InstancedBufferAttribute(new Float32Array(info.count * 4), 4);
+      const colorAttr = new InstancedBufferAttribute(new Float32Array(info.count * 4), 4);
+      geo.setAttribute('aOffset', offsetAttr);
+      geo.setAttribute('aColor', colorAttr);
+
+      // Register GPU buffers with Three.js backend
+      const backend = (this.renderer as any).backend;
+      backend.get(offsetAttr).buffer = offsetGpuBuffer;
+      backend.get(colorAttr).buffer = colorGpuBuffer;
+
+      // Mesh (shared material, positioned at X offset)
+      const mesh = new Mesh(geo, this.sharedMaterial);
+      mesh.frustumCulled = false;
+      mesh.position.x = xOffset;
+      this.scene.add(mesh);
+
+      // Wireframe
+      const wireframe = this.createWireframe(
+        info.aspect, settings.heightScale, color, xOffset, isSelected,
+      );
+      this.scene.add(wireframe);
+
+      // Compute
+      const compute = new HeightmapCompute(this.device);
+      compute.setup(
+        info.dsW, info.dsH, info.aspect, info.fullW, info.fullH,
+        offsetGpuBuffer, colorGpuBuffer, tex, settings,
+      );
+      compute.dispatch();
+
+      this.layerEntries.push({
+        mesh,
+        wireframe,
+        offsetGpuBuffer,
+        colorGpuBuffer,
+        compute,
+        dsWidth: info.dsW,
+        dsHeight: info.dsH,
+        instanceCount: info.count,
+        fullWidth: info.fullW,
+        fullHeight: info.fullH,
+        aspect: info.aspect,
+        xOffset,
+        texture: tex,
+        color,
+        isSelected,
+      });
+    }
+
+    this.resetCamera();
+  }
+
+  /** Re-dispatch compute for all layers with (possibly new) texture content. */
+  redispatchLayers(layerData: HeightmapLayer[]): void {
+    for (let i = 0; i < this.layerEntries.length && i < layerData.length; i++) {
+      const entry = this.layerEntries[i];
+      const tex = layerData[i].texture;
+      entry.compute.rebindTexture(tex);
+      entry.compute.dispatch();
+      entry.texture = tex;
+    }
+  }
+
+  /** Update wireframe colors/opacity based on selection state. */
+  updateWireframeColors(layerData: HeightmapLayer[]): void {
+    for (let i = 0; i < this.layerEntries.length && i < layerData.length; i++) {
+      const entry = this.layerEntries[i];
+      const data = layerData[i];
+      const mat = entry.wireframe.material as LineBasicMaterial;
+      mat.color.setRGB(data.wireframeColor[0], data.wireframeColor[1], data.wireframeColor[2]);
+      mat.opacity = data.isSelected ? 1.0 : 0.5;
+      entry.color = data.wireframeColor;
+      entry.isSelected = data.isSelected;
+    }
+  }
+
+  /** Update settings for all layers (compute uniforms, wireframe, MSAA). */
+  updateSettings(settings: HeightmapSettings): void {
+    const heightChanged = settings.heightScale !== this.currentHeightScale;
+    if (heightChanged) {
+      this.currentHeightScale = settings.heightScale;
+    }
+
+    // MSAA — recreate renderer
     if (this.renderer && this.renderer.samples !== settings.msaa) {
-      this.applyAlphaMode(settings.msaa > 0);
+      if (this.sharedMaterial) {
+        this.applyAlphaMode(this.sharedMaterial, settings.msaa > 0);
+      }
       this.recreateRenderer(settings.msaa);
     }
-    // Re-dispatch compute with updated uniforms
-    if (this.compute && this.offsetGpuBuffer && this.currentTexture) {
-      this.compute.updateSettings(
-        this.dsWidth, this.dsHeight, this.currentAspect,
-        this.fullWidth, this.fullHeight, settings,
-      );
-      this.compute.dispatch();
-    }
-  }
 
-  /** Switch between alphaToCoverage (MSAA on) and alphaTest (MSAA off). */
-  private applyAlphaMode(msaaOn: boolean): void {
-    if (!this.pointsMaterial) return;
-    if (msaaOn) {
-      this.pointsMaterial.alphaToCoverage = true;
-      this.pointsMaterial.alphaTest = 0;
-    } else {
-      this.pointsMaterial.alphaToCoverage = false;
-      this.pointsMaterial.alphaTest = 0.5;
+    // Update all layers
+    for (const entry of this.layerEntries) {
+      // Rebuild wireframe if height changed
+      if (heightChanged) {
+        this.scene.remove(entry.wireframe);
+        entry.wireframe.geometry.dispose();
+        (entry.wireframe.material as Material).dispose();
+        entry.wireframe = this.createWireframe(
+          entry.aspect, settings.heightScale, entry.color, entry.xOffset, entry.isSelected,
+        );
+        this.scene.add(entry.wireframe);
+      }
+
+      // Update compute uniforms and re-dispatch
+      entry.compute.updateSettings(
+        entry.dsWidth, entry.dsHeight, entry.aspect,
+        entry.fullWidth, entry.fullHeight, settings,
+      );
+      entry.compute.dispatch();
     }
-    this.pointsMaterial.needsUpdate = true;
   }
 
   /**
    * Recreate the WebGPU renderer with a new MSAA sample count.
-   * Re-registers shared GPU buffers with the new backend instance.
+   * Re-registers all shared GPU buffers with the new backend instance.
    */
   private async recreateRenderer(msaa: number): Promise<void> {
     if (!this.device || !this.canvasEl) return;
 
     this.stopRenderLoop();
-
-    // Dispose old renderer (clears all cached pipelines, framebuffers, etc.)
     try { this.renderer.dispose(); } catch { /* safe to ignore */ }
 
-    // Create fresh renderer with desired sample count
     this.renderer = new WebGPURenderer({
       canvas: this.canvasEl,
       antialias: msaa > 0,
@@ -562,7 +626,6 @@ class HeightmapScene {
     await this.renderer.init();
     this.renderer.setPixelRatio(window.devicePixelRatio);
 
-    // Restore canvas size
     const w = this.canvasEl.clientWidth;
     const h = this.canvasEl.clientHeight;
     if (w > 0 && h > 0) {
@@ -571,53 +634,25 @@ class HeightmapScene {
       this.camera.updateProjectionMatrix();
     }
 
-    // Re-register shared GPU buffers with the new Three.js backend
-    if (this.pointsMesh && this.offsetGpuBuffer && this.colorGpuBuffer) {
-      const geo = this.pointsMesh.geometry;
+    // Re-register all GPU buffers with the new Three.js backend
+    const backend = (this.renderer as any).backend;
+    for (const entry of this.layerEntries) {
+      const geo = entry.mesh.geometry;
       const offsetAttr = geo.getAttribute('aOffset');
       const colorAttr = geo.getAttribute('aColor');
-      const backend = (this.renderer as any).backend;
-      backend.get(offsetAttr).buffer = this.offsetGpuBuffer;
-      backend.get(colorAttr).buffer = this.colorGpuBuffer;
+      backend.get(offsetAttr).buffer = entry.offsetGpuBuffer;
+      backend.get(colorAttr).buffer = entry.colorGpuBuffer;
     }
 
-    // Resume rendering
     if (!this.disposed) {
       this.startRenderLoop();
     }
   }
 
-  /**
-   * Create or rebuild the wireframe bounding box.
-   */
-  updateWireframe(aspect: number, heightScale: number, wireframeColor?: [number, number, number]): void {
-    if (this.wireframeBox) {
-      this.scene.remove(this.wireframeBox);
-      this.wireframeBox.geometry.dispose();
-      (this.wireframeBox.material as Material).dispose();
-      this.wireframeBox = null;
-    }
-
-    const geometry = new BoxGeometry(1.0, heightScale, aspect);
-    const edges = new EdgesGeometry(geometry);
-    const color = wireframeColor
-      ? new Color(wireframeColor[0], wireframeColor[1], wireframeColor[2])
-      : new Color(0x444444);
-    const material = new LineBasicMaterial({ color });
-    this.wireframeBox = new LineSegments(edges, material);
-    this.wireframeBox.position.set(0, heightScale * 0.5, 0);
-    this.scene.add(this.wireframeBox);
-    geometry.dispose();
-  }
-
-  setWireframeColor(color: [number, number, number] | undefined): void {
-    this.currentWireframeColor = color;
-    this.updateWireframe(this.currentAspect, this.currentHeightScale, color);
-  }
-
   computeAutoDistance(): number {
     const diagonal = Math.sqrt(
-      1.0 + this.currentAspect * this.currentAspect +
+      this.totalWidth * this.totalWidth +
+      this.maxAspect * this.maxAspect +
       this.currentHeightScale * this.currentHeightScale,
     );
     const fov = this.camera.fov * (Math.PI / 180);
@@ -642,7 +677,8 @@ class HeightmapScene {
   frameObject(): void {
     if (!this.controls) return;
     const diagonal = Math.sqrt(
-      1.0 + this.currentAspect * this.currentAspect +
+      this.totalWidth * this.totalWidth +
+      this.maxAspect * this.maxAspect +
       this.currentHeightScale * this.currentHeightScale,
     );
     const fov = this.camera.fov * (Math.PI / 180);
@@ -696,38 +732,35 @@ class HeightmapScene {
       window.removeEventListener('keydown', this.boundKeyDown);
     }
 
-    try {
-      if (this.pointsMesh) {
-        this.pointsMesh.geometry.dispose();
-        (this.pointsMesh.material as Material).dispose();
-      }
-    } catch { /* safe to ignore */ }
-    try {
-      if (this.wireframeBox) {
-        this.wireframeBox.geometry.dispose();
-        (this.wireframeBox.material as Material).dispose();
-      }
-    } catch { /* safe to ignore */ }
+    this.clearLayers();
     try { if (this.controls) this.controls.dispose(); } catch { /* safe to ignore */ }
     try { if (this.renderer) this.renderer.dispose(); } catch { /* safe to ignore */ }
-
-    this.compute?.destroy();
-    this.offsetGpuBuffer?.destroy();
-    this.colorGpuBuffer?.destroy();
   }
 }
 
 /**
  * React component wrapping the Three.js WebGPU heightmap scene.
- * Fully GPU-driven: compute shader → shared buffers → instanced render.
+ * Supports multiple layers displayed side by side in the same 3D view.
  */
-export function HeightmapView({ stageTexture, device, active, renderVersion, settings, wireframeColor }: HeightmapViewProps) {
+export function HeightmapView({ layers, device, active, renderVersion, settings }: HeightmapViewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<HeightmapScene | null>(null);
   const initRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [sceneReady, setSceneReady] = useState(false);
+
+  // Keep latest layers accessible in effects via ref (avoids stale closures)
+  const layersRef = useRef(layers);
+  layersRef.current = layers;
+
+  // Stable structural key: changes when layer count, dimensions, or downsample change
+  const ds = settings?.downsample ?? 1;
+  const layerStructKey = `${layers.length}:${ds}:${layers.map(l => `${l.texture.width}x${l.texture.height}`).join(',')}`;
+  const prevStructKeyRef = useRef('');
+
+  // Stable selection key: changes when isSelected flags change
+  const selectionKey = layers.map(l => l.isSelected ? '1' : '0').join('');
 
   // Initialise Three.js scene + renderer
   useEffect(() => {
@@ -771,33 +804,33 @@ export function HeightmapView({ stageTexture, device, active, renderVersion, set
     };
   }, [active, device]);
 
-  // Setup mesh when texture dimensions or downsample change; re-dispatch on renderVersion
+  // Setup or redispatch layers when structure/content changes
   useEffect(() => {
-    if (!active || !stageTexture || !device || !sceneReady || !settings) return;
     const scene = sceneRef.current;
-    if (!scene) return;
+    if (!scene || !active || !sceneReady) return;
 
-    const { width, height } = stageTexture;
-    const MAX_SIDE = 256;
-    const minDownsample = Math.max(1, Math.floor(Math.max(width, height) / MAX_SIDE));
-    const downsample = Math.max(minDownsample, settings.downsample);
-
-    const dsW = Math.max(1, Math.floor(width / downsample));
-    const dsH = Math.max(1, Math.floor(height / downsample));
-
-    if (dsW * dsH > 100_000) {
-      console.warn(`[HeightmapView] Instance count ${dsW * dsH} exceeds safety limit, skipping`);
+    if (!settings || layers.length === 0) {
+      if (scene.layerCount > 0) {
+        scene.clearLayers();
+        prevStructKeyRef.current = '';
+      }
       return;
     }
 
-    const changed = scene.setupDimensions(width, height, downsample);
-    if (changed) {
-      scene.setupMesh(width, height, stageTexture, settings);
+    if (layerStructKey !== prevStructKeyRef.current) {
+      prevStructKeyRef.current = layerStructKey;
+      scene.setupLayers(layersRef.current, settings);
     } else {
-      // Dimensions unchanged — just re-dispatch with (possibly new) texture content
-      scene.redispatch(stageTexture);
+      scene.redispatchLayers(layersRef.current);
     }
-  }, [active, stageTexture, device, renderVersion, settings?.downsample, sceneReady]);
+  }, [active, sceneReady, layerStructKey, renderVersion]);
+
+  // Wireframe color/selection updates
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene || scene.layerCount === 0) return;
+    scene.updateWireframeColors(layersRef.current);
+  }, [selectionKey]);
 
   // Render loop start/stop on visibility
   useEffect(() => {
@@ -833,13 +866,6 @@ export function HeightmapView({ stageTexture, device, active, renderVersion, set
     if (!scene || !settings) return;
     scene.updateSettings(settings);
   }, [settings]);
-
-  // Wireframe color changes
-  useEffect(() => {
-    const scene = sceneRef.current;
-    if (!scene) return;
-    scene.setWireframeColor(wireframeColor);
-  }, [wireframeColor]);
 
   return (
     <div

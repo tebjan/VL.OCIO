@@ -19,15 +19,66 @@ function createDefaultStages(): StageState[] {
 const STAGE_FOR_FILE_TYPE: Record<LoadedFileType, number> = {
   exr: STAGE_COUNT - 1,
   dds: 2,
+  image: STAGE_COUNT - 1,
   sample: STAGE_COUNT - 1,
 };
 
+/**
+ * Determine whether a file type represents scene-linear HDR data.
+ * Scene-linear content needs tonemapping (RRT+ODT); display-referred sRGB content does not.
+ *
+ * - EXR: always scene-linear (ACEScg)
+ * - DDS BC6H: HDR linear data
+ * - DDS BC7/other: display-referred sRGB
+ * - PNG/JPEG/WebP/etc: display-referred sRGB
+ * - Sample: scene-linear HDR gradient
+ */
+function isSceneLinear(fileType: LoadedFileType, ddsFormatLabel?: string): boolean {
+  if (fileType === 'exr' || fileType === 'sample') return true;
+  if (fileType === 'dds') return ddsFormatLabel?.startsWith('BC6H') ?? false;
+  return false;
+}
+
+/**
+ * Create pipeline settings appropriate for the given file type.
+ * Scene-linear content: ACEScg input, RRT+ODT enabled (full ACES pipeline).
+ * Display-referred sRGB: sRGB input, RRT+ODT disabled (already tonemapped).
+ */
+function createSettingsForFileType(fileType: LoadedFileType, ddsFormatLabel?: string): PipelineSettings {
+  const defaults = createDefaultSettings();
+  const linear = isSceneLinear(fileType, ddsFormatLabel);
+  return {
+    ...defaults,
+    inputColorSpace: linear ? 2 : 5,  // ACEScg : sRGB
+    rrtEnabled: linear,
+    odtEnabled: linear,
+    applySRGB: true,                    // always on — GPU texture sampling linearizes sRGB data
+    outputSpace: 0,                    // always Linear Rec.709
+  };
+}
+
+/** Get a short format label from a filename extension (e.g. "photo.jpg" → "JPEG"). */
+function formatLabelFromFileName(fileName: string | null): string | null {
+  if (!fileName) return null;
+  const ext = fileName.split('.').pop()?.toLowerCase();
+  if (!ext) return null;
+  const labels: Record<string, string> = {
+    jpg: 'JPEG', jpeg: 'JPEG', jpe: 'JPEG',
+    png: 'PNG', bmp: 'BMP', webp: 'WebP',
+    avif: 'AVIF', gif: 'GIF', ico: 'ICO',
+    tif: 'TIFF', tiff: 'TIFF', svg: 'SVG',
+  };
+  return labels[ext] ?? null;
+}
+
 /** Derive StageInfo[] from an instance's state */
 function deriveStages(inst: PipelineInstance): StageInfo[] {
+  // For generic 'image' types, override stage 0 label with the actual format
+  const formatLabel = inst.fileType === 'image' ? formatLabelFromFileName(inst.fileName) : null;
   return inst.stageStates.map((state, i) => ({
     index: i,
-    name: STAGE_NAMES[i].name,
-    shortName: STAGE_NAMES[i].shortName,
+    name: i === 0 && formatLabel ? `${formatLabel} Load` : STAGE_NAMES[i].name,
+    shortName: i === 0 && formatLabel ? formatLabel : STAGE_NAMES[i].shortName,
     description: STAGE_NAMES[i].description,
     enabled: state.enabled,
     available: !inst.unavailableStages.has(i),
@@ -50,6 +101,7 @@ export interface PipelineManagerReturn {
     fileType: LoadedFileType,
     fileName?: string,
     fileHandle?: FileSystemFileHandle,
+    ddsFormatLabel?: string,
   ): PipelineId;
   removePipeline(id: PipelineId): void;
   replacePipelineSource(
@@ -62,6 +114,7 @@ export interface PipelineManagerReturn {
     fileType: LoadedFileType,
     fileName?: string,
     fileHandle?: FileSystemFileHandle,
+    ddsFormatLabel?: string,
   ): void;
   selectPipeline(id: PipelineId): void;
 
@@ -110,6 +163,7 @@ export function usePipelineManager(): PipelineManagerReturn {
     fileType: LoadedFileType,
     fileName?: string,
     fileHandle?: FileSystemFileHandle,
+    ddsFormatLabel?: string,
   ): PipelineId => {
     const id = `pipeline-${nextIdRef.current++}` as PipelineId;
 
@@ -123,6 +177,12 @@ export function usePipelineManager(): PipelineManagerReturn {
       renderer.setSize(width, height);
 
       const unavailableStages = fileType === 'dds' ? new Set([0, 1]) : new Set<number>();
+      const settings = createSettingsForFileType(fileType, ddsFormatLabel);
+
+      // Sync stage enable/disable for RRT (4) and ODT (5) from settings
+      const stageStates = createDefaultStages();
+      stageStates[4] = { enabled: settings.rrtEnabled };
+      stageStates[5] = { enabled: settings.odtEnabled };
 
       const instance: PipelineInstance = {
         id,
@@ -130,10 +190,11 @@ export function usePipelineManager(): PipelineManagerReturn {
         fileName: fileName ?? null,
         fileType,
         fileHandle,
+        ddsFormatLabel,
         renderer,
         sourceTexture,
-        settings: createDefaultSettings(),
-        stageStates: createDefaultStages(),
+        settings,
+        stageStates,
         selectedStageIndex: STAGE_FOR_FILE_TYPE[fileType],
         unavailableStages,
         metadata,
@@ -182,11 +243,19 @@ export function usePipelineManager(): PipelineManagerReturn {
     fileType: LoadedFileType,
     fileName?: string,
     fileHandle?: FileSystemFileHandle,
+    ddsFormatLabel?: string,
   ) => {
     updateInstance(id, (inst) => {
       inst.sourceTexture.destroy();
       inst.renderer.setSize(width, height);
       const unavailableStages = fileType === 'dds' ? new Set([0, 1]) : new Set<number>();
+      const settings = createSettingsForFileType(fileType, ddsFormatLabel);
+
+      // Sync stage enable/disable for RRT (4) and ODT (5) from settings
+      const stageStates = createDefaultStages();
+      stageStates[4] = { enabled: settings.rrtEnabled };
+      stageStates[5] = { enabled: settings.odtEnabled };
+
       return {
         ...inst,
         sourceTexture,
@@ -194,6 +263,9 @@ export function usePipelineManager(): PipelineManagerReturn {
         fileType,
         fileName: fileName ?? null,
         fileHandle,
+        ddsFormatLabel,
+        settings,
+        stageStates,
         selectedStageIndex: STAGE_FOR_FILE_TYPE[fileType],
         unavailableStages,
       };
@@ -258,13 +330,22 @@ export function usePipelineManager(): PipelineManagerReturn {
   const resetAll = useCallback((id?: PipelineId) => {
     const targetId = id ?? selectedId;
     if (!targetId) return;
-    updateInstance(targetId, (inst) => ({
-      ...inst,
-      settings: createDefaultSettings(),
-      stageStates: createDefaultStages(),
-      selectedStageIndex: STAGE_COUNT - 1,
-      unavailableStages: new Set<number>(),
-    }));
+    updateInstance(targetId, (inst) => {
+      // Respect the loaded file type — same logic as addPipeline / replacePipelineSource
+      const settings = createSettingsForFileType(inst.fileType, inst.ddsFormatLabel);
+      const stageStates = createDefaultStages();
+      stageStates[4] = { enabled: settings.rrtEnabled };
+      stageStates[5] = { enabled: settings.odtEnabled };
+      const unavailableStages = inst.fileType === 'dds' ? new Set([0, 1]) : new Set<number>();
+
+      return {
+        ...inst,
+        settings,
+        stageStates,
+        selectedStageIndex: STAGE_FOR_FILE_TYPE[inst.fileType],
+        unavailableStages,
+      };
+    });
   }, [selectedId, updateInstance]);
 
   const pipelines = useMemo(() => Array.from(instanceMap.values()), [instanceMap]);

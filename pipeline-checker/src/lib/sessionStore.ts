@@ -60,7 +60,7 @@ function idbClear(db: IDBDatabase): Promise<void> {
 
 export interface StoredFileRef {
   handle: FileSystemFileHandle;
-  fileType: 'exr' | 'dds';
+  fileType: string;
   fileName: string;
 }
 
@@ -69,7 +69,7 @@ export interface StoredFileRef {
  */
 export async function saveFileHandle(
   handle: FileSystemFileHandle,
-  fileType: 'exr' | 'dds',
+  fileType: string,
   fileName: string,
 ): Promise<void> {
   try {

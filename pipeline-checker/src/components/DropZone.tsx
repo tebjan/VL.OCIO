@@ -1,28 +1,23 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 
 /** File types the pipeline can load. */
-export type LoadedFileType = 'exr' | 'dds' | 'sample';
+export type LoadedFileType = 'exr' | 'dds' | 'image' | 'sample';
 
 interface DropZoneProps {
-  /** Called when an EXR file is dropped. Passes raw buffer for App to parse+upload efficiently. */
-  onExrBuffer: (buffer: ArrayBuffer, fileName: string, fileHandle?: FileSystemFileHandle) => void | Promise<void>;
-  /** Called when a DDS file is dropped. buffer is the raw ArrayBuffer. */
-  onDdsLoaded: (buffer: ArrayBuffer, fileName: string, fileHandle?: FileSystemFileHandle) => void;
-  /** Whether the app has BC texture compression support. */
-  hasBC: boolean;
+  /** Called when a file is dropped on the window (fallback for drops outside pipeline rows). */
+  onFileDrop: (file: File, fileHandle?: FileSystemFileHandle) => void;
   /** Called when drag state changes (true when dragging over window). */
   onDragStateChange?: (isDragging: boolean) => void;
 }
 
 /**
- * Global drag-and-drop overlay using window-level event listeners.
- * Invisible by default, shows a visual indicator when files are dragged over.
- * Does NOT block pointer events on the underlying UI.
+ * Global drag-and-drop detection using window-level event listeners.
+ * Prevents browser default file handling and provides fallback drop handling.
+ * Pipeline rows handle their own targeted drops and stopPropagation.
+ * Renders nothing — visual feedback is on the pipeline rows themselves.
  */
-export function DropZone({ onExrBuffer, onDdsLoaded, hasBC, onDragStateChange }: DropZoneProps) {
+export function DropZone({ onFileDrop, onDragStateChange }: DropZoneProps) {
   const [isDragging, setIsDragging] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const dragCountRef = useRef(0);
 
   // Notify parent of drag state changes
@@ -30,57 +25,7 @@ export function DropZone({ onExrBuffer, onDdsLoaded, hasBC, onDragStateChange }:
     onDragStateChange?.(isDragging);
   }, [isDragging, onDragStateChange]);
 
-  // Clear error after 8 seconds
-  useEffect(() => {
-    if (!error) return;
-    const timer = setTimeout(() => setError(null), 8000);
-    return () => clearTimeout(timer);
-  }, [error]);
-
-  const handleFileDrop = useCallback(
-    async (file: File, fileHandle?: FileSystemFileHandle) => {
-      const name = file.name.toLowerCase();
-
-      if (name.endsWith('.exr')) {
-        setIsLoading(true);
-        setError(null);
-        try {
-          const buffer = await file.arrayBuffer();
-          console.log(`[DropZone] Read EXR: ${file.name} (${(buffer.byteLength / 1024 / 1024).toFixed(1)} MB)`);
-          await onExrBuffer(buffer, file.name, fileHandle);
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          console.error(`[DropZone] EXR load error:`, err);
-          setError(`${file.name}: ${msg}`);
-        } finally {
-          setIsLoading(false);
-        }
-      } else if (name.endsWith('.dds')) {
-        if (!hasBC) {
-          setError('DDS files require BC texture compression support (not available on this GPU).');
-          return;
-        }
-        setIsLoading(true);
-        setError(null);
-        try {
-          const buffer = await file.arrayBuffer();
-          console.log(`[DropZone] Loaded DDS: ${file.name} (${buffer.byteLength} bytes)`);
-          onDdsLoaded(buffer, file.name, fileHandle);
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          console.error(`[DropZone] DDS load error:`, err);
-          setError(msg);
-        } finally {
-          setIsLoading(false);
-        }
-      } else {
-        setError('Unsupported file type. Drop an .exr or .dds file.');
-      }
-    },
-    [onExrBuffer, onDdsLoaded, hasBC]
-  );
-
-  // Window-level drag event listeners — no blocking overlay needed
+  // Window-level drag event listeners
   useEffect(() => {
     const onDragEnter = (e: DragEvent) => {
       e.preventDefault();
@@ -103,6 +48,7 @@ export function DropZone({ onExrBuffer, onDdsLoaded, hasBC, onDragStateChange }:
       e.preventDefault();
     };
 
+    // Fallback: handles drops that miss pipeline rows (no stopPropagation from a row)
     const onDrop = async (e: DragEvent) => {
       e.preventDefault();
       setIsDragging(false);
@@ -124,7 +70,7 @@ export function DropZone({ onExrBuffer, onDdsLoaded, hasBC, onDragStateChange }:
         } catch { /* not supported or denied */ }
       }
 
-      handleFileDrop(file, fileHandle);
+      onFileDrop(file, fileHandle);
     };
 
     window.addEventListener('dragenter', onDragEnter);
@@ -138,74 +84,35 @@ export function DropZone({ onExrBuffer, onDdsLoaded, hasBC, onDragStateChange }:
       window.removeEventListener('dragover', onDragOver);
       window.removeEventListener('drop', onDrop);
     };
-  }, [handleFileDrop]);
+  }, [onFileDrop]);
 
-  return (
-    <>
-      {/* Visual overlay when dragging — only rendered while dragging */}
-      {isDragging && (
-        <div
-          className="fixed inset-0 flex items-center justify-center"
-          style={{
-            zIndex: 1001,
-            background: 'rgba(0, 0, 0, 0.7)',
-            backdropFilter: 'blur(4px)',
-            pointerEvents: 'none',
-          }}
-        >
-          <div
-            className="p-12 rounded-2xl flex flex-col items-center gap-4"
-            style={{
-              border: '2px dashed var(--color-accent)',
-              background: 'rgba(0, 0, 0, 0.5)',
-            }}
-          >
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ color: 'var(--color-accent)' }}>
-              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
-            </svg>
-            <p className="text-lg font-medium" style={{ color: 'var(--color-text)' }}>
-              Drop EXR or DDS file
-            </p>
-            <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
-              Release to load into pipeline
-            </p>
-          </div>
-        </div>
-      )}
+  return null;
+}
 
-      {/* Loading indicator */}
-      {isLoading && (
-        <div
-          className="fixed bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg"
-          style={{
-            zIndex: 1002,
-            background: 'var(--color-surface)',
-            border: '1px solid var(--color-border)',
-            color: 'var(--color-text-muted)',
-            pointerEvents: 'none',
-          }}
-        >
-          Loading...
-        </div>
-      )}
+/**
+ * Extract file and optional FileSystemFileHandle from a React drag event.
+ * Must be called synchronously in the drop event handler.
+ */
+export function extractDroppedFile(
+  e: React.DragEvent,
+): { file: File; handlePromise?: Promise<FileSystemFileHandle | undefined> } | null {
+  const items = e.dataTransfer?.items;
+  if (!items || items.length === 0) return null;
+  const item = items[0];
+  const file = item.getAsFile();
+  if (!file) return null;
 
-      {/* Error toast */}
-      {error && (
-        <div
-          className="fixed bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg max-w-md text-center"
-          style={{
-            zIndex: 1002,
-            background: 'var(--color-surface)',
-            border: '1px solid var(--color-error)',
-            color: 'var(--color-error)',
-            pointerEvents: 'none',
-          }}
-        >
-          {error}
-        </div>
-      )}
-    </>
-  );
+  // Start handle extraction synchronously (before DataTransfer expires)
+  let handlePromise: Promise<FileSystemFileHandle | undefined> | undefined;
+  const getHandle = (item as any).getAsFileSystemHandle as (() => Promise<FileSystemHandle>) | undefined;
+  if (getHandle) {
+    handlePromise = getHandle.call(item).then(
+      (h) => (h.kind === 'file' ? (h as FileSystemFileHandle) : undefined),
+      () => undefined,
+    );
+  }
+
+  return { file, handlePromise };
 }
 
 /**

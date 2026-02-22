@@ -18,7 +18,6 @@ export interface MainPreviewProps {
   device: GPUDevice;
   format: GPUTextureFormat;
   stageTexture: GPUTexture | null;
-  viewExposure: number;
   renderVersion?: number;
 }
 
@@ -34,7 +33,6 @@ export function MainPreview({
   device,
   format,
   stageTexture,
-  viewExposure,
   renderVersion,
 }: MainPreviewProps) {
   const [mode, setMode] = useState<ViewMode>('2d');
@@ -102,7 +100,6 @@ export function MainPreview({
             device={device}
             format={format}
             stageTexture={stageTexture}
-            viewExposure={viewExposure}
             renderVersion={renderVersion}
           />
         </div>

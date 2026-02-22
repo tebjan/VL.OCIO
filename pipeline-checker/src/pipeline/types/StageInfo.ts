@@ -11,7 +11,6 @@ export const STAGE_NAMES: ReadonlyArray<{ name: string; shortName: string }> = [
   { name: 'EXR Load', shortName: 'EXR' },
   { name: 'BC Compress', shortName: 'BC Enc' },
   { name: 'BC Decompress', shortName: 'BC Dec' },
-  { name: 'Input Interp.', shortName: 'Input' },
   { name: 'Color Grade', shortName: 'Grade' },
   { name: 'RRT', shortName: 'RRT' },
   { name: 'ODT', shortName: 'ODT' },

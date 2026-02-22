@@ -5,7 +5,6 @@ import { WebGPUCanvas } from './components/WebGPUCanvas';
 import { Filmstrip } from './components/Filmstrip';
 import { ControlsPanel } from './components/ControlsPanel';
 import { MainPreview } from './components/MainPreview';
-import { ViewExposureHeader } from './components/ViewExposureHeader';
 import { MetadataPanel, computeChannelStats, type ImageMetadata } from './components/MetadataPanel';
 import { usePipeline } from './hooks/usePipeline';
 import { PipelineRenderer } from './pipeline/PipelineRenderer';
@@ -76,7 +75,6 @@ const STAGE_FOR_FILE_TYPE: Record<LoadedFileType, number> = {
 
 export default function App() {
   const [state, setState] = useState<AppState>({ kind: 'initializing' });
-  const [viewExposure, setViewExposure] = useState(0);
   const [renderVersion, setRenderVersion] = useState(0);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<PipelineRenderer | null>(null);
@@ -221,7 +219,7 @@ export default function App() {
     }
 
     // Serialize UI settings → GPU uniform buffer layout
-    const gpuSettings = toGPUSettings(pipeline.settings, viewExposure);
+    const gpuSettings = toGPUSettings(pipeline.settings, 0);
     renderer.updateUniforms(serializeUniforms(gpuSettings));
 
     // Render all enabled stages
@@ -229,7 +227,7 @@ export default function App() {
 
     // Bump version so Preview2D + thumbnails re-render (same texture ref, new content)
     setRenderVersion((v) => v + 1);
-  }, [state, pipeline.settings, pipeline.stages, viewExposure]);
+  }, [state, pipeline.settings, pipeline.stages]);
 
   // Get the output texture for a given UI stage index
   const getStageTexture = useCallback((stageIndex: number): GPUTexture | null => {
@@ -307,17 +305,13 @@ export default function App() {
           />
 
           <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-              <ViewExposureHeader exposure={viewExposure} onChange={setViewExposure} />
-              <div style={{ flex: 1, overflow: 'hidden' }}>
-                <MainPreview
-                  device={state.gpu.device}
-                  format={state.gpu.format}
-                  stageTexture={getSelectedTexture()}
-                  viewExposure={viewExposure}
-                  renderVersion={renderVersion}
-                />
-              </div>
+            <div style={{ flex: 1, overflow: 'hidden' }}>
+              <MainPreview
+                device={state.gpu.device}
+                format={state.gpu.format}
+                stageTexture={getSelectedTexture()}
+                renderVersion={renderVersion}
+              />
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>

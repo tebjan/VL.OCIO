@@ -229,7 +229,6 @@ fn ConvertColorSpace(color: vec3<f32>, fromSpace: i32, toSpace: i32) -> vec3<f32
 fn fs(in: VertexOutput) -> @location(0) vec4<f32> {
     let texCoord = vec2<i32>(in.uv * vec2<f32>(textureDimensions(inputTexture)));
     let tex0col = textureLoad(inputTexture, texCoord, 0);
-    let color = tex0col.rgb;
-    let result = ToLinearRec709(color, u.inputSpace);
-    return vec4<f32>(result, tex0col.a);
+    // Passthrough: Stage 5 (Color Grade) handles inputSpace conversion via DecodeInput()
+    return tex0col;
 }

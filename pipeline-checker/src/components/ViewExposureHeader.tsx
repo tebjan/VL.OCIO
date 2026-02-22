@@ -3,6 +3,8 @@ import { useCallback } from 'react';
 export interface ViewExposureHeaderProps {
   exposure: number;
   onChange: (value: number) => void;
+  applySRGB: boolean;
+  onSRGBChange: (value: boolean) => void;
 }
 
 /**
@@ -10,7 +12,7 @@ export interface ViewExposureHeaderProps {
  * Visually separated from pipeline controls to prevent confusion
  * with grade exposure (Stage 5) or tonemap exposure (Stage 6).
  */
-export function ViewExposureHeader({ exposure, onChange }: ViewExposureHeaderProps) {
+export function ViewExposureHeader({ exposure, onChange, applySRGB, onSRGBChange }: ViewExposureHeaderProps) {
   const handleInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     onChange(parseFloat(e.target.value));
   }, [onChange]);
@@ -96,6 +98,27 @@ export function ViewExposureHeader({ exposure, onChange }: ViewExposureHeaderPro
         >
           {displayValue} EV
         </span>
+
+        <label
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            fontSize: '12px',
+            color: 'var(--surface-300)',
+            cursor: 'pointer',
+            marginLeft: '12px',
+            flexShrink: 0,
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={applySRGB}
+            onChange={(e) => onSRGBChange(e.target.checked)}
+            style={{ cursor: 'pointer', accentColor: 'var(--surface-400)' }}
+          />
+          sRGB
+        </label>
       </div>
     </div>
   );

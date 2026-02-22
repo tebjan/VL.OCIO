@@ -49,12 +49,12 @@ function getOrCreateSharedGPU(device: GPUDevice, format: GPUTextureFormat): Shar
     primitive: { topology: 'triangle-list' },
   });
 
-  // Uniform buffer: zoom=1, pan=0,0, exposure=0 (no adjustment for thumbnails)
+  // Uniform buffer: exposure=0, zoom=1, pan=0,0, applySRGB=1 (no adjustment for thumbnails)
   const uniformBuffer = device.createBuffer({
-    size: 16,
+    size: 20,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
-  device.queue.writeBuffer(uniformBuffer, 0, new Float32Array([0.0, 1.0, 0.0, 0.0]));
+  device.queue.writeBuffer(uniformBuffer, 0, new Float32Array([0.0, 1.0, 0.0, 0.0, 1.0]));
 
   const sampler = device.createSampler({
     magFilter: 'linear',

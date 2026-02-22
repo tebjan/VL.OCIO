@@ -5,7 +5,6 @@ export interface Preview2DProps {
   device: GPUDevice;
   format: GPUTextureFormat;
   stageTexture: GPUTexture | null;
-  viewExposure: number;
   /** Incremented after each pipeline render to trigger preview refresh. */
   renderVersion?: number;
 }
@@ -17,7 +16,7 @@ interface DragState {
   panY: number;
 }
 
-export function Preview2D({ device, format, stageTexture, viewExposure, renderVersion }: Preview2DProps) {
+export function Preview2D({ device, format, stageTexture, renderVersion }: Preview2DProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const gpuRef = useRef<{
@@ -66,7 +65,7 @@ export function Preview2D({ device, format, stageTexture, viewExposure, renderVe
     });
 
     const uniformBuffer = device.createBuffer({
-      size: 16, // 4 x f32: viewExposure, zoom, panX, panY
+      size: 20, // 5 x f32: viewExposure, zoom, panX, panY, applySRGB
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
 
@@ -123,7 +122,7 @@ export function Preview2D({ device, format, stageTexture, viewExposure, renderVe
 
       try {
         // Write uniforms
-        const data = new Float32Array([viewExposure, zoom, panX, panY]);
+        const data = new Float32Array([0, zoom, panX, panY, 1.0]);
         device.queue.writeBuffer(gpu.uniformBuffer, 0, data);
 
         // Create bind group for current stage texture
@@ -156,7 +155,7 @@ export function Preview2D({ device, format, stageTexture, viewExposure, renderVe
     });
 
     return () => cancelAnimationFrame(frameRef.current);
-  }, [device, stageTexture, viewExposure, zoom, panX, panY, renderVersion, canvasSize]);
+  }, [device, stageTexture, zoom, panX, panY, renderVersion, canvasSize]);
 
   // Mouse wheel zoom (centered on cursor).
   // Uses a native event listener with { passive: false } to ensure preventDefault()

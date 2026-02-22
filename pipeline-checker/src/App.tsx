@@ -321,6 +321,7 @@ export default function App() {
                 renderVersion={renderVersion}
                 applySRGB={pipeline.settings.applySRGB}
                 selectedStageIndex={pipeline.selectedStageIndex}
+                stageName={pipeline.stages[pipeline.selectedStageIndex]?.name}
               />
             </div>
 

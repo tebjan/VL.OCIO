@@ -75,6 +75,7 @@ export interface MainPreviewProps {
   renderVersion?: number;
   applySRGB?: boolean;
   selectedStageIndex: number;
+  stageName?: string;
 }
 
 type ViewMode = '2d' | '3d';
@@ -92,6 +93,7 @@ export function MainPreview({
   renderVersion,
   applySRGB,
   selectedStageIndex,
+  stageName,
 }: MainPreviewProps) {
   // Final Display (last stage) always renders with sRGB gamma applied
   const effectiveApplySRGB = (selectedStageIndex === STAGE_NAMES.length - 1) ? true : applySRGB;
@@ -151,6 +153,19 @@ export function MainPreview({
         >
           3D
         </button>
+        {stageName && (
+          <span style={{
+            marginLeft: 'auto',
+            color: 'var(--color-text-muted)',
+            fontSize: '13px',
+            paddingRight: '8px',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}>
+            {stageName}
+          </span>
+        )}
       </div>
 
       {/* View area */}

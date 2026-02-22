@@ -1,4 +1,4 @@
-import { Section } from './ui/Section';
+import { Section } from './grading/Section';
 
 export interface ChannelStats {
   min: [number, number, number, number];

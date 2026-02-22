@@ -1,7 +1,7 @@
-import { Section } from './ui/Section';
-import { Slider } from './ui/Slider';
-import { Select } from './ui/Select';
-import { Toggle } from './ui/Toggle';
+import { Section } from './grading/Section';
+import { Slider } from './grading/Slider';
+import { Select } from './grading/Select';
+import { Toggle } from './grading/Toggle';
 import {
   type HeightmapSettings,
   HeightMode,
@@ -9,16 +9,16 @@ import {
 } from '../types/pipeline';
 
 const HEIGHT_MODE_OPTIONS = Object.entries(HEIGHT_MODE_LABELS).map(
-  ([value, label]) => ({ value: Number(value), label }),
+  ([value, label]) => ({ value: String(value), label }),
 );
 
 const DOWNSAMPLE_OPTIONS = [
-  { value: 1, label: '1x (full)' },
-  { value: 2, label: '2x' },
-  { value: 4, label: '4x' },
-  { value: 8, label: '8x' },
-  { value: 16, label: '16x' },
-] as const;
+  { value: '1', label: '1x (full)' },
+  { value: '2', label: '2x' },
+  { value: '4', label: '4x' },
+  { value: '8', label: '8x' },
+  { value: '16', label: '16x' },
+];
 
 export interface HeightmapControlsProps {
   settings: HeightmapSettings;
@@ -39,11 +39,11 @@ export function HeightmapControls({ settings, onChange }: HeightmapControlsProps
       }}
     >
       <Section title="Height" defaultOpen>
-        <Select
+        <Select<string>
           label="Mode"
-          value={settings.heightMode}
+          value={String(settings.heightMode)}
           options={HEIGHT_MODE_OPTIONS}
-          onChange={(v) => patch({ heightMode: v as HeightMode })}
+          onChange={(v) => patch({ heightMode: Number(v) as HeightMode })}
         />
         <Slider
           label="Scale"
@@ -98,11 +98,11 @@ export function HeightmapControls({ settings, onChange }: HeightmapControlsProps
       </Section>
 
       <Section title="Display" defaultOpen>
-        <Select
+        <Select<string>
           label="Downsample"
-          value={settings.downsample}
-          options={[...DOWNSAMPLE_OPTIONS]}
-          onChange={(v) => patch({ downsample: v as 1 | 2 | 4 | 8 | 16 })}
+          value={String(settings.downsample)}
+          options={DOWNSAMPLE_OPTIONS}
+          onChange={(v) => patch({ downsample: Number(v) as 1 | 2 | 4 | 8 | 16 })}
         />
         <Toggle
           label="Column Mode"

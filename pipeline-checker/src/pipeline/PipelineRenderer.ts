@@ -14,6 +14,7 @@ export class PipelineRenderer {
   private uniformBuffer: GPUBuffer;
   private width: number = 0;
   private height: number = 0;
+  private hasLoggedFirstRender: boolean = false;
 
   constructor(device: GPUDevice) {
     this.device = device;
@@ -87,6 +88,71 @@ export class PipelineRenderer {
     }
 
     this.device.queue.submit([encoder.finish()]);
+
+    // Log first successful render with stage info
+    if (!this.hasLoggedFirstRender) {
+      this.hasLoggedFirstRender = true;
+      const enabledCount = this.stages.filter(s => s.enabled).length;
+      console.log(`[Pipeline] Rendered ${enabledCount}/${this.stages.length} enabled stages (${this.width}x${this.height})`);
+
+      // One-time diagnostic: read back center pixel from each stage output
+      this.readbackDiagnostic(sourceTexture);
+    }
+  }
+
+  /**
+   * One-time diagnostic: read back the center pixel from each stage's output
+   * to verify non-zero values and correct stage-to-stage chaining.
+   * Runs asynchronously after the first render.
+   */
+  private async readbackDiagnostic(sourceTexture: GPUTexture): Promise<void> {
+    const cx = Math.floor(this.width / 2);
+    const cy = Math.floor(this.height / 2);
+
+    // Read source texture center pixel
+    const srcPixel = await this.readPixel(sourceTexture, cx, cy);
+    console.log(`[Pipeline Diagnostic] Source pixel (${cx},${cy}): [${Array.from(srcPixel).map(v => v.toFixed(4)).join(', ')}]`);
+
+    // Read each stage output
+    for (let i = 0; i < this.stages.length; i++) {
+      const stage = this.stages[i];
+      if (stage.output && stage.enabled) {
+        const pixel = await this.readPixel(stage.output, cx, cy);
+        console.log(`[Pipeline Diagnostic] Stage ${i} (${stage.name}): [${Array.from(pixel).map(v => v.toFixed(4)).join(', ')}]`);
+      } else if (!stage.enabled) {
+        console.log(`[Pipeline Diagnostic] Stage ${i} (${stage.name}): DISABLED (bypassed)`);
+      }
+    }
+  }
+
+  /**
+   * Read a single pixel from a GPUTexture at (x, y).
+   * Uses copyTextureToBuffer + mapAsync for GPU readback.
+   */
+  private async readPixel(texture: GPUTexture, x: number, y: number): Promise<Float32Array> {
+    const bytesPerPixel = 16; // rgba32float = 4 x 4 bytes
+    const bytesPerRow = 256;  // minimum 256-byte alignment for copyTextureToBuffer
+
+    const stagingBuffer = this.device.createBuffer({
+      size: bytesPerRow,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+
+    const encoder = this.device.createCommandEncoder();
+    encoder.copyTextureToBuffer(
+      { texture, origin: { x, y } },
+      { buffer: stagingBuffer, bytesPerRow },
+      { width: 1, height: 1 }
+    );
+    this.device.queue.submit([encoder.finish()]);
+
+    await stagingBuffer.mapAsync(GPUMapMode.READ);
+    const data = new Float32Array(stagingBuffer.getMappedRange(0, bytesPerPixel));
+    const pixel = new Float32Array(data); // copy before unmap
+    stagingBuffer.unmap();
+    stagingBuffer.destroy();
+
+    return pixel;
   }
 
   /**

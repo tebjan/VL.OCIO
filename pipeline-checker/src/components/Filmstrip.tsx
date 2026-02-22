@@ -1,4 +1,5 @@
 import { type StageInfo, STAGE_NAMES } from '../pipeline/types/StageInfo';
+import { type PipelineSettings, getStageColorSpace } from '../types/settings';
 import { StageCard } from './StageCard';
 
 export interface FilmstripProps {
@@ -12,9 +13,12 @@ export interface FilmstripProps {
   stageTextures: (GPUTexture | null)[];
   renderVersion?: number;
   applySRGB?: boolean;
+  settings: PipelineSettings;
 }
 
-export function Filmstrip({ stages, selectedIndex, onSelect, onToggle, device, format, stageTextures, renderVersion, applySRGB }: FilmstripProps) {
+export function Filmstrip({ stages, selectedIndex, onSelect, onToggle, device, format, stageTextures, renderVersion, applySRGB, settings }: FilmstripProps) {
+  const isEnabled = (i: number) => stages[i]?.enabled ?? true;
+
   return (
     <div
       style={{
@@ -31,6 +35,7 @@ export function Filmstrip({ stages, selectedIndex, onSelect, onToggle, device, f
       {stages.map((stage, i) => {
         // Final Display (last stage) always renders with sRGB gamma applied
         const effectiveApplySRGB = (i === STAGE_NAMES.length - 1) ? true : applySRGB;
+        const colorSpace = getStageColorSpace(i, settings, isEnabled);
         return (
           <div key={stage.index} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
             {/* Arrow connector before each card (except first) */}
@@ -58,6 +63,7 @@ export function Filmstrip({ stages, selectedIndex, onSelect, onToggle, device, f
               stageTexture={stageTextures[i] ?? null}
               renderVersion={renderVersion}
               applySRGB={effectiveApplySRGB}
+              colorSpaceLabel={colorSpace}
             />
           </div>
         );

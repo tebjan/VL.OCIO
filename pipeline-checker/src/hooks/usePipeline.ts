@@ -40,6 +40,9 @@ export function usePipeline(): UsePipelineReturn {
       next[index] = { enabled };
       return next;
     });
+    // Keep settings.rrtEnabled / odtEnabled in sync with filmstrip checkboxes
+    if (index === 4) setSettings((prev) => prev.rrtEnabled !== enabled ? { ...prev, rrtEnabled: enabled } : prev);
+    if (index === 5) setSettings((prev) => prev.odtEnabled !== enabled ? { ...prev, odtEnabled: enabled } : prev);
   }, []);
 
   const setStageAvailability = useCallback((indices: number[], available: boolean) => {

@@ -13,6 +13,11 @@ import decompressWGSL from './shaders/bc-decompress.wgsl?raw';
 /** Bytes per pixel for rgba16float: 4 channels x 2 bytes. */
 export const BYTES_PER_PIXEL = 8;
 
+/** Calculate the number of mip levels for a given texture size. */
+export function mipLevelCount(width: number, height: number): number {
+  return Math.floor(Math.log2(Math.max(width, height))) + 1;
+}
+
 /** WebGPU bytesPerRow alignment requirement for copyTextureToBuffer. */
 export const ROW_ALIGNMENT = 256;
 
@@ -115,10 +120,12 @@ export function uploadFloat32Texture(
     { width, height }
   );
 
-  // 2. Create final rgba16float output texture
+  // 2. Create final rgba16float output texture with mip levels
+  const mipCount = mipLevelCount(width, height);
   const output = device.createTexture({
     size: [width, height],
     format: 'rgba16float',
+    mipLevelCount: mipCount,
     usage: GPUTextureUsage.TEXTURE_BINDING
          | GPUTextureUsage.RENDER_ATTACHMENT
          | GPUTextureUsage.COPY_SRC,
@@ -154,7 +161,7 @@ export function uploadFloat32Texture(
   const encoder = device.createCommandEncoder({ label: 'f32→f16 convert' });
   const pass = encoder.beginRenderPass({
     colorAttachments: [{
-      view: output.createView(),
+      view: output.createView({ baseMipLevel: 0, mipLevelCount: 1 }),
       loadOp: 'clear' as GPULoadOp,
       storeOp: 'store' as GPUStoreOp,
       clearValue: { r: 0, g: 0, b: 0, a: 1 },
@@ -167,6 +174,7 @@ export function uploadFloat32Texture(
   device.queue.submit([encoder.finish()]);
 
   staging.destroy();
+  generateMipmaps(device, output);
   return output;
 }
 
@@ -192,12 +200,15 @@ export function uploadFloat16Texture(
     data.set(temp, bottomOffset);
   }
 
+  const mipCount = mipLevelCount(width, height);
   const output = device.createTexture({
     size: [width, height],
     format: 'rgba16float',
+    mipLevelCount: mipCount,
     usage: GPUTextureUsage.TEXTURE_BINDING
          | GPUTextureUsage.RENDER_ATTACHMENT
-         | GPUTextureUsage.COPY_SRC,
+         | GPUTextureUsage.COPY_SRC
+         | GPUTextureUsage.COPY_DST,
     label: 'EXR Source (f16 direct)',
   });
 
@@ -208,6 +219,7 @@ export function uploadFloat16Texture(
     { width, height },
   );
 
+  generateMipmaps(device, output);
   return output;
 }
 
@@ -237,10 +249,12 @@ export function uploadDDSTexture(
     { width: dds.width, height: dds.height },
   );
 
-  // 2. Create rgba16float render target for decompressed output
+  // 2. Create rgba16float render target for decompressed output (with mip levels)
+  const mipCount = mipLevelCount(dds.width, dds.height);
   const outputTex = device.createTexture({
     size: [dds.width, dds.height],
     format: 'rgba16float',
+    mipLevelCount: mipCount,
     usage: GPUTextureUsage.TEXTURE_BINDING
          | GPUTextureUsage.RENDER_ATTACHMENT
          | GPUTextureUsage.COPY_SRC,
@@ -280,7 +294,7 @@ export function uploadDDSTexture(
   const encoder = device.createCommandEncoder({ label: 'DDS decompress' });
   const pass = encoder.beginRenderPass({
     colorAttachments: [{
-      view: outputTex.createView(),
+      view: outputTex.createView({ baseMipLevel: 0, mipLevelCount: 1 }),
       loadOp: 'clear' as GPULoadOp,
       storeOp: 'store' as GPUStoreOp,
       clearValue: { r: 0, g: 0, b: 0, a: 1 },
@@ -294,6 +308,119 @@ export function uploadDDSTexture(
 
   // Clean up the compressed texture — we only need the decompressed output
   compressedTex.destroy();
+  generateMipmaps(device, outputTex);
 
   return outputTex;
+}
+
+// ── Mipmap generation ─────────────────────────────────────────────
+
+const MIPMAP_WGSL = `
+struct VertexOutput {
+  @builtin(position) position: vec4<f32>,
+  @location(0) uv: vec2<f32>,
+};
+
+@vertex fn vs(@builtin(vertex_index) i: u32) -> VertexOutput {
+  var out: VertexOutput;
+  let u = f32((i << 1u) & 2u);
+  let v = f32(i & 2u);
+  out.position = vec4<f32>(u * 2.0 - 1.0, v * 2.0 - 1.0, 0.0, 1.0);
+  out.uv = vec2<f32>(u, 1.0 - v);
+  return out;
+}
+
+@group(0) @binding(0) var srcMip: texture_2d<f32>;
+@group(0) @binding(1) var mipSampler: sampler;
+
+@fragment fn fs(in: VertexOutput) -> @location(0) vec4<f32> {
+  return textureSample(srcMip, mipSampler, in.uv);
+}
+`;
+
+/** Cached mipmap generator resources per device. */
+interface MipmapResources {
+  pipeline: GPURenderPipeline;
+  sampler: GPUSampler;
+  bindGroupLayout: GPUBindGroupLayout;
+}
+
+const mipmapCache = new WeakMap<GPUDevice, MipmapResources>();
+
+function getMipmapResources(device: GPUDevice): MipmapResources {
+  let res = mipmapCache.get(device);
+  if (res) return res;
+
+  const module = device.createShaderModule({ label: 'mipmap-gen', code: MIPMAP_WGSL });
+
+  const bindGroupLayout = device.createBindGroupLayout({
+    entries: [
+      { binding: 0, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
+      { binding: 1, visibility: GPUShaderStage.FRAGMENT, sampler: { type: 'filtering' } },
+    ],
+  });
+
+  const pipeline = device.createRenderPipeline({
+    layout: device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] }),
+    vertex: { module, entryPoint: 'vs' },
+    fragment: { module, entryPoint: 'fs', targets: [{ format: 'rgba16float' }] },
+    primitive: { topology: 'triangle-list' },
+  });
+
+  const sampler = device.createSampler({
+    magFilter: 'linear',
+    minFilter: 'linear',
+  });
+
+  res = { pipeline, sampler, bindGroupLayout };
+  mipmapCache.set(device, res);
+  return res;
+}
+
+/**
+ * Generate mipmaps for an rgba16float texture that has multiple mip levels.
+ * Encodes all mip passes into the provided command encoder (no separate submit).
+ * The texture must have RENDER_ATTACHMENT usage and > 1 mip levels.
+ */
+export function encodeMipmaps(device: GPUDevice, encoder: GPUCommandEncoder, texture: GPUTexture): void {
+  if (texture.mipLevelCount <= 1) return;
+
+  const { pipeline, sampler, bindGroupLayout } = getMipmapResources(device);
+
+  for (let level = 1; level < texture.mipLevelCount; level++) {
+    const srcView = texture.createView({ baseMipLevel: level - 1, mipLevelCount: 1 });
+    const dstView = texture.createView({ baseMipLevel: level, mipLevelCount: 1 });
+
+    const bindGroup = device.createBindGroup({
+      layout: bindGroupLayout,
+      entries: [
+        { binding: 0, resource: srcView },
+        { binding: 1, resource: sampler },
+      ],
+    });
+
+    const pass = encoder.beginRenderPass({
+      colorAttachments: [{
+        view: dstView,
+        loadOp: 'clear' as GPULoadOp,
+        storeOp: 'store' as GPUStoreOp,
+        clearValue: { r: 0, g: 0, b: 0, a: 0 },
+      }],
+    });
+    pass.setPipeline(pipeline);
+    pass.setBindGroup(0, bindGroup);
+    pass.draw(3);
+    pass.end();
+  }
+}
+
+/**
+ * Generate mipmaps for a texture in a standalone command buffer submission.
+ * Convenience wrapper around encodeMipmaps for one-shot use after upload.
+ */
+export function generateMipmaps(device: GPUDevice, texture: GPUTexture): void {
+  if (texture.mipLevelCount <= 1) return;
+  const encoder = device.createCommandEncoder({ label: 'mipmap-gen' });
+  encodeMipmaps(device, encoder, texture);
+  device.queue.submit([encoder.finish()]);
 }

@@ -11,14 +11,15 @@ export interface StageCardProps {
   stageTexture: GPUTexture | null;
   renderVersion?: number;
   applySRGB?: boolean;
+  colorSpaceLabel?: string;
 }
 
 /**
  * A single pipeline stage card for the filmstrip.
- * Fixed size: 160x120px (160x90 thumbnail + 160x30 label row).
+ * Fixed size: 160x132px (160x90 thumbnail + label rows).
  * Renders a live GPU thumbnail of the stage's output texture.
  */
-export function StageCard({ stage, isSelected, onSelect, onToggle, device, format, stageTexture, renderVersion, applySRGB }: StageCardProps) {
+export function StageCard({ stage, isSelected, onSelect, onToggle, device, format, stageTexture, renderVersion, applySRGB, colorSpaceLabel }: StageCardProps) {
   const isAvailable = stage.available !== false;
   const isEnabled = stage.enabled && isAvailable;
   const hasThumbnail = device && stageTexture && isAvailable;
@@ -108,15 +109,15 @@ export function StageCard({ stage, isSelected, onSelect, onToggle, device, forma
         )}
       </button>
 
-      {/* Label row: shortName + enable checkbox (30px height) — not clickable */}
+      {/* Label row: stage name, color space, checkbox */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'space-between',
           width: '100%',
           height: '22px',
           padding: '2px 2px 0',
+          gap: '4px',
         }}
       >
         <span
@@ -124,12 +125,28 @@ export function StageCard({ stage, isSelected, onSelect, onToggle, device, forma
             color: 'var(--surface-300)',
             fontSize: '11px',
             whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
+            flexShrink: 0,
           }}
         >
           {stage.name}
         </span>
+
+        {colorSpaceLabel && (
+          <span
+            style={{
+              color: 'var(--surface-500)',
+              fontSize: '9px',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              minWidth: 0,
+            }}
+          >
+            {colorSpaceLabel}
+          </span>
+        )}
+
+        <span style={{ flex: 1 }} />
 
         {isAvailable && (
           <input

@@ -1,4 +1,5 @@
 import type { PipelineStage } from './PipelineStage';
+import { encodeMipmaps } from './TextureUtils';
 
 /**
  * Orchestrates multi-pass rendering through the color pipeline.
@@ -91,6 +92,14 @@ export class PipelineRenderer {
       }
       // When disabled: currentInput is unchanged, so the next enabled
       // stage receives the last enabled stage's output (bypass).
+    }
+
+    // Generate mipmaps for each enabled stage's output (for preview/thumbnail display).
+    // Stage shaders use textureLoad (mip 0 only), so mipmaps don't affect inter-stage rendering.
+    for (const stage of this.stages) {
+      if (stage.enabled && stage.output) {
+        encodeMipmaps(this.device, encoder, stage.output);
+      }
     }
 
     this.device.queue.submit([encoder.finish()]);

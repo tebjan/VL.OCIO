@@ -40,3 +40,4 @@ nul
 
 # Color grading runtime files
 ocio_presets/
+.planning/

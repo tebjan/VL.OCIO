@@ -1,4 +1,5 @@
 import type { PipelineStage } from './PipelineStage';
+import { mipLevelCount } from './TextureUtils';
 import FULLSCREEN_TRIANGLE_VERTEX_WGSL from '../shaders/generated/fullscreen-vert.wgsl?raw';
 
 /**
@@ -123,7 +124,7 @@ export class FragmentStage implements PipelineStage {
 
     const pass = encoder.beginRenderPass({
       colorAttachments: [{
-        view: this.output.createView(),
+        view: this.output.createView({ baseMipLevel: 0, mipLevelCount: 1 }),
         loadOp: 'clear' as GPULoadOp,
         storeOp: 'store' as GPUStoreOp,
         clearValue: { r: 0, g: 0, b: 0, a: 0 },
@@ -146,6 +147,7 @@ export class FragmentStage implements PipelineStage {
     return device.createTexture({
       size: [width, height],
       format: 'rgba16float',
+      mipLevelCount: mipLevelCount(width, height),
       usage: GPUTextureUsage.RENDER_ATTACHMENT
            | GPUTextureUsage.TEXTURE_BINDING
            | GPUTextureUsage.COPY_SRC,

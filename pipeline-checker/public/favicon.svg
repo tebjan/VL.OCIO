@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <mask id="m">
+      <rect width="32" height="32" fill="white"/>
+      <circle cx="16" cy="16" r="4.5" fill="black"/>
+    </mask>
+  </defs>
+  <circle cx="16" cy="16" r="15" fill="#1a1a2e" stroke="#444" stroke-width="1"/>
+  <!-- 24-segment gradient matching UI ColorWheel.tsx: R at 0° (right), CW: R→M→B→C→G→Y -->
+  <g mask="url(#m)">
+    <path d="M16 16 L31 16 A15 15 0 0 1 30.49 19.88Z" fill="#ff4444"/>
+    <path d="M16 16 L30.49 19.88 A15 15 0 0 1 28.99 23.5Z" fill="#ff4473"/>
+    <path d="M16 16 L28.99 23.5 A15 15 0 0 1 26.61 26.61Z" fill="#ff44a2"/>
+    <path d="M16 16 L26.61 26.61 A15 15 0 0 1 23.5 28.99Z" fill="#ff44d0"/>
+    <path d="M16 16 L23.5 28.99 A15 15 0 0 1 19.88 30.49Z" fill="#ff44ff"/>
+    <path d="M16 16 L19.88 30.49 A15 15 0 0 1 16 31Z" fill="#d044ff"/>
+    <path d="M16 16 L16 31 A15 15 0 0 1 12.12 30.49Z" fill="#a244ff"/>
+    <path d="M16 16 L12.12 30.49 A15 15 0 0 1 8.5 28.99Z" fill="#7344ff"/>
+    <path d="M16 16 L8.5 28.99 A15 15 0 0 1 5.39 26.61Z" fill="#4444ff"/>
+    <path d="M16 16 L5.39 26.61 A15 15 0 0 1 3.01 23.5Z" fill="#4473ff"/>
+    <path d="M16 16 L3.01 23.5 A15 15 0 0 1 1.51 19.88Z" fill="#44a2ff"/>
+    <path d="M16 16 L1.51 19.88 A15 15 0 0 1 1 16Z" fill="#44d0ff"/>
+    <path d="M16 16 L1 16 A15 15 0 0 1 1.51 12.12Z" fill="#44ffff"/>
+    <path d="M16 16 L1.51 12.12 A15 15 0 0 1 3.01 8.5Z" fill="#44ffd0"/>
+    <path d="M16 16 L3.01 8.5 A15 15 0 0 1 5.39 5.39Z" fill="#44ffa2"/>
+    <path d="M16 16 L5.39 5.39 A15 15 0 0 1 8.5 3.01Z" fill="#44ff73"/>
+    <path d="M16 16 L8.5 3.01 A15 15 0 0 1 12.12 1.51Z" fill="#44ff44"/>
+    <path d="M16 16 L12.12 1.51 A15 15 0 0 1 16 1Z" fill="#73ff44"/>
+    <path d="M16 16 L16 1 A15 15 0 0 1 19.88 1.51Z" fill="#a2ff44"/>
+    <path d="M16 16 L19.88 1.51 A15 15 0 0 1 23.5 3.01Z" fill="#d0ff44"/>
+    <path d="M16 16 L23.5 3.01 A15 15 0 0 1 26.61 5.39Z" fill="#ffff44"/>
+    <path d="M16 16 L26.61 5.39 A15 15 0 0 1 28.99 8.5Z" fill="#ffd044"/>
+    <path d="M16 16 L28.99 8.5 A15 15 0 0 1 30.49 12.12Z" fill="#ffa244"/>
+    <path d="M16 16 L30.49 12.12 A15 15 0 0 1 31 16Z" fill="#ff7344"/>
+  </g>
+  <circle cx="16" cy="16" r="4.5" fill="#e0e0e0"/>
+  <circle cx="16" cy="16" r="1.5" fill="#888"/>
+</svg>

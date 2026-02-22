@@ -74,6 +74,7 @@ export function Preview2D({ device, format, stageTexture, renderVersion, applySR
     const sampler = device.createSampler({
       magFilter: 'linear',
       minFilter: 'linear',
+      mipmapFilter: 'linear',
     });
 
     gpuRef.current = { ctx, pipeline, uniformBuffer, bindGroupLayout, sampler };
@@ -185,11 +186,25 @@ export function Preview2D({ device, format, stageTexture, renderVersion, applySR
       });
     };
 
+    // Prevent middle-click autoscroll (browser default for button 1).
+    // Must prevent on both mousedown and pointerdown to fully suppress autoscroll.
+    const preventMiddle = (e: Event) => {
+      if ((e as MouseEvent).button === 1) e.preventDefault();
+    };
+
     canvas.addEventListener('wheel', handleWheel, { passive: false });
-    return () => canvas.removeEventListener('wheel', handleWheel);
+    canvas.addEventListener('mousedown', preventMiddle);
+    canvas.addEventListener('pointerdown', preventMiddle);
+    canvas.addEventListener('auxclick', preventMiddle);
+    return () => {
+      canvas.removeEventListener('wheel', handleWheel);
+      canvas.removeEventListener('mousedown', preventMiddle);
+      canvas.removeEventListener('pointerdown', preventMiddle);
+      canvas.removeEventListener('auxclick', preventMiddle);
+    };
   }, []);
 
-  // Click-drag pan
+  // Click-drag pan (left, middle, or right button)
   const handlePointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;

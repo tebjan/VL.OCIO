@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useWebSocket, URL_PATH } from './hooks/useWebSocket'
 import { useIsMobile } from './hooks/useIsMobile'
 import { LiftGammaGain } from './components/LiftGammaGain'
+import { ShadowMidHighlight } from './components/ShadowMidHighlight'
 import { Slider } from './components/Slider'
 import { Select } from './components/Select'
 import { Section } from './components/Section'
@@ -325,6 +326,17 @@ function App() {
                 <Slider label="Lift" value={liftMaster} min={-0.5} max={0.5} step={0.01} defaultValue={0} decimals={2} onChange={handleLiftMasterChange} />
                 <Slider label="Gamma" value={gammaMaster} min={0.75} max={1.5} step={0.01} defaultValue={1} decimals={2} onChange={handleGammaMasterChange} />
                 <Slider label="Gain" value={gainMaster} min={0.75} max={1.5} step={0.01} defaultValue={1} decimals={2} onChange={handleGainMasterChange} />
+              </div>
+
+              <div className="mb-4">
+                <ShadowMidHighlight
+                  shadowColor={cc.shadowColor}
+                  midtoneColor={cc.midtoneColor}
+                  highlightColor={cc.highlightColor}
+                  onShadowColorChange={(v) => updateColorCorrection({ shadowColor: v })}
+                  onMidtoneColorChange={(v) => updateColorCorrection({ midtoneColor: v })}
+                  onHighlightColorChange={(v) => updateColorCorrection({ highlightColor: v })}
+                />
               </div>
 
               <div className="space-y-2 mb-4">

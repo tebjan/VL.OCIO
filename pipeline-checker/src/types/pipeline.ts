@@ -33,16 +33,18 @@ export const HEIGHT_MODE_LABELS: Record<HeightMode, string> = {
 };
 
 export type DownsampleFactor = 1 | 2 | 4 | 8 | 16;
+export type MSAASamples = 0 | 2 | 4;
 
 export interface HeightmapSettings {
   heightMode: HeightMode;
-  heightScale: number;          // 0.01 - 2.0, default 0.1
+  heightScale: number;          // 0.01 - 2.0, default 0.25
   exponent: number;             // 0.1 - 5.0, default 1.0
   stopsMode: boolean;           // default false
   perceptualMode: boolean;      // default false
   rangeMin: number;             // -1.0 - 10.0, default 0.0
   rangeMax: number;             // 0.01 - 100.0, default 1.0
   downsample: DownsampleFactor; // 1 | 2 | 4 | 8 | 16, default 4
+  msaa: MSAASamples;            // 1 | 4, default 4
 }
 
 export function createDefaultHeightmapSettings(): HeightmapSettings {
@@ -55,5 +57,6 @@ export function createDefaultHeightmapSettings(): HeightmapSettings {
     rangeMin: 0.0,
     rangeMax: 1.0,
     downsample: 4,
+    msaa: 4,
   };
 }

@@ -111,6 +111,65 @@ export interface PipelineSettings {
   applySRGB: boolean;
 }
 
+/**
+ * Returns the theoretical color space at a given pipeline stage output,
+ * accounting for current settings and which stages are enabled/disabled.
+ * When a stage is disabled (bypassed), its output equals the previous stage's output.
+ */
+// Short labels for filmstrip display (index matches HDR_COLOR_SPACES)
+const CS_SHORT: string[] = [
+  'Lin 709', 'Lin 2020', 'ACEScg', 'ACEScc', 'ACEScct',
+  'sRGB', 'PQ 2020', 'HLG 2020', 'scRGB',
+];
+
+function csShort(index: number): string {
+  return CS_SHORT[index] ?? '?';
+}
+
+export function getStageColorSpace(
+  stageIndex: number,
+  settings: PipelineSettings,
+  stageEnabled: (index: number) => boolean,
+): string {
+  // Pre-pipeline stages: always the raw input color space
+  if (stageIndex <= 2) return csShort(settings.inputColorSpace);
+
+  // If this stage is disabled, propagate from previous stage
+  if (!stageEnabled(stageIndex)) {
+    return getStageColorSpace(stageIndex - 1, settings, stageEnabled);
+  }
+
+  switch (stageIndex) {
+    case 3: // Color Grade — input-convert normalizes to Linear Rec.709 hub
+      return 'Lin 709';
+
+    case 4: { // RRT
+      const op = settings.tonemapOperator;
+      if (op === 2) return 'OCES (AP1)';   // ACES 1.3
+      if (op === 3) return 'AP1';           // ACES 2.0
+      return 'Lin 709';                     // all others stay in Rec.709
+    }
+
+    case 5: { // ODT
+      const op = settings.tonemapOperator;
+      if (op === 2 || op === 3) {
+        return settings.odtTarget === 1 ? 'Lin 2020' : 'Lin 709';
+      }
+      return 'Lin 709'; // non-ACES operators: passthrough
+    }
+
+    case 6: // Output Encode
+    case 7: // Display Remap
+      return csShort(settings.outputSpace);
+
+    case 8: // Final Display
+      return 'sRGB';
+
+    default:
+      return '';
+  }
+}
+
 export function createDefaultSettings(): PipelineSettings {
   return {
     inputColorSpace: 2,  // ACEScg

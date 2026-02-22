@@ -27,6 +27,8 @@ struct ViewUniforms {
     panX: f32,
     panY: f32,
     applySRGB: f32,
+    canvasAspect: f32,
+    textureAspect: f32,
 };
 
 // sRGB transfer function (IEC 61966-2-1)
@@ -38,8 +40,18 @@ fn linearToSRGB(linear: vec3<f32>) -> vec3<f32> {
 
 @fragment
 fn fs(in: VertexOutput) -> @location(0) vec4<f32> {
-    // Transform UV by zoom/pan
-    let uv = (in.uv - 0.5) / view.zoom + vec2<f32>(view.panX, view.panY) + 0.5;
+    // Aspect ratio correction: fit texture proportionally inside canvas
+    var aspectScale = vec2<f32>(1.0, 1.0);
+    if (view.textureAspect > view.canvasAspect) {
+        // Texture wider than canvas: fit width, letterbox vertically
+        aspectScale.y = view.textureAspect / view.canvasAspect;
+    } else {
+        // Texture taller than canvas: fit height, pillarbox horizontally
+        aspectScale.x = view.canvasAspect / view.textureAspect;
+    }
+
+    // Transform UV by aspect correction, zoom, and pan
+    let uv = (in.uv - 0.5) * aspectScale / view.zoom + vec2<f32>(view.panX, view.panY) + 0.5;
 
     // Sample unconditionally (textureSample requires uniform control flow)
     let clampedUV = clamp(uv, vec2<f32>(0.0), vec2<f32>(1.0));

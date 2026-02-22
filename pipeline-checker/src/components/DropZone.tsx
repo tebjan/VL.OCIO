@@ -4,12 +4,8 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 export type LoadedFileType = 'exr' | 'dds' | 'sample';
 
 interface DropZoneProps {
-  /**
-   * Called when an EXR image is loaded from file drop.
-   * imageData is Float32Array RGBA, width/height in pixels.
-   * fileHandle is for session persistence (re-read on reload).
-   */
-  onExrLoaded: (imageData: Float32Array, width: number, height: number, fileType: LoadedFileType, rawBuffer: ArrayBuffer, fileName: string, fileHandle?: FileSystemFileHandle) => void;
+  /** Called when an EXR file is dropped. Passes raw buffer for App to parse+upload efficiently. */
+  onExrBuffer: (buffer: ArrayBuffer, fileName: string, fileHandle?: FileSystemFileHandle) => void | Promise<void>;
   /** Called when a DDS file is dropped. buffer is the raw ArrayBuffer. */
   onDdsLoaded: (buffer: ArrayBuffer, fileName: string, fileHandle?: FileSystemFileHandle) => void;
   /** Whether the app has BC texture compression support. */
@@ -21,66 +17,37 @@ interface DropZoneProps {
  * Invisible by default, shows a visual indicator when files are dragged over.
  * Does NOT block pointer events on the underlying UI.
  */
-export function DropZone({ onExrLoaded, onDdsLoaded, hasBC }: DropZoneProps) {
+export function DropZone({ onExrBuffer, onDdsLoaded, hasBC }: DropZoneProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const dragCountRef = useRef(0);
 
-  // Clear error after 4 seconds
+  // Clear error after 8 seconds
   useEffect(() => {
     if (!error) return;
-    const timer = setTimeout(() => setError(null), 4000);
+    const timer = setTimeout(() => setError(null), 8000);
     return () => clearTimeout(timer);
   }, [error]);
 
-  const processExrBytes = useCallback(
-    async (buffer: ArrayBuffer, fileName: string) => {
-      setIsLoading(true);
-      setError(null);
-
-      try {
-        const { EXRLoader } = await import('three/addons/loaders/EXRLoader.js');
-        const loader = new EXRLoader();
-
-        const result = loader.parse(buffer);
-
-        if (!result || !result.data) {
-          throw new Error(`Failed to parse EXR file "${fileName}": no image data returned.`);
-        }
-
-        const { data, width, height } = result;
-
-        let float32Data: Float32Array;
-        if (data instanceof Float32Array) {
-          float32Data = data;
-        } else {
-          float32Data = new Float32Array(data.length);
-          for (let i = 0; i < data.length; i++) {
-            float32Data[i] = halfToFloat(data[i] as number);
-          }
-        }
-
-        console.log(`[DropZone] Loaded EXR: ${fileName} (${width}x${height})`);
-        onExrLoaded(float32Data, width, height, 'exr', buffer, fileName);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error(`[DropZone] EXR load error:`, err);
-        setError(msg);
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [onExrLoaded]
-  );
-
   const handleFileDrop = useCallback(
-    async (file: File) => {
+    async (file: File, fileHandle?: FileSystemFileHandle) => {
       const name = file.name.toLowerCase();
 
       if (name.endsWith('.exr')) {
-        const buffer = await file.arrayBuffer();
-        await processExrBytes(buffer, file.name);
+        setIsLoading(true);
+        setError(null);
+        try {
+          const buffer = await file.arrayBuffer();
+          console.log(`[DropZone] Read EXR: ${file.name} (${(buffer.byteLength / 1024 / 1024).toFixed(1)} MB)`);
+          await onExrBuffer(buffer, file.name, fileHandle);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error(`[DropZone] EXR load error:`, err);
+          setError(`${file.name}: ${msg}`);
+        } finally {
+          setIsLoading(false);
+        }
       } else if (name.endsWith('.dds')) {
         if (!hasBC) {
           setError('DDS files require BC texture compression support (not available on this GPU).');
@@ -91,7 +58,7 @@ export function DropZone({ onExrLoaded, onDdsLoaded, hasBC }: DropZoneProps) {
         try {
           const buffer = await file.arrayBuffer();
           console.log(`[DropZone] Loaded DDS: ${file.name} (${buffer.byteLength} bytes)`);
-          onDdsLoaded(buffer, file.name);
+          onDdsLoaded(buffer, file.name, fileHandle);
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           console.error(`[DropZone] DDS load error:`, err);
@@ -103,7 +70,7 @@ export function DropZone({ onExrLoaded, onDdsLoaded, hasBC }: DropZoneProps) {
         setError('Unsupported file type. Drop an .exr or .dds file.');
       }
     },
-    [processExrBytes, onDdsLoaded, hasBC]
+    [onExrBuffer, onDdsLoaded, hasBC]
   );
 
   // Window-level drag event listeners — no blocking overlay needed
@@ -129,14 +96,28 @@ export function DropZone({ onExrLoaded, onDdsLoaded, hasBC }: DropZoneProps) {
       e.preventDefault();
     };
 
-    const onDrop = (e: DragEvent) => {
+    const onDrop = async (e: DragEvent) => {
       e.preventDefault();
       setIsDragging(false);
       dragCountRef.current = 0;
 
-      const files = e.dataTransfer?.files;
-      if (!files || files.length === 0) return;
-      handleFileDrop(files[0]);
+      const items = e.dataTransfer?.items;
+      if (!items || items.length === 0) return;
+      const item = items[0];
+      const file = item.getAsFile();
+      if (!file) return;
+
+      // Try to get a FileSystemFileHandle for session persistence (Chrome/Edge)
+      let fileHandle: FileSystemFileHandle | undefined;
+      const getHandle = (item as any).getAsFileSystemHandle as (() => Promise<FileSystemHandle>) | undefined;
+      if (getHandle) {
+        try {
+          const h = await getHandle.call(item);
+          if (h.kind === 'file') fileHandle = h as FileSystemFileHandle;
+        } catch { /* not supported or denied */ }
+      }
+
+      handleFileDrop(file, fileHandle);
     };
 
     window.addEventListener('dragenter', onDragEnter);

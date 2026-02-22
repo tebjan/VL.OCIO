@@ -5,11 +5,11 @@ import { WebGPUCanvas } from './components/WebGPUCanvas';
 import { Filmstrip } from './components/Filmstrip';
 import { ControlsPanel } from './components/ControlsPanel';
 import { MainPreview } from './components/MainPreview';
-import { MetadataPanel, computeChannelStats, type ImageMetadata } from './components/MetadataPanel';
+import { MetadataPanel, computeChannelStats, type ImageMetadata, type ChannelStats } from './components/MetadataPanel';
 import { usePipeline } from './hooks/usePipeline';
 import { PipelineRenderer } from './pipeline/PipelineRenderer';
 import { createColorPipelineStages } from './pipeline/stages';
-import { uploadFloat32Texture, uploadDDSTexture } from './pipeline/TextureUtils';
+import { uploadFloat32Texture, uploadFloat16Texture, uploadDDSTexture } from './pipeline/TextureUtils';
 import { parseDDS } from './pipeline/DDSParser';
 import {
   serializeUniforms,
@@ -17,7 +17,7 @@ import {
 } from './pipeline/PipelineUniforms';
 import type { PipelineSettings } from './types/settings';
 import { STAGE_NAMES } from './pipeline/types/StageInfo';
-import { saveImageData, loadImageData, saveViewState, loadViewState } from './lib/sessionStore';
+import { saveFileHandle, loadFileHandle, saveViewState, loadViewState } from './lib/sessionStore';
 
 type AppState =
   | { kind: 'initializing' }
@@ -74,6 +74,130 @@ const STAGE_FOR_FILE_TYPE: Record<LoadedFileType, number> = {
   sample: STAGE_NAMES.length - 1, // Final Display
 };
 
+/**
+ * Compute per-channel min/max stats directly from a Uint16Array of half-float RGBA data.
+ * Avoids allocating a full Float32Array (~362 MB for 4K+ images).
+ */
+function computeStatsFromHalf(data: Uint16Array, width: number, height: number): ChannelStats {
+  const min: [number, number, number, number] = [Infinity, Infinity, Infinity, Infinity];
+  const max: [number, number, number, number] = [-Infinity, -Infinity, -Infinity, -Infinity];
+  const pixelCount = width * height;
+  for (let i = 0; i < pixelCount; i++) {
+    const base = i * 4;
+    for (let c = 0; c < 4; c++) {
+      const v = halfToFloat(data[base + c]);
+      if (v < min[c]) min[c] = v;
+      if (v > max[c]) max[c] = v;
+    }
+  }
+  return { min, max };
+}
+
+/**
+ * Parse EXR buffer and upload to GPU, returning the texture and stats.
+ * Uses uploadFloat16Texture for half-float EXRs (direct, no staging texture),
+ * uploadFloat32Texture for full-float EXRs.
+ * Downscales if image exceeds GPU maxTextureDimension2D.
+ */
+async function parseAndUploadExr(
+  device: GPUDevice,
+  buffer: ArrayBuffer,
+): Promise<{ sourceTexture: GPUTexture; stats: ChannelStats; width: number; height: number } | null> {
+  const { EXRLoader } = await import('three/addons/loaders/EXRLoader.js');
+  const loader = new EXRLoader();
+  const result = loader.parse(buffer);
+
+  if (!result?.data) return null;
+
+  let { data, width, height } = result;
+  const maxDim = device.limits.maxTextureDimension2D;
+
+  // Downscale if image exceeds GPU texture limits
+  if (width > maxDim || height > maxDim) {
+    const scale = Math.min(maxDim / width, maxDim / height);
+    const newW = Math.floor(width * scale);
+    const newH = Math.floor(height * scale);
+    console.warn(`[App] Image ${width}x${height} exceeds GPU limit ${maxDim}px, downscaling to ${newW}x${newH}`);
+    data = downsampleRGBA(data, width, height, newW, newH);
+    width = newW;
+    height = newH;
+  }
+
+  let sourceTexture: GPUTexture;
+  let stats: ChannelStats;
+
+  if (data instanceof Float32Array) {
+    stats = computeChannelStats(data, width, height);
+    sourceTexture = uploadFloat32Texture(device, data, width, height);
+  } else {
+    // Half-float EXR: compute stats directly from Uint16, upload without conversion
+    stats = computeStatsFromHalf(data as Uint16Array, width, height);
+    sourceTexture = uploadFloat16Texture(device, data as Uint16Array, width, height);
+  }
+
+  return { sourceTexture, stats, width, height };
+}
+
+/**
+ * Downsample RGBA pixel data (Float32Array or Uint16Array) using box filter.
+ * Returns same type as input.
+ */
+function downsampleRGBA<T extends Float32Array | Uint16Array>(
+  src: T,
+  srcW: number,
+  srcH: number,
+  dstW: number,
+  dstH: number,
+): T {
+  const isFloat32 = src instanceof Float32Array;
+  const dst = (isFloat32 ? new Float32Array(dstW * dstH * 4) : new Uint16Array(dstW * dstH * 4)) as T;
+
+  // For half-float, work in float32 for accurate averaging, then convert back
+  const scaleX = srcW / dstW;
+  const scaleY = srcH / dstH;
+
+  for (let dy = 0; dy < dstH; dy++) {
+    const sy0 = Math.floor(dy * scaleY);
+    const sy1 = Math.min(Math.ceil((dy + 1) * scaleY), srcH);
+    for (let dx = 0; dx < dstW; dx++) {
+      const sx0 = Math.floor(dx * scaleX);
+      const sx1 = Math.min(Math.ceil((dx + 1) * scaleX), srcW);
+      const acc = [0, 0, 0, 0];
+      let count = 0;
+      for (let sy = sy0; sy < sy1; sy++) {
+        for (let sx = sx0; sx < sx1; sx++) {
+          const si = (sy * srcW + sx) * 4;
+          for (let c = 0; c < 4; c++) {
+            acc[c] += isFloat32 ? src[si + c] : halfToFloat(src[si + c]);
+          }
+          count++;
+        }
+      }
+      const di = (dy * dstW + dx) * 4;
+      if (isFloat32) {
+        for (let c = 0; c < 4; c++) (dst as Float32Array)[di + c] = acc[c] / count;
+      } else {
+        // Convert averaged float back to half-float
+        for (let c = 0; c < 4; c++) (dst as Uint16Array)[di + c] = floatToHalf(acc[c] / count);
+      }
+    }
+  }
+  return dst;
+}
+
+/** Convert a float32 value to IEEE 754 half-float (uint16). */
+function floatToHalf(v: number): number {
+  const buf = new ArrayBuffer(4);
+  new Float32Array(buf)[0] = v;
+  const f = new Uint32Array(buf)[0];
+  const sign = (f >>> 16) & 0x8000;
+  const exponent = ((f >>> 23) & 0xff) - 127;
+  const mantissa = f & 0x7fffff;
+  if (exponent >= 16) return sign | 0x7c00; // Inf/NaN
+  if (exponent < -14) return sign; // zero/denorm
+  return sign | ((exponent + 15) << 10) | (mantissa >>> 13);
+}
+
 export default function App() {
   const [state, setState] = useState<AppState>({ kind: 'initializing' });
   const [renderVersion, setRenderVersion] = useState(0);
@@ -86,7 +210,7 @@ export default function App() {
 
   // Load an rgba16float source texture and transition to 'loaded' state
   const loadSourceTexture = useCallback(
-    (gpu: GPUContext, sourceTexture: GPUTexture, width: number, height: number, imageData: Float32Array, fileType: LoadedFileType, fileName?: string) => {
+    (gpu: GPUContext, sourceTexture: GPUTexture, width: number, height: number, stats: ChannelStats | null, fileSizeMB: string, fileType: LoadedFileType, fileName?: string) => {
       sourceTextureRef.current?.destroy();
       sourceTextureRef.current = sourceTexture;
 
@@ -100,12 +224,11 @@ export default function App() {
         rendererRef.current.setSize(width, height);
       }
 
-      const stats = computeChannelStats(imageData, width, height);
       const metadata: ImageMetadata = {
         width,
         height,
-        channels: 'RGBA Float32',
-        fileSizeMB: (imageData.byteLength / (1024 * 1024)).toFixed(2),
+        channels: 'RGBA Float16',
+        fileSizeMB,
         fileName,
         stats,
       };
@@ -141,65 +264,46 @@ export default function App() {
 
         gpuRef.current = gpu;
 
-        // Try to restore a previously dropped image from IndexedDB
-        const stored = await loadImageData();
+        // Try to restore a previously dropped file via its FileSystemFileHandle
+        const stored = await loadFileHandle();
         if (cancelled) return;
 
         if (stored) {
           console.log(`[App] Restoring session: ${stored.fileName} (${stored.fileType})`);
+          try {
+            const file = await stored.handle.getFile();
+            const buffer = await file.arrayBuffer();
+            if (cancelled) return;
 
-          if (stored.fileType === 'exr') {
-            // Re-parse the EXR from the stored raw buffer
-            try {
-              const { EXRLoader } = await import('three/addons/loaders/EXRLoader.js');
+            if (stored.fileType === 'exr') {
+              const parsed = await parseAndUploadExr(gpu.device, buffer);
               if (cancelled) return;
-              const loader = new EXRLoader();
-              const result = loader.parse(stored.data);
-
-              if (result?.data) {
-                let float32Data: Float32Array;
-                if (result.data instanceof Float32Array) {
-                  float32Data = result.data;
-                } else {
-                  float32Data = new Float32Array(result.data.length);
-                  for (let i = 0; i < result.data.length; i++) {
-                    float32Data[i] = halfToFloat(result.data[i] as number);
-                  }
-                }
-                const sourceTexture = uploadFloat32Texture(gpu.device, float32Data, result.width, result.height);
-                loadSourceTexture(gpu, sourceTexture, result.width, result.height, float32Data, 'exr', stored.fileName);
-
-                // Restore stage selection
+              if (parsed) {
+                const sizeMB = (buffer.byteLength / (1024 * 1024)).toFixed(2);
+                loadSourceTexture(gpu, parsed.sourceTexture, parsed.width, parsed.height, parsed.stats, sizeMB, 'exr' as LoadedFileType, stored.fileName);
                 const savedStage = loadViewState();
-                if (savedStage !== null) {
-                  pipeline.selectStage(savedStage);
-                }
+                if (savedStage !== null) pipeline.selectStage(savedStage);
                 return;
               }
-            } catch (err) {
-              console.warn('[App] Failed to restore EXR session, loading sample:', err);
-            }
-          } else if (stored.fileType === 'dds') {
-            try {
-              handleDdsLoaded(stored.data, stored.fileName, true);
-
-              // Restore stage selection (after DDS sets its default)
+            } else if (stored.fileType === 'dds') {
+              handleDdsLoaded(buffer, stored.fileName);
               const savedStage = loadViewState();
               if (savedStage !== null) {
-                // Use setTimeout to let the DDS load complete its stage selection first
                 setTimeout(() => pipeline.selectStage(savedStage), 0);
               }
               return;
-            } catch (err) {
-              console.warn('[App] Failed to restore DDS session, loading sample:', err);
             }
+          } catch (err) {
+            console.warn('[App] Failed to restore session from file handle, loading sample:', err);
           }
         }
 
         // Fallback: auto-load sample image — no start screen
         const sample = generateSampleImage();
         const sourceTexture = uploadFloat32Texture(gpu.device, sample.data, sample.width, sample.height);
-        loadSourceTexture(gpu, sourceTexture, sample.width, sample.height, sample.data, 'sample');
+        const sampleStats = computeChannelStats(sample.data, sample.width, sample.height);
+        const sampleSizeMB = (sample.data.byteLength / (1024 * 1024)).toFixed(2);
+        loadSourceTexture(gpu, sourceTexture, sample.width, sample.height, sampleStats, sampleSizeMB, 'sample');
       })
       .catch((err) => {
         if (!cancelled) setState({ kind: 'error', message: err.message });
@@ -209,18 +313,21 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Handle EXR image loaded from drop (or session restore)
-  const handleExrLoaded = useCallback(
-    (imageData: Float32Array, width: number, height: number, fileType: LoadedFileType, rawBuffer?: ArrayBuffer, fileName?: string) => {
+  // Handle EXR buffer from drop — parse and upload via the efficient path
+  const handleExrBuffer = useCallback(
+    async (buffer: ArrayBuffer, fileName: string, fileHandle?: FileSystemFileHandle) => {
       const gpu = gpuRef.current;
       if (!gpu) return;
 
-      const sourceTexture = uploadFloat32Texture(gpu.device, imageData, width, height);
-      loadSourceTexture(gpu, sourceTexture, width, height, imageData, fileType, fileName);
+      const parsed = await parseAndUploadExr(gpu.device, buffer);
+      if (!parsed) throw new Error(`Failed to parse EXR file "${fileName}": no image data returned.`);
 
-      // Persist to IndexedDB (only user-dropped files, not sample)
-      if (rawBuffer && fileName && fileType === 'exr') {
-        saveImageData(rawBuffer, 'exr', fileName);
+      const sizeMB = (buffer.byteLength / (1024 * 1024)).toFixed(2);
+      loadSourceTexture(gpu, parsed.sourceTexture, parsed.width, parsed.height, parsed.stats, sizeMB, 'exr', fileName);
+
+      // Persist file handle for session restore
+      if (fileHandle) {
+        saveFileHandle(fileHandle, 'exr', fileName);
       }
     },
     [loadSourceTexture],
@@ -228,7 +335,7 @@ export default function App() {
 
   // Handle DDS file loaded from drop (or session restore)
   const handleDdsLoaded = useCallback(
-    (buffer: ArrayBuffer, fileName: string, skipPersist?: boolean) => {
+    (buffer: ArrayBuffer, fileName: string, fileHandle?: FileSystemFileHandle) => {
       const gpu = gpuRef.current;
       if (!gpu) return;
 
@@ -238,8 +345,6 @@ export default function App() {
 
         const sourceTexture = uploadDDSTexture(gpu.device, dds);
 
-        // For metadata, we don't have per-pixel Float32 stats for DDS
-        // Create a placeholder metadata
         sourceTextureRef.current?.destroy();
         sourceTextureRef.current = sourceTexture;
 
@@ -266,9 +371,9 @@ export default function App() {
         pipeline.setStageAvailability([0, 1], false);
         setState({ kind: 'loaded', gpu, sourceTexture, metadata });
 
-        // Persist to IndexedDB (skip if restoring from session)
-        if (!skipPersist) {
-          saveImageData(buffer, 'dds', fileName);
+        // Persist file handle for session restore
+        if (fileHandle) {
+          saveFileHandle(fileHandle, 'dds', fileName);
         }
       } catch (err) {
         console.error(`[App] DDS load error for "${fileName}":`, err);
@@ -348,7 +453,7 @@ export default function App() {
       {/* Global drag-and-drop overlay — always active, invisible until dragging */}
       {gpuRef.current && (
         <DropZone
-          onExrLoaded={handleExrLoaded}
+          onExrBuffer={handleExrBuffer}
           onDdsLoaded={handleDdsLoaded}
           hasBC={gpuRef.current.hasBC}
         />
@@ -393,6 +498,7 @@ export default function App() {
             stageTextures={stageTextures}
             renderVersion={renderVersion}
             applySRGB={pipeline.settings.applySRGB}
+            settings={pipeline.settings}
           />
 
           <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>

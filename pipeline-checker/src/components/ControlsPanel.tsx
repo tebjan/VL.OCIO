@@ -18,7 +18,7 @@ import {
   gradingSpaceToIndex,
   indexToGradingSpace,
 } from '../lib/enumMaps';
-import { Section, Slider, Select, LiftGammaGain } from './ui';
+import { Section, Slider, Select, LiftGammaGain, ShadowMidHighlight } from './ui';
 import { Toggle } from './Toggle';
 
 export interface ControlsPanelProps {
@@ -189,22 +189,16 @@ export function ControlsPanel({ settings, onSettingsChange, onReset }: ControlsP
               <Slider mobile label="Offset B" value={settings.gradeOffset.z} min={-1} max={1} defaultValue={0} onChange={(v) => set({ gradeOffset: { ...settings.gradeOffset, z: v } })} />
             </div>
 
-            <div className="space-y-2 mb-4">
-              <Slider mobile label="SH Color R" value={settings.gradeShadowColor.x} min={-1} max={1} defaultValue={0} onChange={(v) => set({ gradeShadowColor: { ...settings.gradeShadowColor, x: v } })} />
-              <Slider mobile label="SH Color G" value={settings.gradeShadowColor.y} min={-1} max={1} defaultValue={0} onChange={(v) => set({ gradeShadowColor: { ...settings.gradeShadowColor, y: v } })} />
-              <Slider mobile label="SH Color B" value={settings.gradeShadowColor.z} min={-1} max={1} defaultValue={0} onChange={(v) => set({ gradeShadowColor: { ...settings.gradeShadowColor, z: v } })} />
-            </div>
-
-            <div className="space-y-2 mb-4">
-              <Slider mobile label="Mid Color R" value={settings.gradeMidtoneColor.x} min={-1} max={1} defaultValue={0} onChange={(v) => set({ gradeMidtoneColor: { ...settings.gradeMidtoneColor, x: v } })} />
-              <Slider mobile label="Mid Color G" value={settings.gradeMidtoneColor.y} min={-1} max={1} defaultValue={0} onChange={(v) => set({ gradeMidtoneColor: { ...settings.gradeMidtoneColor, y: v } })} />
-              <Slider mobile label="Mid Color B" value={settings.gradeMidtoneColor.z} min={-1} max={1} defaultValue={0} onChange={(v) => set({ gradeMidtoneColor: { ...settings.gradeMidtoneColor, z: v } })} />
-            </div>
-
-            <div className="space-y-2 mb-4">
-              <Slider mobile label="HL Color R" value={settings.gradeHighlightColor.x} min={-1} max={1} defaultValue={0} onChange={(v) => set({ gradeHighlightColor: { ...settings.gradeHighlightColor, x: v } })} />
-              <Slider mobile label="HL Color G" value={settings.gradeHighlightColor.y} min={-1} max={1} defaultValue={0} onChange={(v) => set({ gradeHighlightColor: { ...settings.gradeHighlightColor, y: v } })} />
-              <Slider mobile label="HL Color B" value={settings.gradeHighlightColor.z} min={-1} max={1} defaultValue={0} onChange={(v) => set({ gradeHighlightColor: { ...settings.gradeHighlightColor, z: v } })} />
+            <div className="mb-4">
+              <ShadowMidHighlight
+                mobile
+                shadowColor={settings.gradeShadowColor}
+                midtoneColor={settings.gradeMidtoneColor}
+                highlightColor={settings.gradeHighlightColor}
+                onShadowColorChange={(v) => set({ gradeShadowColor: v })}
+                onMidtoneColorChange={(v) => set({ gradeMidtoneColor: v })}
+                onHighlightColorChange={(v) => set({ gradeHighlightColor: v })}
+              />
             </div>
 
             <div className="space-y-2">

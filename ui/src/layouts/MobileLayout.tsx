@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { LiftGammaGain } from '../components/LiftGammaGain'
+import { ShadowMidHighlight } from '../components/ShadowMidHighlight'
 import { Slider } from '../components/Slider'
 import { Select } from '../components/Select'
 import { PresetManager } from '../components/PresetManager'
@@ -142,7 +143,7 @@ function GradeTab(props: MobileLayoutProps) {
 }
 
 function WheelsTab(props: MobileLayoutProps) {
-  const { cc, handleLiftChange, handleGammaChange, handleGainChange, liftMaster, gammaMaster, gainMaster, handleLiftMasterChange, handleGammaMasterChange, handleGainMasterChange } = props
+  const { cc, updateColorCorrection, handleLiftChange, handleGammaChange, handleGainChange, liftMaster, gammaMaster, gainMaster, handleLiftMasterChange, handleGammaMasterChange, handleGainMasterChange } = props
 
   return (
     <>
@@ -160,6 +161,18 @@ function WheelsTab(props: MobileLayoutProps) {
         <Slider mobile label="Gamma" value={gammaMaster} min={0.75} max={1.5} step={0.01} defaultValue={1} decimals={2} onChange={handleGammaMasterChange} />
         <Slider mobile label="Gain" value={gainMaster} min={0.75} max={1.5} step={0.01} defaultValue={1} decimals={2} onChange={handleGainMasterChange} />
       </div>
+
+      <div className="border-t border-surface-700 my-4" />
+
+      <ShadowMidHighlight
+        mobile
+        shadowColor={cc.shadowColor}
+        midtoneColor={cc.midtoneColor}
+        highlightColor={cc.highlightColor}
+        onShadowColorChange={(v) => updateColorCorrection({ shadowColor: v })}
+        onMidtoneColorChange={(v) => updateColorCorrection({ midtoneColor: v })}
+        onHighlightColorChange={(v) => updateColorCorrection({ highlightColor: v })}
+      />
     </>
   )
 }

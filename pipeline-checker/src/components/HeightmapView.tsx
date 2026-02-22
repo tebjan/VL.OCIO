@@ -15,7 +15,7 @@ import {
   InstancedBufferAttribute,
 } from 'three/webgpu';
 import type { Material } from 'three/webgpu';
-import { attribute, positionLocal, modelViewMatrix, uv, float, step, vec3 } from 'three/tsl';
+import { attribute, positionLocal, modelViewMatrix, uv, float, fwidth, smoothstep, vec3 } from 'three/tsl';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import type { HeightmapSettings } from '../types/pipeline';
 
@@ -273,6 +273,8 @@ class HeightmapScene {
   instanceCount = 0;
   /** Instanced mesh rendering the heightmap points */
   private pointsMesh: Mesh | null = null;
+  /** Material reference for runtime alpha mode updates */
+  private pointsMaterial: MeshBasicNodeMaterial | null = null;
   /** Wireframe bounding box */
   private wireframeBox: LineSegments | null = null;
   /** Current aspect ratio (height/width) for camera/wireframe */
@@ -456,12 +458,16 @@ class HeightmapScene {
     (material as any).positionNode = billboardPos;
     (material as any).colorNode = attribute('aColor', 'vec4').xyz;
 
-    // Round dot: discard fragments outside a circle in UV space
+    // Antialiased round dot via SDF + fwidth
+    // SDF: distance from circle edge (negative inside, positive outside)
     const uvCentered = uv().sub(float(0.5));
-    const distSq = uvCentered.dot(uvCentered);
-    (material as any).opacityNode = float(1.0).sub(step(float(0.25), distSq));
-    material.alphaTest = 0.5;
+    const dist = uvCentered.length().sub(float(0.5));
+    const halfPx = fwidth(dist).mul(float(0.5));
+    // smoothstep(-halfPx, halfPx, dist) → 0 inside, 1 outside; invert for alpha
+    (material as any).opacityNode = float(1.0).sub(smoothstep(halfPx.negate(), halfPx, dist));
     material.depthWrite = true;
+    this.pointsMaterial = material;
+    this.applyAlphaMode(settings.msaa > 0);
 
     const mesh = new Mesh(geo, material);
     mesh.frustumCulled = false;
@@ -494,22 +500,86 @@ class HeightmapScene {
 
   /**
    * Update settings from HeightmapControls.
-   * For mock data only the wireframe reacts; texture-based height will
-   * re-dispatch compute with updated uniforms.
+   * Re-dispatches compute with updated uniforms and handles MSAA changes.
    */
   updateSettings(settings: HeightmapSettings): void {
     if (settings.heightScale !== this.currentHeightScale) {
       this.currentHeightScale = settings.heightScale;
       this.updateWireframe(this.currentAspect, this.currentHeightScale);
     }
+    // MSAA — recreate renderer (WebGPU bakes sampleCount into render pipelines,
+    // runtime switching without full recreation causes validation errors)
+    if (this.renderer && this.renderer.samples !== settings.msaa) {
+      this.applyAlphaMode(settings.msaa > 0);
+      this.recreateRenderer(settings.msaa);
+    }
     // Re-dispatch compute with updated uniforms
-    // settings consumed via compute uniforms
     if (this.compute && this.offsetGpuBuffer && this.currentTexture) {
       this.compute.updateSettings(
         this.dsWidth, this.dsHeight, this.currentAspect,
         this.fullWidth, this.fullHeight, settings,
       );
       this.compute.dispatch();
+    }
+  }
+
+  /** Switch between alphaToCoverage (MSAA on) and alphaTest (MSAA off). */
+  private applyAlphaMode(msaaOn: boolean): void {
+    if (!this.pointsMaterial) return;
+    if (msaaOn) {
+      this.pointsMaterial.alphaToCoverage = true;
+      this.pointsMaterial.alphaTest = 0;
+    } else {
+      this.pointsMaterial.alphaToCoverage = false;
+      this.pointsMaterial.alphaTest = 0.5;
+    }
+    this.pointsMaterial.needsUpdate = true;
+  }
+
+  /**
+   * Recreate the WebGPU renderer with a new MSAA sample count.
+   * Re-registers shared GPU buffers with the new backend instance.
+   */
+  private async recreateRenderer(msaa: number): Promise<void> {
+    if (!this.device || !this.canvasEl) return;
+
+    this.stopRenderLoop();
+
+    // Dispose old renderer (clears all cached pipelines, framebuffers, etc.)
+    try { this.renderer.dispose(); } catch { /* safe to ignore */ }
+
+    // Create fresh renderer with desired sample count
+    this.renderer = new WebGPURenderer({
+      canvas: this.canvasEl,
+      antialias: msaa > 0,
+      device: this.device,
+    } as any);
+    this.renderer.samples = msaa;
+    await this.renderer.init();
+    this.renderer.setPixelRatio(window.devicePixelRatio);
+
+    // Restore canvas size
+    const w = this.canvasEl.clientWidth;
+    const h = this.canvasEl.clientHeight;
+    if (w > 0 && h > 0) {
+      this.renderer.setSize(w, h, false);
+      this.camera.aspect = w / h;
+      this.camera.updateProjectionMatrix();
+    }
+
+    // Re-register shared GPU buffers with the new Three.js backend
+    if (this.pointsMesh && this.offsetGpuBuffer && this.colorGpuBuffer) {
+      const geo = this.pointsMesh.geometry;
+      const offsetAttr = geo.getAttribute('aOffset');
+      const colorAttr = geo.getAttribute('aColor');
+      const backend = (this.renderer as any).backend;
+      backend.get(offsetAttr).buffer = this.offsetGpuBuffer;
+      backend.get(colorAttr).buffer = this.colorGpuBuffer;
+    }
+
+    // Resume rendering
+    if (!this.disposed) {
+      this.startRenderLoop();
     }
   }
 

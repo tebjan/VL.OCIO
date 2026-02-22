@@ -62,6 +62,7 @@ function getOrCreateSharedGPU(device: GPUDevice, format: GPUTextureFormat): Shar
   const sampler = device.createSampler({
     magFilter: 'linear',
     minFilter: 'linear',
+    mipmapFilter: 'linear',
   });
 
   shared = { pipeline, uniformBuffer, bindGroupLayout, sampler };

@@ -15,7 +15,7 @@ import {
   InstancedBufferAttribute,
 } from 'three/webgpu';
 import type { Material } from 'three/webgpu';
-import { attribute, positionLocal } from 'three/tsl';
+import { attribute, positionLocal, modelViewMatrix, uv, float, step, vec3 } from 'three/tsl';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import type { HeightmapSettings } from '../types/pipeline';
 
@@ -86,9 +86,15 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   let range = max(p.rangeMax - p.rangeMin, 0.0001);
   h = (h - p.rangeMin) / range;
 
-  // Stops mode: -log2
+  // Stops mode: -log2(h)
   if (p.stopsMode != 0u) {
-    h = -log2(max(h, 0.00001)) / 20.0;
+    h = -log2(max(h, 0.00001));
+  }
+
+  // Perceptual mode: gamma 2.2
+  if (p.perceptualMode != 0u) {
+    let ps = select(-1.0, 1.0, h >= 0.0);
+    h = ps * pow(abs(h), 1.0 / 2.2);
   }
 
   // Exponent (sign-preserving) + scale
@@ -385,6 +391,7 @@ class HeightmapScene {
 
     const cellW = 1.0 / dsW;
     const cellD = aspect / dsH;
+    const dotSize = Math.max(cellW, cellD);
 
     // ---- GPU buffers shared between compute and render ----
     const byteSize = count * 16; // vec4<f32> = 16 bytes per instance
@@ -401,13 +408,13 @@ class HeightmapScene {
       label: 'hm-color',
     });
 
-    // ---- Instanced geometry ----
-    const baseGeo = new PlaneGeometry(cellW, cellD);
-    baseGeo.rotateX(-Math.PI / 2);
+    // ---- Instanced geometry (XY plane quad, no rotation — billboard handles orientation) ----
+    const baseGeo = new PlaneGeometry(dotSize, dotSize);
 
     const geo = new InstancedBufferGeometry();
     geo.index = baseGeo.index;
     geo.setAttribute('position', baseGeo.getAttribute('position'));
+    geo.setAttribute('uv', baseGeo.getAttribute('uv'));
     geo.instanceCount = count;
 
     // Instance attributes — CPU arrays are dummy; compute fills the GPU buffers directly
@@ -417,21 +424,44 @@ class HeightmapScene {
     geo.setAttribute('aColor', colorAttr);
 
     // Pre-register our GPU buffers with Three.js backend.
-    // Backend.get() returns a data map entry keyed by the attribute object.
     // Setting .buffer before the first render makes Three.js skip its own
     // buffer creation and use ours instead (which have STORAGE usage).
     const backend = (this.renderer as any).backend;
     backend.get(offsetAttr).buffer = this.offsetGpuBuffer;
     backend.get(colorAttr).buffer = this.colorGpuBuffer;
 
-    // ---- Node material ----
-    // TSL attribute() reads from the named geometry attribute.
-    // positionLocal = base vertex position; we add the per-instance offset.
-    const material = new MeshBasicNodeMaterial();
-    (material as any).positionNode = positionLocal.add(
-      attribute('aOffset', 'vec4').xyz,
+    // ---- Billboard node material ----
+    // Extract camera right/up from modelViewMatrix (= viewMatrix since model is identity).
+    // Row 0 = camera right, Row 1 = camera up in world space.
+    // Column-major: row i component j = element(j)[i].
+    const camRight = vec3(
+      modelViewMatrix.element(0).x,
+      modelViewMatrix.element(1).x,
+      modelViewMatrix.element(2).x,
     );
+    const camUp = vec3(
+      modelViewMatrix.element(0).y,
+      modelViewMatrix.element(1).y,
+      modelViewMatrix.element(2).y,
+    );
+
+    // Billboard: quad offset in camera-aligned frame
+    const instancePos = attribute('aOffset', 'vec4').xyz;
+    const local = positionLocal;
+    const billboardPos = instancePos
+      .add(camRight.mul(local.x))
+      .add(camUp.mul(local.y));
+
+    const material = new MeshBasicNodeMaterial();
+    (material as any).positionNode = billboardPos;
     (material as any).colorNode = attribute('aColor', 'vec4').xyz;
+
+    // Round dot: discard fragments outside a circle in UV space
+    const uvCentered = uv().sub(float(0.5));
+    const distSq = uvCentered.dot(uvCentered);
+    (material as any).opacityNode = float(1.0).sub(step(float(0.25), distSq));
+    material.alphaTest = 0.5;
+    material.depthWrite = true;
 
     const mesh = new Mesh(geo, material);
     mesh.frustumCulled = false;

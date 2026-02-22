@@ -1,20 +1,20 @@
 /**
  * Session persistence for pipeline-checker.
  *
- * - Image data (ArrayBuffer) stored in IndexedDB (can be several MB).
+ * - File handle (FileSystemFileHandle) stored in IndexedDB for reload.
  * - View state (stage index) stored in localStorage (lightweight).
  */
 
 const DB_NAME = 'pipeline-checker';
 const STORE_NAME = 'session';
-const IMAGE_KEY = 'lastImage';
+const FILE_KEY = 'lastFileHandle';
 const VIEW_STATE_KEY = 'pipeline-checker:viewState';
 
 // ── IndexedDB helpers ──────────────────────────────────────────────
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, 1);
+    const request = indexedDB.open(DB_NAME, 2);
     request.onupgradeneeded = () => {
       const db = request.result;
       if (!db.objectStoreNames.contains(STORE_NAME)) {
@@ -58,40 +58,56 @@ function idbClear(db: IDBDatabase): Promise<void> {
 
 // ── Public API ─────────────────────────────────────────────────────
 
-export interface StoredImageData {
-  data: ArrayBuffer;
+export interface StoredFileRef {
+  handle: FileSystemFileHandle;
   fileType: 'exr' | 'dds';
   fileName: string;
 }
 
 /**
- * Persist the raw file ArrayBuffer so it can be restored after reload.
+ * Persist a FileSystemFileHandle so we can re-read the file after reload.
  */
-export async function saveImageData(
-  data: ArrayBuffer,
+export async function saveFileHandle(
+  handle: FileSystemFileHandle,
   fileType: 'exr' | 'dds',
   fileName: string,
 ): Promise<void> {
   try {
     const db = await openDB();
-    await idbPut(db, IMAGE_KEY, { data, fileType, fileName });
+    await idbPut(db, FILE_KEY, { handle, fileType, fileName });
     db.close();
   } catch (err) {
-    console.warn('[sessionStore] Failed to save image data:', err);
+    console.warn('[sessionStore] Failed to save file handle:', err);
   }
 }
 
 /**
- * Load the previously persisted image data, or null if none exists.
+ * Load the previously persisted file handle, or null if none exists.
+ * Verifies read permission is still granted.
  */
-export async function loadImageData(): Promise<StoredImageData | null> {
+export async function loadFileHandle(): Promise<StoredFileRef | null> {
   try {
     const db = await openDB();
-    const result = await idbGet<StoredImageData>(db, IMAGE_KEY);
+    const result = await idbGet<StoredFileRef>(db, FILE_KEY);
     db.close();
-    return result ?? null;
+    if (!result?.handle) return null;
+
+    // Check permission — granted persists across reloads in the same tab.
+    // queryPermission is part of the File System Access API (Chrome/Edge).
+    const handle = result.handle as FileSystemFileHandle & {
+      queryPermission?(opts: { mode: string }): Promise<string>;
+    };
+    if (handle.queryPermission) {
+      const perm = await handle.queryPermission({ mode: 'read' });
+      if (perm !== 'granted') {
+        console.log('[sessionStore] File permission not granted, skipping restore');
+        return null;
+      }
+    }
+
+    return result;
   } catch (err) {
-    console.warn('[sessionStore] Failed to load image data:', err);
+    console.warn('[sessionStore] Failed to load file handle:', err);
     return null;
   }
 }

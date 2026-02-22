@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { initWebGPU, type GPUContext } from './gpu/WebGPUContext';
-import { DropZone, generateSampleImage, type LoadedFileType } from './components/DropZone';
+import { DropZone, generateSampleImage, halfToFloat, type LoadedFileType } from './components/DropZone';
 import { WebGPUCanvas } from './components/WebGPUCanvas';
 import { Filmstrip } from './components/Filmstrip';
 import { ControlsPanel } from './components/ControlsPanel';
@@ -163,7 +163,7 @@ export default function App() {
                 } else {
                   float32Data = new Float32Array(result.data.length);
                   for (let i = 0; i < result.data.length; i++) {
-                    float32Data[i] = result.data[i] as number;
+                    float32Data[i] = halfToFloat(result.data[i] as number);
                   }
                 }
                 const sourceTexture = uploadFloat32Texture(gpu.device, float32Data, result.width, result.height);

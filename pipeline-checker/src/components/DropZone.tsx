@@ -7,11 +7,11 @@ interface DropZoneProps {
   /**
    * Called when an EXR image is loaded from file drop.
    * imageData is Float32Array RGBA, width/height in pixels.
-   * rawBuffer is the original EXR ArrayBuffer (for session persistence).
+   * fileHandle is for session persistence (re-read on reload).
    */
-  onExrLoaded: (imageData: Float32Array, width: number, height: number, fileType: LoadedFileType, rawBuffer: ArrayBuffer, fileName: string) => void;
+  onExrLoaded: (imageData: Float32Array, width: number, height: number, fileType: LoadedFileType, rawBuffer: ArrayBuffer, fileName: string, fileHandle?: FileSystemFileHandle) => void;
   /** Called when a DDS file is dropped. buffer is the raw ArrayBuffer. */
-  onDdsLoaded: (buffer: ArrayBuffer, fileName: string) => void;
+  onDdsLoaded: (buffer: ArrayBuffer, fileName: string, fileHandle?: FileSystemFileHandle) => void;
   /** Whether the app has BC texture compression support. */
   hasBC: boolean;
 }
@@ -245,7 +245,7 @@ export function generateSampleImage(): { data: Float32Array; width: number; heig
   return { data, width, height };
 }
 
-function halfToFloat(h: number): number {
+export function halfToFloat(h: number): number {
   const sign = (h >>> 15) & 0x1;
   const exponent = (h >>> 10) & 0x1f;
   const mantissa = h & 0x3ff;

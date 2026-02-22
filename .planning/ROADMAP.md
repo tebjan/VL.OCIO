@@ -26,8 +26,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 </details>
 
-- [ ] **Phase 4: Interaction Clarity** - Fix click areas, add blue active-stage highlight, show stage name in preview header
-- [ ] **Phase 5: Display Logic** - Final Display always sRGB, toggle scoping, DDS stage graying
+- [x] **Phase 4: Interaction Clarity** - Fix click areas, add blue active-stage highlight, show stage name in preview header
+- [x] **Phase 5: Display Logic** - Final Display always sRGB, toggle scoping, DDS stage graying
 - [ ] **Phase 6: Tooltips** - Explanatory tooltips on all pipeline stages and UI controls
 
 ## Phase Details
@@ -89,7 +89,7 @@ Plans:
 **Plans**: TBD
 
 Plans:
-- [ ] 04-01: Fix click areas, add blue highlight, show stage name in header
+- [x] 04-01: Fix click areas, add blue highlight, show stage name in header
 
 ### Phase 5: Display Logic
 **Goal**: Pipeline display behavior is correct for both EXR and DDS workflows without manual adjustment
@@ -102,7 +102,7 @@ Plans:
 **Plans**: TBD
 
 Plans:
-- [ ] 05-01: sRGB scoping for Final Display, DDS stage graying
+- [x] 05-01: sRGB scoping for Final Display, DDS stage graying
 
 ### Phase 6: Tooltips
 **Goal**: User can discover what each pipeline stage and UI control does without external documentation
@@ -127,6 +127,6 @@ Phases execute in numeric order: 4 -> 5 -> 6
 | 1. Pipeline Rendering | v1.0 | 2/2 | Complete | 2026-02-22 |
 | 2. Grading UI Integration | v1.0 | 2/2 | Complete | 2026-02-22 |
 | 3. GPU Testing Framework | v1.0 | 0/2 | Deferred | - |
-| 4. Interaction Clarity | v1.1 | 0/1 | Not started | - |
-| 5. Display Logic | v1.1 | 0/1 | Not started | - |
+| 4. Interaction Clarity | v1.1 | 1/1 | Complete | 2026-02-22 |
+| 5. Display Logic | v1.1 | 1/1 | Complete | 2026-02-22 |
 | 6. Tooltips | v1.1 | 0/1 | Not started | - |

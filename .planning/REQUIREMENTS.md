@@ -32,9 +32,9 @@ Requirements for usability polish milestone. Each maps to roadmap phases.
 
 ### Display Logic
 
-- [ ] **DISP-01**: Final Display stage always renders with sRGB curve applied, regardless of the vvvv viewer toggle state
-- [ ] **DISP-02**: The vvvv viewer toggle only affects stages before Final Display
-- [ ] **DISP-03**: When a DDS file is loaded, stages 0 (EXR Load) and 1 (BC Compress) are visually grayed out and unavailable
+- [x] **DISP-01**: Final Display stage always renders with sRGB curve applied, regardless of the vvvv viewer toggle state
+- [x] **DISP-02**: The vvvv viewer toggle only affects stages before Final Display
+- [x] **DISP-03**: When a DDS file is loaded, stages 0 (EXR Load) and 1 (BC Compress) are visually grayed out and unavailable
 
 ### Tooltips
 
@@ -78,9 +78,9 @@ Requirements for usability polish milestone. Each maps to roadmap phases.
 | INTX-01 | Phase 4 | Complete |
 | INTX-02 | Phase 4 | Complete |
 | INTX-03 | Phase 4 | Complete |
-| DISP-01 | Phase 5 | Pending |
-| DISP-02 | Phase 5 | Pending |
-| DISP-03 | Phase 5 | Pending |
+| DISP-01 | Phase 5 | Complete |
+| DISP-02 | Phase 5 | Complete |
+| DISP-03 | Phase 5 | Complete |
 | TIPS-01 | Phase 6 | Pending |
 | TIPS-02 | Phase 6 | Pending |
 

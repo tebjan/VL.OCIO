@@ -12,7 +12,7 @@ Fix the broken pipeline-checker rendering so all 10 stages produce visible outpu
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Pipeline Rendering** - Fix all 10 pipeline stages to render visible output with correct texture chaining, toggles, and previews
+- [x] **Phase 1: Pipeline Rendering** - Fix all 10 pipeline stages to render visible output with correct texture chaining, toggles, and previews
 - [ ] **Phase 2: Grading UI Integration** - Replace duplicated grading controls with the existing `ui/` project's components and styling
 - [ ] **Phase 3: GPU Testing Framework** - Build test runner that executes real WebGPU pipeline stages with pixel readback and visual heuristics
 
@@ -30,8 +30,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 2 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — Debug and fix GPU pipeline rendering (shader compilation, texture binding, uniform alignment, stage chaining)
-- [ ] 01-02-PLAN.md — Fix Preview2D display, filmstrip thumbnails, zoom/pan, and stage interaction
+- [x] 01-01-PLAN.md — Debug and fix GPU pipeline rendering (shader compilation, texture binding, uniform alignment, stage chaining)
+- [x] 01-02-PLAN.md — Fix Preview2D display, filmstrip thumbnails, zoom/pan, and stage interaction
 
 ### Phase 2: Grading UI Integration
 **Goal**: Color grading controls in the pipeline-checker are the real `ui/` project components, not duplicates
@@ -69,6 +69,6 @@ Phases execute in numeric order: 1 -> 2 -> 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Pipeline Rendering | 0/2 | Not started | - |
+| 1. Pipeline Rendering | 2/2 | Complete | 2026-02-22 |
 | 2. Grading UI Integration | 0/1 | Not started | - |
 | 3. GPU Testing Framework | 0/2 | Not started | - |

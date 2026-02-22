@@ -10,8 +10,8 @@
 - [x] **PIPE-01**: All 10 pipeline stages render visible output when an EXR image is loaded
 - [x] **PIPE-02**: Stage-to-stage texture chaining works correctly (each stage reads previous stage's output)
 - [x] **PIPE-03**: Stage enable/disable toggles work and bypass stages correctly
-- [ ] **PIPE-04**: Filmstrip shows correct preview thumbnails for each stage
-- [ ] **PIPE-05**: 2D preview displays the selected stage's output with zoom/pan working
+- [x] **PIPE-04**: Filmstrip shows correct preview thumbnails for each stage
+- [x] **PIPE-05**: 2D preview displays the selected stage's output with zoom/pan working
 
 ### UI Integration
 
@@ -53,8 +53,8 @@
 | PIPE-01 | Phase 1 | Complete |
 | PIPE-02 | Phase 1 | Complete |
 | PIPE-03 | Phase 1 | Complete |
-| PIPE-04 | Phase 1 | Pending |
-| PIPE-05 | Phase 1 | Pending |
+| PIPE-04 | Phase 1 | Complete |
+| PIPE-05 | Phase 1 | Complete |
 | UI-01 | Phase 2 | Pending |
 | UI-02 | Phase 2 | Pending |
 | UI-03 | Phase 2 | Pending |
@@ -73,4 +73,4 @@
 
 ---
 *Requirements defined: 2026-02-22*
-*Last updated: 2026-02-22 after initial definition*
+*Last updated: 2026-02-22 after Phase 1 completion*

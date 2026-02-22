@@ -8,6 +8,7 @@ import { MainPreview } from './components/MainPreview';
 import { MetadataPanel, computeChannelStats, type ImageMetadata, type ChannelStats } from './components/MetadataPanel';
 import { usePipelineManager } from './hooks/usePipelineManager';
 import { uploadFloat32Texture, uploadFloat16Texture, uploadDDSTexture } from './pipeline/TextureUtils';
+import { MAX_PIPELINES } from './types/PipelineInstance';
 import { parseDDS } from './pipeline/DDSParser';
 import {
   serializeUniforms,
@@ -181,7 +182,7 @@ export default function App() {
   const [isDragging, setIsDragging] = useState(false);
   const manager = usePipelineManager();
 
-  // Load a file into the pipeline manager — creates or replaces a pipeline
+  // Load a file into the pipeline manager — adds a new pipeline or replaces selected if at capacity
   const loadFile = useCallback(
     (gpu: GPUContext, sourceTexture: GPUTexture, width: number, height: number, stats: ChannelStats | null, fileSizeMB: string, fileType: LoadedFileType, fileName?: string, fileHandle?: FileSystemFileHandle) => {
       const metadata: ImageMetadata = {
@@ -193,12 +194,12 @@ export default function App() {
         stats,
       };
 
-      // For now (single pipeline behavior): replace or create the first pipeline
-      if (manager.pipelines.length === 0) {
+      if (manager.pipelines.length < MAX_PIPELINES) {
         manager.addPipeline(gpu.device, sourceTexture, width, height, metadata, fileType, fileName, fileHandle);
       } else {
-        const first = manager.pipelines[0];
-        manager.replacePipelineSource(first.id, gpu.device, sourceTexture, width, height, metadata, fileType, fileName, fileHandle);
+        // At capacity — replace the currently selected pipeline
+        const targetId = manager.selectedPipelineId ?? manager.pipelines[0].id;
+        manager.replacePipelineSource(targetId, gpu.device, sourceTexture, width, height, metadata, fileType, fileName, fileHandle);
       }
 
       setState({ kind: 'ready', gpu });

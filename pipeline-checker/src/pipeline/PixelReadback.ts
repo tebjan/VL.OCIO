@@ -48,8 +48,14 @@ export class PixelReadback {
       this.device.queue.submit([encoder.finish()]);
 
       await buffer.mapAsync(GPUMapMode.READ);
-      const mapped = new Float32Array(buffer.getMappedRange());
-      const pixel = new Float32Array([mapped[0], mapped[1], mapped[2], mapped[3]]);
+      const pixel = new Float32Array(4);
+      if (texture.format === 'rgba16float') {
+        const dv = new DataView(buffer.getMappedRange(0, 8));
+        for (let i = 0; i < 4; i++) pixel[i] = dv.getFloat16(i * 2, true);
+      } else {
+        const mapped = new Float32Array(buffer.getMappedRange(0, 16));
+        pixel.set(mapped);
+      }
       buffer.unmap();
       buffer.destroy();
 

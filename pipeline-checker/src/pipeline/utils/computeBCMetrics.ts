@@ -17,8 +17,8 @@ export async function computeBCMetrics(
 ): Promise<PipelineBCMetrics> {
   const raw = await metricsComputer.computeMetrics(originalTexture, decompressedTexture);
 
-  // Compression ratio: uncompressed rgba32float (16 bytes/pixel) vs encoded
-  const uncompressedBytes = encodeResult.originalWidth * encodeResult.originalHeight * 16;
+  // Compression ratio: uncompressed rgba16float (8 bytes/pixel) vs encoded
+  const uncompressedBytes = encodeResult.originalWidth * encodeResult.originalHeight * 8;
   const compressionRatio = uncompressedBytes / encodeResult.data.byteLength;
 
   return {

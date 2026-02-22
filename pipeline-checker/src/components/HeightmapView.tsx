@@ -1,4 +1,5 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useCallback } from 'react';
+import { alignedBytesPerRow, copyAlignedToContiguous } from '../pipeline/TextureUtils';
 import {
   WebGPURenderer,
   Scene,
@@ -44,7 +45,11 @@ import type { HeightmapSettings } from '../types/pipeline';
 
 export interface HeightmapViewProps {
   stageTexture: GPUTexture | null;
+  /** The pipeline's GPUDevice — needed for GPU readback of stage textures. */
+  device: GPUDevice | null;
   active: boolean;
+  /** Incremented after each pipeline render to trigger readback refresh. */
+  renderVersion?: number;
 }
 
 /**
@@ -420,12 +425,18 @@ class HeightmapScene {
     if (this.disposed) return;
     const loop = async () => {
       if (this.disposed) return;
-      this.controls.update();
-      // Run TSL compute to update position/color buffers, then render
-      if (this.computeNode) {
-        await this.renderer.computeAsync(this.computeNode);
+      try {
+        this.controls.update();
+        // Run TSL compute to update position/color buffers, then render
+        if (this.computeNode) {
+          await this.renderer.computeAsync(this.computeNode);
+        }
+        await this.renderer.renderAsync(this.scene, this.camera);
+      } catch (err) {
+        console.error('[HeightmapView] Render loop error:', err);
+        // Stop the loop on error to prevent a crash spiral
+        return;
       }
-      await this.renderer.renderAsync(this.scene, this.camera);
       this.animationId = requestAnimationFrame(loop);
     };
     this.animationId = requestAnimationFrame(loop);
@@ -466,11 +477,12 @@ class HeightmapScene {
  * React component wrapping the Three.js WebGPU heightmap scene.
  * Creates its own canvas; the scene persists across tab switches.
  */
-export function HeightmapView({ active }: HeightmapViewProps) {
+export function HeightmapView({ stageTexture, device, active, renderVersion }: HeightmapViewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<HeightmapScene | null>(null);
   const initRef = useRef(false);
+  const readbackIdRef = useRef(0);
 
   // Initialize scene on first activation
   useEffect(() => {
@@ -480,15 +492,19 @@ export function HeightmapView({ active }: HeightmapViewProps) {
     const scene = new HeightmapScene();
     sceneRef.current = scene;
 
-    scene.init(canvasRef.current).then(() => {
-      // Initial size
-      const container = containerRef.current;
-      if (container) {
-        const rect = container.getBoundingClientRect();
-        scene.resize(rect.width, rect.height);
-      }
-      scene.startRenderLoop();
-    });
+    scene.init(canvasRef.current)
+      .then(() => {
+        // Initial size
+        const container = containerRef.current;
+        if (container) {
+          const rect = container.getBoundingClientRect();
+          scene.resize(rect.width, rect.height);
+        }
+        scene.startRenderLoop();
+      })
+      .catch((err) => {
+        console.error('[HeightmapView] Init failed:', err);
+      });
 
     return () => {
       scene.dispose();
@@ -496,6 +512,85 @@ export function HeightmapView({ active }: HeightmapViewProps) {
       initRef.current = false;
     };
   }, [active]);
+
+  // GPU readback: read stage texture pixels and feed to Three.js DataTexture
+  const doReadback = useCallback(async (
+    pipelineDevice: GPUDevice,
+    tex: GPUTexture,
+    scene: HeightmapScene,
+    readbackId: number,
+  ) => {
+    const { width, height } = tex;
+    // Downsample to max ~256 on longest side for 3D view
+    const downsample = Math.max(1, Math.floor(Math.max(width, height) / 256));
+    const dsW = Math.max(1, Math.floor(width / downsample));
+    const dsH = Math.max(1, Math.floor(height / downsample));
+
+    const bytesPerRow = alignedBytesPerRow(width);
+    const bufferSize = bytesPerRow * height;
+
+    const stagingBuffer = pipelineDevice.createBuffer({
+      size: bufferSize,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+      label: 'Heightmap readback',
+    });
+
+    const encoder = pipelineDevice.createCommandEncoder();
+    encoder.copyTextureToBuffer(
+      { texture: tex },
+      { buffer: stagingBuffer, bytesPerRow, rowsPerImage: height },
+      { width, height },
+    );
+    pipelineDevice.queue.submit([encoder.finish()]);
+
+    await stagingBuffer.mapAsync(GPUMapMode.READ);
+
+    // Abort if a newer readback started while we were waiting
+    if (readbackIdRef.current !== readbackId) {
+      stagingBuffer.unmap();
+      stagingBuffer.destroy();
+      return;
+    }
+
+    const fullData = copyAlignedToContiguous(
+      stagingBuffer.getMappedRange(),
+      width, height, bytesPerRow,
+    );
+    stagingBuffer.unmap();
+    stagingBuffer.destroy();
+
+    // Downsample to target resolution (nearest-neighbor)
+    const dsData = new Float32Array(dsW * dsH * 4);
+    for (let y = 0; y < dsH; y++) {
+      const srcY = y * downsample;
+      for (let x = 0; x < dsW; x++) {
+        const srcX = x * downsample;
+        const srcIdx = (srcY * width + srcX) * 4;
+        const dstIdx = (y * dsW + x) * 4;
+        dsData[dstIdx] = fullData[srcIdx];
+        dsData[dstIdx + 1] = fullData[srcIdx + 1];
+        dsData[dstIdx + 2] = fullData[srcIdx + 2];
+        dsData[dstIdx + 3] = fullData[srcIdx + 3];
+      }
+    }
+
+    // Setup compute/mesh if dimensions changed, then update texture data
+    scene.setupCompute(width, height, downsample);
+    scene.setupMesh(width, height);
+    scene.updateSourceTexture(dsData);
+  }, []);
+
+  // Trigger readback when stage texture or render version changes
+  useEffect(() => {
+    if (!active || !stageTexture || !device) return;
+    const scene = sceneRef.current;
+    if (!scene || !initRef.current) return;
+
+    const id = ++readbackIdRef.current;
+    doReadback(device, stageTexture, scene, id).catch((err) => {
+      console.warn('[HeightmapView] Readback failed:', err);
+    });
+  }, [active, stageTexture, device, renderVersion, doReadback]);
 
   // Start/stop render loop on active change
   useEffect(() => {

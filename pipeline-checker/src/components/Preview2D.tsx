@@ -25,6 +25,7 @@ export function Preview2D({ device, format, stageTexture, viewExposure, renderVe
     pipeline: GPURenderPipeline;
     uniformBuffer: GPUBuffer;
     bindGroupLayout: GPUBindGroupLayout;
+    sampler: GPUSampler;
   } | null>(null);
   const dragRef = useRef<DragState | null>(null);
   const frameRef = useRef<number>(0);
@@ -45,8 +46,9 @@ export function Preview2D({ device, format, stageTexture, viewExposure, renderVe
 
     const bindGroupLayout = device.createBindGroupLayout({
       entries: [
-        { binding: 0, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'unfilterable-float' } },
+        { binding: 0, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
         { binding: 1, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
+        { binding: 2, visibility: GPUShaderStage.FRAGMENT, sampler: { type: 'filtering' } },
       ],
     });
 
@@ -68,7 +70,12 @@ export function Preview2D({ device, format, stageTexture, viewExposure, renderVe
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
 
-    gpuRef.current = { ctx, pipeline, uniformBuffer, bindGroupLayout };
+    const sampler = device.createSampler({
+      magFilter: 'linear',
+      minFilter: 'linear',
+    });
+
+    gpuRef.current = { ctx, pipeline, uniformBuffer, bindGroupLayout, sampler };
 
     return () => {
       uniformBuffer.destroy();
@@ -114,33 +121,38 @@ export function Preview2D({ device, format, stageTexture, viewExposure, renderVe
       const canvas = canvasRef.current;
       if (!canvas || canvas.width === 0 || canvas.height === 0) return;
 
-      // Write uniforms
-      const data = new Float32Array([viewExposure, zoom, panX, panY]);
-      device.queue.writeBuffer(gpu.uniformBuffer, 0, data);
+      try {
+        // Write uniforms
+        const data = new Float32Array([viewExposure, zoom, panX, panY]);
+        device.queue.writeBuffer(gpu.uniformBuffer, 0, data);
 
-      // Create bind group for current stage texture
-      const bindGroup = device.createBindGroup({
-        layout: gpu.bindGroupLayout,
-        entries: [
-          { binding: 0, resource: stageTexture.createView() },
-          { binding: 1, resource: { buffer: gpu.uniformBuffer } },
-        ],
-      });
+        // Create bind group for current stage texture
+        const bindGroup = device.createBindGroup({
+          layout: gpu.bindGroupLayout,
+          entries: [
+            { binding: 0, resource: stageTexture.createView() },
+            { binding: 1, resource: { buffer: gpu.uniformBuffer } },
+            { binding: 2, resource: gpu.sampler },
+          ],
+        });
 
-      const encoder = device.createCommandEncoder();
-      const pass = encoder.beginRenderPass({
-        colorAttachments: [{
-          view: gpu.ctx.getCurrentTexture().createView(),
-          loadOp: 'clear',
-          storeOp: 'store',
-          clearValue: { r: 0.05, g: 0.05, b: 0.05, a: 1 },
-        }],
-      });
-      pass.setPipeline(gpu.pipeline);
-      pass.setBindGroup(0, bindGroup);
-      pass.draw(3);
-      pass.end();
-      device.queue.submit([encoder.finish()]);
+        const encoder = device.createCommandEncoder();
+        const pass = encoder.beginRenderPass({
+          colorAttachments: [{
+            view: gpu.ctx.getCurrentTexture().createView(),
+            loadOp: 'clear',
+            storeOp: 'store',
+            clearValue: { r: 0.05, g: 0.05, b: 0.05, a: 1 },
+          }],
+        });
+        pass.setPipeline(gpu.pipeline);
+        pass.setBindGroup(0, bindGroup);
+        pass.draw(3);
+        pass.end();
+        device.queue.submit([encoder.finish()]);
+      } catch {
+        // getCurrentTexture() can throw during resize — safe to skip this frame
+      }
     });
 
     return () => cancelAnimationFrame(frameRef.current);
@@ -210,7 +222,8 @@ export function Preview2D({ device, format, stageTexture, viewExposure, renderVe
     <div
       ref={containerRef}
       style={{
-        flex: 1,
+        width: '100%',
+        height: '100%',
         position: 'relative',
         overflow: 'hidden',
         background: 'var(--color-bg, #0d0d0d)',

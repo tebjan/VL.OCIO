@@ -1,6 +1,6 @@
-// Preview blit shader — renders stage rgba32float texture to canvas
-// Applies view exposure (display-only) and sRGB gamma for SDR output.
-// NOT a pipeline stage — purely a display utility.
+// Preview blit shader — renders stage rgba16float texture to canvas.
+// Faithful display: raw pixel values clamped to 0-1. No gamma, no exposure, no transforms.
+// Uses textureSample with linear filtering for correct downscaling in thumbnails.
 
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
@@ -18,6 +18,8 @@ fn vs(@builtin(vertex_index) i: u32) -> VertexOutput {
 }
 
 @group(0) @binding(0) var stageTexture: texture_2d<f32>;
+@group(0) @binding(1) var<uniform> view: ViewUniforms;
+@group(0) @binding(2) var texSampler: sampler;
 
 struct ViewUniforms {
     viewExposure: f32,
@@ -25,35 +27,29 @@ struct ViewUniforms {
     panX: f32,
     panY: f32,
 };
-@group(0) @binding(1) var<uniform> view: ViewUniforms;
+
+// sRGB transfer function (IEC 61966-2-1)
+fn linearToSRGB(linear: vec3<f32>) -> vec3<f32> {
+    let lo = linear * 12.92;
+    let hi = 1.055 * pow(linear, vec3<f32>(1.0 / 2.4)) - 0.055;
+    return select(hi, lo, linear <= vec3<f32>(0.0031308));
+}
 
 @fragment
 fn fs(in: VertexOutput) -> @location(0) vec4<f32> {
     // Transform UV by zoom/pan
     let uv = (in.uv - 0.5) / view.zoom + vec2<f32>(view.panX, view.panY) + 0.5;
 
-    // Out-of-bounds: dark border
-    if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
-        return vec4<f32>(0.05, 0.05, 0.05, 1.0);
-    }
+    // Sample unconditionally (textureSample requires uniform control flow)
+    let clampedUV = clamp(uv, vec2<f32>(0.0), vec2<f32>(1.0));
+    let color = textureSample(stageTexture, texSampler, clampedUV);
 
-    // Use textureLoad with integer coords (unfilterable-float cannot use textureSample)
-    let dims = vec2<f32>(textureDimensions(stageTexture));
-    let texCoord = vec2<i32>(clamp(uv * dims, vec2<f32>(0.0), dims - 1.0));
-    var color = textureLoad(stageTexture, texCoord, 0);
+    // Clamp to 0-1, then apply linear → sRGB gamma for correct display
+    let clamped = clamp(color.rgb, vec3<f32>(0.0), vec3<f32>(1.0));
+    let srgb = linearToSRGB(clamped);
 
-    // View exposure (does NOT affect pipeline output)
-    color = vec4<f32>(color.rgb * exp2(view.viewExposure), color.a);
-
-    // Clamp for SDR display
-    color = clamp(color, vec4<f32>(0.0), vec4<f32>(1.0));
-
-    // Linear-to-sRGB gamma
-    let srgb = select(
-        color.rgb * 12.92,
-        pow(color.rgb, vec3<f32>(1.0 / 2.4)) * 1.055 - 0.055,
-        color.rgb > vec3<f32>(0.0031308)
-    );
-
-    return vec4<f32>(srgb, color.a);
+    // Out-of-bounds: dark border (applied after sampling to keep uniform control flow)
+    let border = vec4<f32>(0.05, 0.05, 0.05, 1.0);
+    let oob = uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0;
+    return select(vec4<f32>(srgb, color.a), border, oob);
 }

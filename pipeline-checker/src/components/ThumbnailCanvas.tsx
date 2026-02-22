@@ -19,6 +19,7 @@ interface SharedThumbnailGPU {
   pipeline: GPURenderPipeline;
   uniformBuffer: GPUBuffer;
   bindGroupLayout: GPUBindGroupLayout;
+  sampler: GPUSampler;
 }
 
 const sharedGPUMap = new WeakMap<GPUDevice, SharedThumbnailGPU>();
@@ -29,8 +30,9 @@ function getOrCreateSharedGPU(device: GPUDevice, format: GPUTextureFormat): Shar
 
   const bindGroupLayout = device.createBindGroupLayout({
     entries: [
-      { binding: 0, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'unfilterable-float' } },
+      { binding: 0, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } },
       { binding: 1, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
+      { binding: 2, visibility: GPUShaderStage.FRAGMENT, sampler: { type: 'filtering' } },
     ],
   });
 
@@ -54,7 +56,12 @@ function getOrCreateSharedGPU(device: GPUDevice, format: GPUTextureFormat): Shar
   });
   device.queue.writeBuffer(uniformBuffer, 0, new Float32Array([0.0, 1.0, 0.0, 0.0]));
 
-  shared = { pipeline, uniformBuffer, bindGroupLayout };
+  const sampler = device.createSampler({
+    magFilter: 'linear',
+    minFilter: 'linear',
+  });
+
+  shared = { pipeline, uniformBuffer, bindGroupLayout, sampler };
   sharedGPUMap.set(device, shared);
   return shared;
 }
@@ -90,30 +97,35 @@ export function ThumbnailCanvas({ device, format, texture, width, height, render
     const ctx = ctxRef.current;
     if (!ctx || !texture) return;
 
-    const shared = getOrCreateSharedGPU(device, format);
+    try {
+      const shared = getOrCreateSharedGPU(device, format);
 
-    const bindGroup = device.createBindGroup({
-      layout: shared.bindGroupLayout,
-      entries: [
-        { binding: 0, resource: texture.createView() },
-        { binding: 1, resource: { buffer: shared.uniformBuffer } },
-      ],
-    });
+      const bindGroup = device.createBindGroup({
+        layout: shared.bindGroupLayout,
+        entries: [
+          { binding: 0, resource: texture.createView() },
+          { binding: 1, resource: { buffer: shared.uniformBuffer } },
+          { binding: 2, resource: shared.sampler },
+        ],
+      });
 
-    const encoder = device.createCommandEncoder();
-    const pass = encoder.beginRenderPass({
-      colorAttachments: [{
-        view: ctx.getCurrentTexture().createView(),
-        loadOp: 'clear',
-        storeOp: 'store',
-        clearValue: { r: 0.05, g: 0.05, b: 0.05, a: 1 },
-      }],
-    });
-    pass.setPipeline(shared.pipeline);
-    pass.setBindGroup(0, bindGroup);
-    pass.draw(3);
-    pass.end();
-    device.queue.submit([encoder.finish()]);
+      const encoder = device.createCommandEncoder();
+      const pass = encoder.beginRenderPass({
+        colorAttachments: [{
+          view: ctx.getCurrentTexture().createView(),
+          loadOp: 'clear',
+          storeOp: 'store',
+          clearValue: { r: 0.05, g: 0.05, b: 0.05, a: 1 },
+        }],
+      });
+      pass.setPipeline(shared.pipeline);
+      pass.setBindGroup(0, bindGroup);
+      pass.draw(3);
+      pass.end();
+      device.queue.submit([encoder.finish()]);
+    } catch {
+      // getCurrentTexture() can throw during resize — safe to skip this frame
+    }
   }, [device, format, texture, renderVersion]);
 
   return (

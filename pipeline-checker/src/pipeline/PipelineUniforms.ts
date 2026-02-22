@@ -93,8 +93,8 @@ export const DEFAULT_SETTINGS: PipelineSettings = {
   tonemapOp: 0,             // None
   tonemapExposure: 0,
   whitePoint: 1,
-  paperWhite: 203,
-  peakBrightness: 1000,
+  paperWhite: 100,              // SDR reference white
+  peakBrightness: 100,          // SDR 100 nits
   blackLevel: 0,
   whiteLevel: 1,
   bcEnabled: false,

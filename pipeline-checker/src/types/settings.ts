@@ -129,16 +129,16 @@ export function createDefaultSettings(): PipelineSettings {
     gradeShadowSoftClip: 0,
     gradeHighlightKnee: 1,
     gradeShadowKnee: 0.1,
-    tonemapOperator: 0,
+    tonemapOperator: 1,  // ACES (Fit) — visible tonemap so stages show differences
     rrtEnabled: true,
     odtEnabled: true,
     odtTarget: 0,
     tonemapExposure: 0,
     tonemapWhitePoint: 4,
-    tonemapPeakBrightness: 1000,
+    tonemapPeakBrightness: 100,    // SDR 100 nits target
     outputSpace: 0,
-    outputPaperWhite: 200,
-    outputPeakBrightness: 1000,
+    outputPaperWhite: 100,         // SDR reference white
+    outputPeakBrightness: 100,     // SDR peak brightness
     outputBlackLevel: 0,
     outputWhiteLevel: 1,
   };

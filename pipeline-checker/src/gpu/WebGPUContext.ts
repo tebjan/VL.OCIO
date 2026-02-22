@@ -41,9 +41,16 @@ export async function initWebGPU(canvas: HTMLCanvasElement): Promise<GPUContext>
   device.lost.then((info) => {
     console.error(`WebGPU device lost: ${info.message}`);
     if (info.reason !== 'destroyed') {
-      // Could attempt re-initialization here in the future
       console.error('Unexpected device loss — reload the page.');
     }
+  });
+
+  // Catch any uncaptured WebGPU validation errors and log prominently
+  device.addEventListener('uncapturederror', (event) => {
+    console.error(
+      `%c[WebGPU] Uncaptured error: ${(event as GPUUncapturedErrorEvent).error.message}`,
+      'color: red; font-weight: bold; font-size: 14px;',
+    );
   });
 
   const format = navigator.gpu.getPreferredCanvasFormat();

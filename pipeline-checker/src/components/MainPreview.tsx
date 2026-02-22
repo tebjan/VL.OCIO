@@ -1,11 +1,18 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, lazy, Suspense } from 'react';
 import { Preview2D } from './Preview2D';
-import { HeightmapView } from './HeightmapView';
 import { HeightmapControls } from './HeightmapControls';
 import {
   type HeightmapSettings,
   createDefaultHeightmapSettings,
 } from '../types/pipeline';
+
+// Lazy-load HeightmapView to prevent Three.js WebGPU module from being
+// evaluated at app startup. Three.js WebGPU imports can interfere with
+// direct WebGPU usage (the color pipeline). Only loaded when user first
+// switches to 3D mode.
+const LazyHeightmapView = lazy(() =>
+  import('./HeightmapView').then((m) => ({ default: m.HeightmapView })),
+);
 
 export interface MainPreviewProps {
   device: GPUDevice;
@@ -20,7 +27,8 @@ type ViewMode = '2d' | '3d';
 /**
  * Container component with [2D] / [3D] tab toggle.
  * Renders Preview2D or HeightmapView based on the active tab.
- * Both views preserve their state across tab switches.
+ * HeightmapView is lazy-loaded on first 3D activation to avoid
+ * loading Three.js unless needed.
  */
 export function MainPreview({
   device,
@@ -33,6 +41,12 @@ export function MainPreview({
   const [heightmapSettings, setHeightmapSettings] = useState<HeightmapSettings>(
     createDefaultHeightmapSettings,
   );
+  // Track whether 3D was ever activated — once true, keep HeightmapView mounted
+  const [ever3D, setEver3D] = useState(false);
+
+  useEffect(() => {
+    if (mode === '3d') setEver3D(true);
+  }, [mode]);
 
   const handleSettingsChange = useCallback(
     (settings: HeightmapSettings) => setHeightmapSettings(settings),
@@ -81,7 +95,7 @@ export function MainPreview({
         </button>
       </div>
 
-      {/* View area — both mount always to preserve state, visibility toggled */}
+      {/* View area */}
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
         <div style={{ width: '100%', height: '100%', display: mode === '2d' ? 'block' : 'none' }}>
           <Preview2D
@@ -92,7 +106,23 @@ export function MainPreview({
             renderVersion={renderVersion}
           />
         </div>
-        <HeightmapView stageTexture={stageTexture} active={mode === '3d'} />
+        {ever3D && (
+          <Suspense fallback={
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              height: '100%', color: 'var(--color-text-muted)',
+            }}>
+              Loading 3D view...
+            </div>
+          }>
+            <LazyHeightmapView
+              stageTexture={stageTexture}
+              device={device}
+              active={mode === '3d'}
+              renderVersion={renderVersion}
+            />
+          </Suspense>
+        )}
       </div>
 
       {/* 3D controls shown only in 3D mode */}

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { initWebGPU, type GPUContext } from './gpu/WebGPUContext';
-import { DropZone } from './components/DropZone';
+import { DropZone, generateSampleImage, type LoadedFileType } from './components/DropZone';
 import { WebGPUCanvas } from './components/WebGPUCanvas';
 import { Filmstrip } from './components/Filmstrip';
 import { ControlsPanel } from './components/ControlsPanel';
@@ -10,24 +10,22 @@ import { MetadataPanel, computeChannelStats, type ImageMetadata } from './compon
 import { usePipeline } from './hooks/usePipeline';
 import { PipelineRenderer } from './pipeline/PipelineRenderer';
 import { createColorPipelineStages } from './pipeline/stages';
-import { uploadFloat32Texture } from './pipeline/TextureUtils';
+import { uploadFloat32Texture, uploadDDSTexture } from './pipeline/TextureUtils';
+import { parseDDS } from './pipeline/DDSParser';
 import {
   serializeUniforms,
   type PipelineSettings as GPUPipelineSettings,
 } from './pipeline/PipelineUniforms';
 import type { PipelineSettings } from './types/settings';
+import { STAGE_NAMES } from './pipeline/types/StageInfo';
 
 type AppState =
   | { kind: 'initializing' }
   | { kind: 'error'; message: string }
-  | { kind: 'ready'; gpu: GPUContext }
   | { kind: 'loaded'; gpu: GPUContext; sourceTexture: GPUTexture; metadata: ImageMetadata };
 
 /**
- * Map UI-facing PipelineSettings (types/settings.ts) to the GPU uniform
- * buffer format (PipelineUniforms.ts). The two interfaces use different
- * field names — the UI uses descriptive prefixed names while the GPU
- * struct uses WGSL-matching compact names.
+ * Map UI-facing PipelineSettings to the GPU uniform buffer format.
  */
 function toGPUSettings(s: PipelineSettings, viewExposure: number): GPUPipelineSettings {
   return {
@@ -69,6 +67,13 @@ function toGPUSettings(s: PipelineSettings, viewExposure: number): GPUPipelineSe
   };
 }
 
+/** Stage index to auto-select based on loaded file type. */
+const STAGE_FOR_FILE_TYPE: Record<LoadedFileType, number> = {
+  exr: STAGE_NAMES.length - 1,   // Final Display
+  dds: 2,                         // BC Decompress
+  sample: STAGE_NAMES.length - 1, // Final Display
+};
+
 export default function App() {
   const [state, setState] = useState<AppState>({ kind: 'initializing' });
   const [viewExposure, setViewExposure] = useState(0);
@@ -76,33 +81,16 @@ export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<PipelineRenderer | null>(null);
   const sourceTextureRef = useRef<GPUTexture | null>(null);
+  const gpuRef = useRef<GPUContext | null>(null);
 
   const pipeline = usePipeline();
 
-  // Initialize WebGPU on mount
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    initWebGPU(canvas)
-      .then((gpu) => setState({ kind: 'ready', gpu }))
-      .catch((err) => setState({ kind: 'error', message: err.message }));
-  }, []);
-
-  // Handle image load: upload to GPU texture, create pipeline renderer + stages
-  const handleImageLoaded = useCallback(
-    (imageData: Float32Array, width: number, height: number) => {
-      if (state.kind !== 'ready' && state.kind !== 'loaded') return;
-      const { gpu } = state;
-
-      // Destroy previous source texture if reloading
+  // Load an rgba16float source texture and transition to 'loaded' state
+  const loadSourceTexture = useCallback(
+    (gpu: GPUContext, sourceTexture: GPUTexture, width: number, height: number, imageData: Float32Array, fileType: LoadedFileType) => {
       sourceTextureRef.current?.destroy();
-
-      // Upload EXR pixel data to GPU
-      const sourceTexture = uploadFloat32Texture(gpu.device, imageData, width, height);
       sourceTextureRef.current = sourceTexture;
 
-      // Create pipeline renderer on first load
       if (!rendererRef.current) {
         const renderer = new PipelineRenderer(gpu.device);
         const stages = createColorPipelineStages();
@@ -113,7 +101,6 @@ export default function App() {
         rendererRef.current.setSize(width, height);
       }
 
-      // Compute EXR metadata for the info panel
       const stats = computeChannelStats(imageData, width, height);
       const metadata: ImageMetadata = {
         width,
@@ -123,20 +110,108 @@ export default function App() {
         stats,
       };
 
+      pipeline.selectStage(STAGE_FOR_FILE_TYPE[fileType]);
       setState({ kind: 'loaded', gpu, sourceTexture, metadata });
     },
-    [state],
+    [pipeline],
   );
 
-  // Re-render the pipeline whenever settings, stage toggles, or view exposure change
+  // Initialize WebGPU and auto-load sample image.
+  // Cleanup handles React StrictMode double-init (dev mode runs effects twice).
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    let cancelled = false;
+
+    initWebGPU(canvas)
+      .then((gpu) => {
+        if (cancelled) return;
+
+        // Destroy previous GPU resources (StrictMode re-init)
+        rendererRef.current?.destroy();
+        rendererRef.current = null;
+        sourceTextureRef.current?.destroy();
+        sourceTextureRef.current = null;
+
+        gpuRef.current = gpu;
+        // Auto-load sample image — no start screen
+        const sample = generateSampleImage();
+        const sourceTexture = uploadFloat32Texture(gpu.device, sample.data, sample.width, sample.height);
+        loadSourceTexture(gpu, sourceTexture, sample.width, sample.height, sample.data, 'sample');
+      })
+      .catch((err) => {
+        if (!cancelled) setState({ kind: 'error', message: err.message });
+      });
+
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Handle EXR image loaded from drop
+  const handleExrLoaded = useCallback(
+    (imageData: Float32Array, width: number, height: number, fileType: LoadedFileType) => {
+      const gpu = gpuRef.current;
+      if (!gpu) return;
+
+      const sourceTexture = uploadFloat32Texture(gpu.device, imageData, width, height);
+      loadSourceTexture(gpu, sourceTexture, width, height, imageData, fileType);
+    },
+    [loadSourceTexture],
+  );
+
+  // Handle DDS file loaded from drop
+  const handleDdsLoaded = useCallback(
+    (buffer: ArrayBuffer, fileName: string) => {
+      const gpu = gpuRef.current;
+      if (!gpu) return;
+
+      try {
+        const dds = parseDDS(buffer);
+        console.log(`[App] Parsed DDS: ${fileName} (${dds.width}x${dds.height}, ${dds.formatLabel})`);
+
+        const sourceTexture = uploadDDSTexture(gpu.device, dds);
+
+        // For metadata, we don't have per-pixel Float32 stats for DDS
+        // Create a placeholder metadata
+        sourceTextureRef.current?.destroy();
+        sourceTextureRef.current = sourceTexture;
+
+        if (!rendererRef.current) {
+          const renderer = new PipelineRenderer(gpu.device);
+          const stages = createColorPipelineStages();
+          renderer.setStages(stages);
+          renderer.setSize(dds.width, dds.height);
+          rendererRef.current = renderer;
+        } else {
+          rendererRef.current.setSize(dds.width, dds.height);
+        }
+
+        const metadata: ImageMetadata = {
+          width: dds.width,
+          height: dds.height,
+          channels: dds.formatLabel,
+          fileSizeMB: (buffer.byteLength / (1024 * 1024)).toFixed(2),
+          stats: null as any,
+        };
+
+        pipeline.selectStage(STAGE_FOR_FILE_TYPE['dds']);
+        setState({ kind: 'loaded', gpu, sourceTexture, metadata });
+      } catch (err) {
+        console.error(`[App] DDS load error for "${fileName}":`, err);
+      }
+    },
+    [pipeline],
+  );
+
+  // Re-render the pipeline whenever settings, stage toggles, or view exposure change.
+  // Synchronous in useEffect — every change triggers one GPU submission.
   useEffect(() => {
     if (state.kind !== 'loaded' || !rendererRef.current) return;
     const renderer = rendererRef.current;
 
     // Sync stage enable/disable from UI state to renderer stages.
-    // The renderer holds only the 6 color stages (Input Interp through Display Remap),
-    // which correspond to UI stage indices 3-8. UI stages 0-2 (EXR, BC Compress,
-    // BC Decompress) and 9 (Final Display) are not in the renderer.
+    // Renderer stages 0-5 correspond to UI stage indices 3-8.
     const pipelineStages = renderer.getStages();
     for (let i = 0; i < pipelineStages.length; i++) {
       const uiStage = pipeline.stages[i + 3];
@@ -145,28 +220,14 @@ export default function App() {
       }
     }
 
-    // Serialize UI settings -> GPU uniform buffer layout
+    // Serialize UI settings → GPU uniform buffer layout
     const gpuSettings = toGPUSettings(pipeline.settings, viewExposure);
-    const uniformData = serializeUniforms(gpuSettings);
-    renderer.updateUniforms(uniformData);
-
-    // Push GPU error scopes to catch validation errors
-    const device = state.gpu.device;
-    device.pushErrorScope('validation');
-    device.pushErrorScope('out-of-memory');
+    renderer.updateUniforms(serializeUniforms(gpuSettings));
 
     // Render all enabled stages
     renderer.render(state.sourceTexture);
 
-    // Pop error scopes and log any issues
-    device.popErrorScope().then((err) => {
-      if (err) console.warn(`[Pipeline] GPU out-of-memory: ${err.message}`);
-    });
-    device.popErrorScope().then((err) => {
-      if (err) console.warn(`[Pipeline] GPU validation error: ${err.message}`);
-    });
-
-    // Bump version so Preview2D re-renders (same texture ref, new content)
+    // Bump version so Preview2D + thumbnails re-render (same texture ref, new content)
     setRenderVersion((v) => v + 1);
   }, [state, pipeline.settings, pipeline.stages, viewExposure]);
 
@@ -176,24 +237,16 @@ export default function App() {
     const renderer = rendererRef.current;
     if (!renderer) return state.sourceTexture;
 
-    // UI stages 0-2 (EXR Load, BC Compress, BC Decompress): show source texture
-    if (stageIndex < 3) {
-      return state.sourceTexture;
-    }
+    if (stageIndex < 3) return state.sourceTexture;
 
-    // UI stages 3-8 map to renderer stages 0-5
-    // UI stage 9 (Final Display) = last renderer stage output
     const rendererIndex = Math.min(stageIndex - 3, renderer.getStages().length - 1);
     return renderer.getStageOutput(rendererIndex) ?? state.sourceTexture;
   }, [state]);
 
-  // Get the output texture for the currently selected filmstrip stage
   const getSelectedTexture = (): GPUTexture | null => {
     return getStageTexture(pipeline.selectedStageIndex);
   };
 
-  // Compute per-stage textures for filmstrip thumbnails
-  // Recomputed when renderVersion changes (after pipeline render)
   const stageTextures = useMemo((): (GPUTexture | null)[] => {
     if (state.kind !== 'loaded') return [];
     return pipeline.stages.map((_, i) => getStageTexture(i));
@@ -202,8 +255,16 @@ export default function App() {
 
   return (
     <div className="w-full h-full flex flex-col" style={{ background: 'var(--color-bg)' }}>
-      {/* Hidden canvas for initial WebGPU context */}
       <WebGPUCanvas ref={canvasRef} />
+
+      {/* Global drag-and-drop overlay — always active, invisible until dragging */}
+      {gpuRef.current && (
+        <DropZone
+          onExrLoaded={handleExrLoaded}
+          onDdsLoaded={handleDdsLoaded}
+          hasBC={gpuRef.current.hasBC}
+        />
+      )}
 
       {state.kind === 'initializing' && (
         <div className="flex-1 flex items-center justify-center">
@@ -220,15 +281,10 @@ export default function App() {
             <h2 className="text-xl font-semibold mb-4" style={{ color: 'var(--color-error)' }}>
               WebGPU Not Available
             </h2>
-            <p className="mb-4" style={{ color: 'var(--color-text-muted)' }}>
-              {state.message}
-            </p>
+            <p className="mb-4" style={{ color: 'var(--color-text-muted)' }}>{state.message}</p>
             <p style={{ color: 'var(--color-text-muted)' }}>
               WebGPU requires Chrome 113+, Edge 113+, or Firefox Nightly with
-              <code
-                className="px-1 mx-1 rounded text-sm"
-                style={{ background: 'var(--color-bg)' }}
-              >
+              <code className="px-1 mx-1 rounded text-sm" style={{ background: 'var(--color-bg)' }}>
                 dom.webgpu.enabled
               </code>
               set to true.
@@ -237,13 +293,8 @@ export default function App() {
         </div>
       )}
 
-      {state.kind === 'ready' && (
-        <DropZone onImageLoaded={handleImageLoaded} />
-      )}
-
       {state.kind === 'loaded' && (
         <>
-          {/* Filmstrip: horizontal strip of stage cards at the top */}
           <Filmstrip
             stages={pipeline.stages}
             selectedIndex={pipeline.selectedStageIndex}
@@ -255,9 +306,7 @@ export default function App() {
             renderVersion={renderVersion}
           />
 
-          {/* Main content: preview + controls panel side-by-side */}
           <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-            {/* Left: preview area (exposure header + 2D/3D view) */}
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
               <ViewExposureHeader exposure={viewExposure} onChange={setViewExposure} />
               <div style={{ flex: 1, overflow: 'hidden' }}>
@@ -271,7 +320,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Right: controls panel with settings + metadata */}
             <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
               <ControlsPanel
                 settings={pipeline.settings}

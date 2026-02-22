@@ -6,7 +6,7 @@ import decompressWGSL from '../shaders/bc-decompress.wgsl?raw';
  * Stage 3: BC Decompress
  *
  * Takes raw BC block data from BCCompressStage (Stage 2) and decompresses
- * it back to an rgba32float render target using WebGPU native
+ * it back to an rgba16float render target using WebGPU native
  * texture-compression-bc hardware decompression.
  *
  * The BC blocks are uploaded as a native compressed texture, and the GPU
@@ -54,7 +54,7 @@ export class BCDecompressStage implements PipelineStage {
   private createRenderTarget(width: number, height: number): void {
     this.renderTarget = this.device.createTexture({
       size: [width, height],
-      format: 'rgba32float',
+      format: 'rgba16float',
       usage:
         GPUTextureUsage.RENDER_ATTACHMENT |
         GPUTextureUsage.TEXTURE_BINDING |
@@ -80,7 +80,7 @@ export class BCDecompressStage implements PipelineStage {
         module: shaderModule,
         entryPoint: 'fs',
         targets: [{
-          format: 'rgba32float',
+          format: 'rgba16float',
           blend: undefined, // REQUIRED: no hardware blending on float32
         }],
       },

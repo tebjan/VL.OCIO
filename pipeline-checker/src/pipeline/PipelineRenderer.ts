@@ -75,6 +75,12 @@ export class PipelineRenderer {
    * @param sourceTexture - The EXR source texture (stage 0/1 output).
    */
   render(sourceTexture: GPUTexture): void {
+    // Use error scope on first render to catch validation issues
+    const isFirst = !this.hasLoggedFirstRender;
+    if (isFirst) {
+      this.device.pushErrorScope('validation');
+    }
+
     const encoder = this.device.createCommandEncoder();
     let currentInput = sourceTexture;
 
@@ -90,10 +96,22 @@ export class PipelineRenderer {
     this.device.queue.submit([encoder.finish()]);
 
     // Log first successful render with stage info
-    if (!this.hasLoggedFirstRender) {
+    if (isFirst) {
       this.hasLoggedFirstRender = true;
       const enabledCount = this.stages.filter(s => s.enabled).length;
       console.log(`[Pipeline] Rendered ${enabledCount}/${this.stages.length} enabled stages (${this.width}x${this.height})`);
+
+      // Check for validation errors during first render
+      this.device.popErrorScope().then((error) => {
+        if (error) {
+          console.error(
+            `%c[Pipeline] RENDER VALIDATION ERROR: ${error.message}`,
+            'color: red; font-weight: bold; font-size: 14px;',
+          );
+        } else {
+          console.log('[Pipeline] First render: no validation errors');
+        }
+      });
 
       // One-time diagnostic: read back center pixel from each stage output
       this.readbackDiagnostic(sourceTexture);
@@ -130,7 +148,8 @@ export class PipelineRenderer {
    * Uses copyTextureToBuffer + mapAsync for GPU readback.
    */
   private async readPixel(texture: GPUTexture, x: number, y: number): Promise<Float32Array> {
-    const bytesPerPixel = 16; // rgba32float = 4 x 4 bytes
+    const isFloat16 = texture.format === 'rgba16float';
+    const bytesPerPixel = isFloat16 ? 8 : 16;
     const bytesPerRow = 256;  // minimum 256-byte alignment for copyTextureToBuffer
 
     const stagingBuffer = this.device.createBuffer({
@@ -147,8 +166,14 @@ export class PipelineRenderer {
     this.device.queue.submit([encoder.finish()]);
 
     await stagingBuffer.mapAsync(GPUMapMode.READ);
-    const data = new Float32Array(stagingBuffer.getMappedRange(0, bytesPerPixel));
-    const pixel = new Float32Array(data); // copy before unmap
+    const pixel = new Float32Array(4);
+    if (isFloat16) {
+      const dv = new DataView(stagingBuffer.getMappedRange(0, bytesPerPixel));
+      for (let i = 0; i < 4; i++) pixel[i] = dv.getFloat16(i * 2, true);
+    } else {
+      const data = new Float32Array(stagingBuffer.getMappedRange(0, bytesPerPixel));
+      pixel.set(data);
+    }
     stagingBuffer.unmap();
     stagingBuffer.destroy();
 

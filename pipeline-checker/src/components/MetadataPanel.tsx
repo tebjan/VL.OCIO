@@ -10,7 +10,7 @@ export interface ImageMetadata {
   height: number;
   channels: string;
   fileSizeMB: string;
-  stats: ChannelStats;
+  stats: ChannelStats | null;
 }
 
 export interface MetadataPanelProps {
@@ -55,7 +55,7 @@ export function MetadataPanel({ metadata }: MetadataPanelProps) {
   const channelNames = ['R', 'G', 'B', 'A'] as const;
 
   return (
-    <Section title="EXR Metadata" defaultOpen={false}>
+    <Section title="Image Info" defaultOpen={false}>
       <div
         style={{
           display: 'grid',
@@ -66,24 +66,28 @@ export function MetadataPanel({ metadata }: MetadataPanelProps) {
         <span style={LABEL_STYLE}>Resolution</span>
         <span style={VALUE_STYLE}>{width} x {height}</span>
 
-        <span style={LABEL_STYLE}>Channels</span>
+        <span style={LABEL_STYLE}>Format</span>
         <span style={VALUE_STYLE}>{channels}</span>
 
         <span style={LABEL_STYLE}>File size</span>
         <span style={VALUE_STYLE}>{fileSizeMB} MB</span>
 
-        <span style={{ ...LABEL_STYLE, gridColumn: '1 / -1', marginTop: '6px' }}>
-          Per-channel range
-        </span>
-
-        {channelNames.map((ch, i) => (
-          <div key={ch} style={{ display: 'contents' }}>
-            <span style={LABEL_STYLE}>{ch}</span>
-            <span style={VALUE_STYLE}>
-              [{stats.min[i].toFixed(5)}, {stats.max[i].toFixed(5)}]
+        {stats && (
+          <>
+            <span style={{ ...LABEL_STYLE, gridColumn: '1 / -1', marginTop: '6px' }}>
+              Per-channel range
             </span>
-          </div>
-        ))}
+
+            {channelNames.map((ch, i) => (
+              <div key={ch} style={{ display: 'contents' }}>
+                <span style={LABEL_STYLE}>{ch}</span>
+                <span style={VALUE_STYLE}>
+                  [{stats.min[i].toFixed(5)}, {stats.max[i].toFixed(5)}]
+                </span>
+              </div>
+            ))}
+          </>
+        )}
       </div>
     </Section>
   );

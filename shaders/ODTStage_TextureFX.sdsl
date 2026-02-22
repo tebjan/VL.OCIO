@@ -1,0 +1,66 @@
+// ============================================================================
+// ODTStage_TextureFX.sdsl
+// Stage 7: ODT (Device Transform) -- applies output device transform,
+//          behavior depends on tonemap operator
+// ============================================================================
+//
+// Per-stage TextureFX shader for the pipeline checker transpiler.
+// Applies the ODT (output device transform). Behavior depends on the
+// tonemap operator used in the RRT stage:
+//
+//   ACES 1.3 (op=2): Input is AP1 from RRT -> apply ODT (spline c9 +
+//                     dim surround + desat + gamut)
+//   ACES 2.0 (op=3): Input is normalized AP1 from RRT -> apply ODT
+//                     (gamut convert)
+//   All others (0, 1, 4-11): Input is already Linear Rec.709 from RRT
+//                             -> passthrough (ODT was baked into tonemap)
+//
+// ============================================================================
+
+shader ODTStage_TextureFX : FilterBase, HDRTonemap
+{
+    // Must match the RRT stage's tonemap operator
+    [EnumType("VL.OCIO.TonemapOperator, VL.OCIO")]
+    int TonemapOp = 0;
+
+    // Target output color space (determines which ODT variant to use)
+    // 0=Linear709, 1=Linear2020, 2=ACEScg, 3=ACEScc, 4=ACEScct, 5=sRGB, 6=PQ2020, 7=HLG2020, 8=scRGB
+    [EnumType("VL.OCIO.HDRColorSpace, VL.OCIO")]
+    int OutputSpace = 0;
+
+    // Peak luminance for ACES 2.0 ODT
+    float PeakBrightness = 1000.0;
+
+    float4 Filter(float4 tex0col)
+    {
+        float3 color = tex0col.rgb;
+        float3 result;
+
+        if (TonemapOp == 2)         // ACES 1.3: apply ODT
+        {
+            // Determine target gamut based on output space
+            // Rec.2020 targets: Linear2020=1, PQ=6, HLG=7
+            bool isRec2020Target = (OutputSpace == 1 || OutputSpace == 6 || OutputSpace == 7);
+
+            if (isRec2020Target)
+                result = ACES13_ODT_Rec2020_1000nits(color);
+            else
+                result = ACES13_ODT_Rec709_100nits(color);
+        }
+        else if (TonemapOp == 3)    // ACES 2.0: apply ODT (gamut convert)
+        {
+            bool isRec2020Target = (OutputSpace == 1 || OutputSpace == 6 || OutputSpace == 7);
+
+            if (isRec2020Target)
+                result = ACES20_ODT_Rec2020(color);
+            else
+                result = ACES20_ODT_Rec709(color);
+        }
+        else                        // All others: passthrough (already display-ready Linear Rec.709)
+        {
+            result = color;
+        }
+
+        return float4(result, tex0col.a);
+    }
+};

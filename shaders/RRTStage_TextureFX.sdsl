@@ -1,0 +1,62 @@
+// ============================================================================
+// RRTStage_TextureFX.sdsl
+// Stage 6: RRT (Tonemap Curve) -- applies tonemap operator, input is
+//          Linear AP1, output varies by operator
+// ============================================================================
+//
+// Per-stage TextureFX shader for the pipeline checker transpiler.
+// Applies the tonemap curve (RRT). Input is Linear AP1 from the
+// color grade stage.
+//
+// Output depends on operator:
+//   ACES 1.3 (op=2): AP1 values (ready for ODT)
+//   ACES 2.0 (op=3): Normalized AP1 [0-1]
+//   All others (0, 1, 4-11): Linear Rec.709 (tonemap bakes in conversion)
+//
+// NOTE: Output color space varies by operator. The ODT stage must know
+// which operator was used to interpret its input correctly. This matches
+// the pipeline checker's existing behavior.
+//
+// ============================================================================
+
+shader RRTStage_TextureFX : FilterBase, TonemapOperators
+{
+    // Tonemapping operator
+    // 0=None, 1=ACES(Fit), 2=ACES1.3, 3=ACES2.0, 4=AgX, 5=GT, 6=Uncharted2,
+    // 7=KhronosPBR, 8=Lottes, 9=Reinhard, 10=ReinhardExt, 11=HejlBurgess
+    [EnumType("VL.OCIO.TonemapOperator, VL.OCIO")]
+    int TonemapOp = 0;
+
+    // Pre-tonemap exposure adjustment (in stops)
+    float Exposure = 0.0;
+
+    // Shoulder strength for Reinhard Extended (affects highlight rolloff)
+    float WhitePoint = 4.0;
+
+    // Peak luminance for ACES 2.0 tonescale
+    float PeakBrightness = 1000.0;
+
+    float4 Filter(float4 tex0col)
+    {
+        float3 color = tex0col.rgb;
+        float3 result;
+
+        if (TonemapOp == 2)         // ACES 1.3: RRT only, output is AP1
+        {
+            color *= exp2(Exposure);
+            result = ACES13_RRT(color);
+        }
+        else if (TonemapOp == 3)    // ACES 2.0: tonescale only, output is normalized AP1
+        {
+            color *= exp2(Exposure);
+            result = ACES20_RRT(color, PeakBrightness);
+        }
+        else                        // All others (0, 1, 4-11): dispatcher handles conversion
+        {
+            // Input is ACEScg (space=2), output is Linear Rec.709
+            result = ApplyTonemap(color, 2, TonemapOp, Exposure, WhitePoint);
+        }
+
+        return float4(result, tex0col.a);
+    }
+};

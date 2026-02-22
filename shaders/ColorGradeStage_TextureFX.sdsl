@@ -1,0 +1,54 @@
+// ============================================================================
+// ColorGradeStage_TextureFX.sdsl
+// Stage 5: Color Grading -- grade in ACEScct (log) or ACEScg (linear),
+//          output is Linear AP1
+// ============================================================================
+//
+// Per-stage TextureFX shader for the pipeline checker transpiler.
+// Isolates the color grading stage from HDRGrade. Input is any
+// HDRColorSpace, output is always Linear AP1 (ACEScg) for handoff
+// to the RRT stage.
+//
+// All grading parameters are inherited from the HDRGrade mixin --
+// they are NOT redeclared here. The HDRGrade mixin declares:
+//   InputSpace, GradingSpace, Exposure, Contrast, Saturation,
+//   Temperature, Tint, Highlights, Shadows, Vibrance,
+//   Lift, Gamma, Gain, Offset, ShadowColor, MidtoneColor,
+//   HighlightColor, HighlightSoftClip, ShadowSoftClip,
+//   HighlightKnee, ShadowKnee, VignetteStrength, VignetteRadius,
+//   VignetteSoftness
+//
+// IMPORTANT: Output is always Linear AP1 (no EncodeOutput step).
+// This differs from HDRGrade_TextureFX which has an OutputSpace pin.
+// The stage pipeline expects AP1 handoff to the RRT stage.
+//
+// ============================================================================
+
+shader ColorGradeStage_TextureFX : FilterBase, HDRGrade
+{
+    float4 Filter(float4 tex0col)
+    {
+        float3 color = tex0col.rgb;
+
+        // Step 1: Decode input to Linear AP1
+        float3 linearAP1 = DecodeInput(color);
+
+        // Step 2: Apply grading in chosen space
+        if (GradingSpace == 0)
+            linearAP1 = ApplyGradingLog(linearAP1);
+        else
+            linearAP1 = ApplyGradingLinear(linearAP1);
+
+        // Step 3: Vignette (screen-space, applied in AP1 linear)
+        if (VignetteStrength > 0.001)
+        {
+            float2 centered = streams.TexCoord - 0.5;
+            float vigDist = length(centered);
+            float vigMask = smoothstep(VignetteRadius, VignetteRadius - VignetteSoftness, vigDist);
+            linearAP1 *= lerp(1.0, vigMask, VignetteStrength);
+        }
+
+        // Output is Linear AP1 (ACEScg) -- no output encoding
+        return float4(linearAP1, tex0col.a);
+    }
+};

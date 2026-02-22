@@ -9,8 +9,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "clsx": "^2.1.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "tailwind-merge": "^3.5.0",
     "three": "^0.171.0"
   },
   "devDependencies": {

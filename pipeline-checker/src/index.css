@@ -1,5 +1,20 @@
 @import "tailwindcss";
 
+@theme {
+  --color-surface-50: #fafafa;
+  --color-surface-100: #f4f4f5;
+  --color-surface-200: #e4e4e7;
+  --color-surface-300: #d4d4d8;
+  --color-surface-400: #a1a1aa;
+  --color-surface-500: #71717a;
+  --color-surface-600: #52525b;
+  --color-surface-700: #3f3f46;
+  --color-surface-800: #27272a;
+  --color-surface-900: #18181b;
+  --color-surface-950: #09090b;
+  --font-family-mono: 'JetBrains Mono', 'Fira Code', 'Monaco', monospace;
+}
+
 /* Color-neutral dark theme custom properties */
 :root {
   --color-bg: #0d0d0d;

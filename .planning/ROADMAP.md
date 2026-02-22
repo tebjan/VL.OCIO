@@ -42,10 +42,11 @@ Plans:
   2. The grading controls' visual appearance (colors, spacing, fonts) matches the existing `ui/` project's Tailwind theme
   3. All parameter names, value ranges, and defaults in the pipeline-checker match those defined in `ui/src/types/settings.ts`
   4. No duplicated or custom grading UI code remains in the pipeline-checker source
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 02-01: Replace grading controls with ui/ components
+- [ ] 02-01-PLAN.md — Copy ui/ components, install deps, configure Tailwind v4 surface palette, create enum mapping layer
+- [ ] 02-02-PLAN.md — Rewrite ControlsPanel with ui/ grading components, update peripheral imports, delete old ui/ directory
 
 ### Phase 3: GPU Testing Framework
 **Goal**: Every pipeline module is verified by automated tests that actually run WebGPU shaders and validate output
@@ -70,5 +71,5 @@ Phases execute in numeric order: 1 -> 2 -> 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Pipeline Rendering | 2/2 | Complete | 2026-02-22 |
-| 2. Grading UI Integration | 0/1 | Not started | - |
+| 2. Grading UI Integration | 0/2 | Not started | - |
 | 3. GPU Testing Framework | 0/2 | Not started | - |

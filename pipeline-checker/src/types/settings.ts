@@ -61,6 +61,9 @@ export interface Vec3 {
   z: number;
 }
 
+/** Alias for compatibility with ui/ components that use Vector3 name */
+export type Vector3 = Vec3;
+
 export interface PipelineSettings {
   // Input (Stages 1-4)
   inputColorSpace: number;
@@ -107,7 +110,7 @@ export interface PipelineSettings {
 
 export function createDefaultSettings(): PipelineSettings {
   return {
-    inputColorSpace: 0,
+    inputColorSpace: 2,  // ACEScg
     bcFormat: 5,
     gradingSpace: 0,
     gradeExposure: 0,

@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect, useCallback, useState } from 'react';
 import { alignedBytesPerRow, copyAlignedToContiguous } from '../pipeline/TextureUtils';
 import {
   WebGPURenderer,
@@ -12,8 +12,7 @@ import {
   ClampToEdgeWrapping,
   LinearSRGBColorSpace,
   SpriteNodeMaterial,
-  Mesh,
-  PlaneGeometry,
+  Sprite,
   BoxGeometry,
   EdgesGeometry,
   LineBasicMaterial,
@@ -24,11 +23,13 @@ import {
   instancedArray,
   Fn,
   instanceIndex,
-  texture,
+  textureLoad,
   uniform,
+  ivec2,
   vec2,
   vec3,
   float,
+  int,
   select,
   dot,
   clamp,
@@ -50,6 +51,8 @@ export interface HeightmapViewProps {
   active: boolean;
   /** Incremented after each pipeline render to trigger readback refresh. */
   renderVersion?: number;
+  /** 3D heightmap display settings from HeightmapControls. */
+  settings?: HeightmapSettings;
 }
 
 /**
@@ -64,6 +67,9 @@ class HeightmapScene {
   controls: OrbitControls;
   private animationId = 0;
   private disposed = false;
+  computeFailed = false;
+  /** Callback invoked on unrecoverable errors (render loop, device loss). */
+  onError: ((message: string) => void) | null = null;
 
   // --- TSL compute state ---
   /** GPU storage buffer: per-instance vec3 positions */
@@ -79,8 +85,8 @@ class HeightmapScene {
   dsHeight = 0;
   /** Current instance count */
   instanceCount = 0;
-  /** Billboard sprite mesh (instanced via .count) */
-  private billboardMesh: Mesh | null = null;
+  /** Billboard sprite (instanced via .count with SpriteNodeMaterial for billboarding) */
+  private billboardMesh: Sprite | null = null;
   /** Wireframe bounding box */
   private wireframeBox: LineSegments | null = null;
   /** Current aspect ratio (height/width) for camera/wireframe */
@@ -112,10 +118,20 @@ class HeightmapScene {
     this.controls = null!;
   }
 
-  async init(canvas: HTMLCanvasElement): Promise<void> {
-    this.renderer = new WebGPURenderer({ canvas, antialias: true });
+  async init(canvas: HTMLCanvasElement, sharedDevice: GPUDevice): Promise<void> {
+    // Share the pipeline's GPUDevice to avoid creating a second device
+    // (dual WebGPU devices cause device loss / page blackout on many drivers)
+    this.renderer = new WebGPURenderer({ canvas, antialias: true, device: sharedDevice } as any);
     await this.renderer.init();
     this.renderer.setPixelRatio(window.devicePixelRatio);
+
+    // Monitor for device loss
+    sharedDevice.lost.then((info: GPUDeviceLostInfo) => {
+      if (info.reason !== 'destroyed') {
+        console.error('[HeightmapView] GPU device lost:', info.message);
+        this.onError?.(`GPU device lost: ${info.message}`);
+      }
+    });
 
     this.canvasEl = canvas;
     this.controls = new OrbitControls(this.camera, canvas);
@@ -223,12 +239,8 @@ class HeightmapScene {
       const gx = idx.mod(uDsW);
       const gy = idx.div(uDsW);
 
-      // UV at center of each downsampled cell
-      const uv = vec2(
-        gx.add(0.5).div(uDsW),
-        gy.add(0.5).div(uDsH),
-      );
-      const pixel = texture(srcTex, uv);
+      // textureLoad with integer coords — no sampler needed, valid in compute shaders
+      const pixel = textureLoad(srcTex, ivec2(int(gx), int(gy)));
 
       // --- Height mode selection (GPU-side select() chain) ---
       const h = select(uHM.equal(0),
@@ -278,10 +290,9 @@ class HeightmapScene {
   setupMesh(fullWidth: number, fullHeight: number): void {
     if (!this.positionBuffer || !this.colorBuffer) return;
 
-    // Remove previous mesh
+    // Remove previous sprite
     if (this.billboardMesh) {
       this.scene.remove(this.billboardMesh);
-      this.billboardMesh.geometry.dispose();
       (this.billboardMesh.material as SpriteNodeMaterial).dispose();
       this.billboardMesh = null;
     }
@@ -294,27 +305,28 @@ class HeightmapScene {
     const cellW = 1.0 / this.dsWidth;
     const cellD = aspect / this.dsHeight;
 
-    // SpriteNodeMaterial reads from compute storage buffers via .toAttribute()
-    // (.toAttribute() exists at runtime but not in @types/three)
+    // SpriteNodeMaterial reads storage buffers:
+    //   positionNode uses .toAttribute() — exposes buffer as per-instance vertex attribute
+    //   colorNode uses .element(instanceIndex) — works in fragment shader context
+    // (Pattern from Three.js webgpu_compute_particles.html)
     const material = new SpriteNodeMaterial();
-    material.positionNode = (this.positionBuffer as any).toAttribute();
-    material.colorNode = (this.colorBuffer as any).toAttribute();
+    // @ts-expect-error Three.js WebGPU API: toAttribute() exists at runtime but missing from @types/three
+    material.positionNode = this.positionBuffer.toAttribute();
+    material.colorNode = this.colorBuffer.element(instanceIndex);
     material.scaleNode = vec2(cellW, cellD);
     material.depthWrite = true;
     material.depthTest = true;
     material.sizeAttenuation = true;
     material.transparent = false;
 
-    // PlaneGeometry(1,1) is instanced by setting mesh.count
-    const geometry = new PlaneGeometry(1, 1);
-    const mesh = new Mesh(geometry, material);
-    // mesh.count enables instanced rendering in Three.js WebGPU
-    // (not in @types/three but exists at runtime)
-    (mesh as any).count = this.instanceCount;
-    mesh.frustumCulled = false;
+    // Sprite provides internal billboard quad; .count enables instanced rendering
+    const sprite = new Sprite(material);
+    // @ts-expect-error Three.js WebGPU API: Sprite.count exists at runtime but missing from @types/three
+    sprite.count = this.instanceCount;
+    sprite.frustumCulled = false;
 
-    this.billboardMesh = mesh;
-    this.scene.add(mesh);
+    this.billboardMesh = sprite;
+    this.scene.add(sprite);
   }
 
   /**
@@ -402,6 +414,7 @@ class HeightmapScene {
    * Frame the entire object: keep current orbit angles, adjust distance to fit bounding box.
    */
   frameObject(): void {
+    if (!this.controls) return;
     const diagonal = Math.sqrt(
       1.0 + this.currentAspect * this.currentAspect +
       this.currentHeightScale * this.currentHeightScale,
@@ -426,17 +439,27 @@ class HeightmapScene {
     const loop = async () => {
       if (this.disposed) return;
       try {
-        this.controls.update();
+        if (this.controls) this.controls.update();
         // Run TSL compute to update position/color buffers, then render
-        if (this.computeNode) {
-          await this.renderer.computeAsync(this.computeNode);
+        if (this.computeNode && !this.computeFailed && this.renderer) {
+          try {
+            await this.renderer.computeAsync(this.computeNode);
+          } catch (computeErr) {
+            console.error('[HeightmapView] Compute shader failed:', computeErr);
+            this.computeFailed = true;
+            this.onError?.('3D compute shader failed — scene will render without heightmap data');
+          }
         }
+        // Re-check disposed after await — cleanup may have run during compute
+        if (this.disposed || !this.renderer) return;
         await this.renderer.renderAsync(this.scene, this.camera);
       } catch (err) {
+        if (this.disposed) return; // Error during shutdown is expected
         console.error('[HeightmapView] Render loop error:', err);
-        // Stop the loop on error to prevent a crash spiral
+        this.onError?.(`3D render error: ${(err as Error).message}`);
         return;
       }
+      if (this.disposed) return;
       this.animationId = requestAnimationFrame(loop);
     };
     this.animationId = requestAnimationFrame(loop);
@@ -459,17 +482,23 @@ class HeightmapScene {
       window.removeEventListener('keydown', this.boundKeyDown);
     }
 
-    if (this.billboardMesh) {
-      this.billboardMesh.geometry.dispose();
-      (this.billboardMesh.material as SpriteNodeMaterial).dispose();
-    }
-    if (this.wireframeBox) {
-      this.wireframeBox.geometry.dispose();
-      (this.wireframeBox.material as Material).dispose();
-    }
-    this.controls?.dispose();
-    this.sourceTexture?.dispose();
-    this.renderer?.dispose();
+    // Wrap GPU resource cleanup in try/catch — dispose can be called while
+    // async init is still in flight, leaving Three.js objects partially
+    // constructed. Errors here are non-fatal (resources will be GC'd).
+    try {
+      if (this.billboardMesh) {
+        (this.billboardMesh.material as SpriteNodeMaterial).dispose();
+      }
+    } catch { /* safe to ignore */ }
+    try {
+      if (this.wireframeBox) {
+        this.wireframeBox.geometry.dispose();
+        (this.wireframeBox.material as Material).dispose();
+      }
+    } catch { /* safe to ignore */ }
+    try { if (this.controls) this.controls.dispose(); } catch { /* safe to ignore */ }
+    try { if (this.sourceTexture) this.sourceTexture.dispose(); } catch { /* safe to ignore */ }
+    try { if (this.renderer) this.renderer.dispose(); } catch { /* safe to ignore */ }
   }
 }
 
@@ -477,12 +506,13 @@ class HeightmapScene {
  * React component wrapping the Three.js WebGPU heightmap scene.
  * Creates its own canvas; the scene persists across tab switches.
  */
-export function HeightmapView({ stageTexture, device, active, renderVersion }: HeightmapViewProps) {
+export function HeightmapView({ stageTexture, device, active, renderVersion, settings }: HeightmapViewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<HeightmapScene | null>(null);
   const initRef = useRef(false);
   const readbackIdRef = useRef(0);
+  const [error, setError] = useState<string | null>(null);
 
   // Initialize scene on first activation
   useEffect(() => {
@@ -490,10 +520,22 @@ export function HeightmapView({ stageTexture, device, active, renderVersion }: H
     initRef.current = true;
 
     const scene = new HeightmapScene();
+    scene.onError = setError;
     sceneRef.current = scene;
 
-    scene.init(canvasRef.current)
+    if (!device) {
+      setError('No GPU device available for 3D view');
+      return;
+    }
+
+    // Track whether cleanup ran before init finished (React Strict Mode / HMR)
+    let cancelled = false;
+
+    scene.init(canvasRef.current, device)
       .then(() => {
+        // Don't proceed if component was unmounted during async init
+        // @ts-expect-error HeightmapScene.disposed is accessed for cleanup check; private access is intentional
+        if (cancelled || scene.disposed) return;
         // Initial size
         const container = containerRef.current;
         if (container) {
@@ -503,15 +545,18 @@ export function HeightmapView({ stageTexture, device, active, renderVersion }: H
         scene.startRenderLoop();
       })
       .catch((err) => {
+        if (cancelled) return;
         console.error('[HeightmapView] Init failed:', err);
+        setError(`3D initialization failed: ${(err as Error).message}`);
       });
 
     return () => {
+      cancelled = true;
       scene.dispose();
       sceneRef.current = null;
       initRef.current = false;
     };
-  }, [active]);
+  }, [active, device]);
 
   // GPU readback: read stage texture pixels and feed to Three.js DataTexture
   const doReadback = useCallback(async (
@@ -521,10 +566,17 @@ export function HeightmapView({ stageTexture, device, active, renderVersion }: H
     readbackId: number,
   ) => {
     const { width, height } = tex;
-    // Downsample to max ~256 on longest side for 3D view
-    const downsample = Math.max(1, Math.floor(Math.max(width, height) / 256));
+    // Downsample to max ~256 on longest side for 3D view (caps instance count at ~65K)
+    const MAX_SIDE = 256;
+    const minDownsample = Math.max(1, Math.floor(Math.max(width, height) / MAX_SIDE));
+    const downsample = Math.max(minDownsample, 1);
     const dsW = Math.max(1, Math.floor(width / downsample));
     const dsH = Math.max(1, Math.floor(height / downsample));
+
+    if (dsW * dsH > 100_000) {
+      console.warn(`[HeightmapView] Instance count ${dsW * dsH} exceeds safety limit, skipping`);
+      return;
+    }
 
     const bytesPerRow = alignedBytesPerRow(width);
     const bufferSize = bytesPerRow * height;
@@ -543,7 +595,12 @@ export function HeightmapView({ stageTexture, device, active, renderVersion }: H
     );
     pipelineDevice.queue.submit([encoder.finish()]);
 
-    await stagingBuffer.mapAsync(GPUMapMode.READ);
+    // Timeout prevents infinite hang if GPU stalls
+    const mapPromise = stagingBuffer.mapAsync(GPUMapMode.READ);
+    const timeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('GPU readback timeout (5s)')), 5000),
+    );
+    await Promise.race([mapPromise, timeout]);
 
     // Abort if a newer readback started while we were waiting
     if (readbackIdRef.current !== readbackId) {
@@ -620,11 +677,19 @@ export function HeightmapView({ stageTexture, device, active, renderVersion }: H
     return () => observer.disconnect();
   }, []);
 
+  // Forward HeightmapSettings to the scene
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene || !settings) return;
+    scene.updateSettings(settings);
+  }, [settings]);
+
   return (
     <div
       ref={containerRef}
       style={{
-        flex: 1,
+        width: '100%',
+        height: '100%',
         position: 'relative',
         overflow: 'hidden',
         display: active ? 'block' : 'none',
@@ -634,6 +699,44 @@ export function HeightmapView({ stageTexture, device, active, renderVersion }: H
         ref={canvasRef}
         style={{ width: '100%', height: '100%', display: 'block' }}
       />
+      {error && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(13, 13, 13, 0.85)',
+            pointerEvents: 'auto',
+          }}
+        >
+          <div style={{ textAlign: 'center', maxWidth: '400px', padding: '24px' }}>
+            <div style={{ color: '#e06060', fontSize: '14px', marginBottom: '12px' }}>{error}</div>
+            <button
+              onClick={() => {
+                setError(null);
+                const scene = sceneRef.current;
+                if (scene) {
+                  scene.computeFailed = false;
+                  scene.startRenderLoop();
+                }
+              }}
+              style={{
+                padding: '6px 16px',
+                borderRadius: '4px',
+                border: '1px solid var(--color-border, #444)',
+                background: 'var(--surface-600, #333)',
+                color: 'var(--color-text, #ccc)',
+                cursor: 'pointer',
+                fontSize: '13px',
+              }}
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

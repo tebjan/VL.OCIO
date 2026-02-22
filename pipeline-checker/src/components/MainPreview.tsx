@@ -1,10 +1,64 @@
-import { useState, useCallback, useEffect, lazy, Suspense } from 'react';
+import { Component, useState, useCallback, useEffect, lazy, Suspense } from 'react';
+import type { ReactNode, ErrorInfo } from 'react';
 import { Preview2D } from './Preview2D';
 import { HeightmapControls } from './HeightmapControls';
 import {
   type HeightmapSettings,
   createDefaultHeightmapSettings,
 } from '../types/pipeline';
+import { STAGE_NAMES } from '../pipeline/types/StageInfo';
+
+/**
+ * Error boundary that catches render/lifecycle errors from HeightmapView
+ * and displays a fallback instead of crashing the entire app.
+ */
+class HeightmapErrorBoundary extends Component<
+  { children: ReactNode; onReset: () => void },
+  { error: string | null }
+> {
+  state: { error: string | null } = { error: null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error: error.message };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error('[HeightmapErrorBoundary]', error, info.componentStack);
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          height: '100%', background: 'var(--color-bg, #0d0d0d)',
+        }}>
+          <div style={{ textAlign: 'center', maxWidth: '400px', padding: '24px' }}>
+            <div style={{ color: '#e06060', fontSize: '14px', marginBottom: '12px' }}>
+              3D view crashed: {this.state.error}
+            </div>
+            <button
+              onClick={() => {
+                this.setState({ error: null });
+                this.props.onReset();
+              }}
+              style={{
+                padding: '6px 16px', borderRadius: '4px',
+                border: '1px solid var(--color-border, #444)',
+                background: 'var(--surface-600, #333)',
+                color: 'var(--color-text, #ccc)',
+                cursor: 'pointer', fontSize: '13px',
+              }}
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // Lazy-load HeightmapView to prevent Three.js WebGPU module from being
 // evaluated at app startup. Three.js WebGPU imports can interfere with
@@ -19,6 +73,8 @@ export interface MainPreviewProps {
   format: GPUTextureFormat;
   stageTexture: GPUTexture | null;
   renderVersion?: number;
+  applySRGB?: boolean;
+  selectedStageIndex: number;
 }
 
 type ViewMode = '2d' | '3d';
@@ -34,7 +90,11 @@ export function MainPreview({
   format,
   stageTexture,
   renderVersion,
+  applySRGB,
+  selectedStageIndex,
 }: MainPreviewProps) {
+  // Final Display (last stage) always renders with sRGB gamma applied
+  const effectiveApplySRGB = (selectedStageIndex === STAGE_NAMES.length - 1) ? true : applySRGB;
   const [mode, setMode] = useState<ViewMode>('2d');
   const [heightmapSettings, setHeightmapSettings] = useState<HeightmapSettings>(
     createDefaultHeightmapSettings,
@@ -101,24 +161,28 @@ export function MainPreview({
             format={format}
             stageTexture={stageTexture}
             renderVersion={renderVersion}
+            applySRGB={effectiveApplySRGB}
           />
         </div>
         {ever3D && (
-          <Suspense fallback={
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              height: '100%', color: 'var(--color-text-muted)',
-            }}>
-              Loading 3D view...
-            </div>
-          }>
-            <LazyHeightmapView
-              stageTexture={stageTexture}
-              device={device}
-              active={mode === '3d'}
-              renderVersion={renderVersion}
-            />
-          </Suspense>
+          <HeightmapErrorBoundary onReset={() => setEver3D(false)}>
+            <Suspense fallback={
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                height: '100%', color: 'var(--color-text-muted)',
+              }}>
+                Loading 3D view...
+              </div>
+            }>
+              <LazyHeightmapView
+                stageTexture={stageTexture}
+                device={device}
+                active={mode === '3d'}
+                renderVersion={renderVersion}
+                settings={heightmapSettings}
+              />
+            </Suspense>
+          </HeightmapErrorBoundary>
         )}
       </div>
 

@@ -202,6 +202,13 @@ export default function App() {
     [pipeline],
   );
 
+  // Sync RRT/ODT toggle settings to stage enable/disable.
+  // Stage 4 = RRT, Stage 5 = ODT.
+  useEffect(() => {
+    pipeline.toggleStage(4, pipeline.settings.rrtEnabled);
+    pipeline.toggleStage(5, pipeline.settings.odtEnabled);
+  }, [pipeline.settings.rrtEnabled, pipeline.settings.odtEnabled, pipeline.toggleStage]);
+
   // Re-render the pipeline whenever settings, stage toggles, or view exposure change.
   // Synchronous in useEffect — every change triggers one GPU submission.
   useEffect(() => {
@@ -302,6 +309,7 @@ export default function App() {
             format={state.gpu.format}
             stageTextures={stageTextures}
             renderVersion={renderVersion}
+            applySRGB={pipeline.settings.applySRGB}
           />
 
           <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
@@ -311,6 +319,8 @@ export default function App() {
                 format={state.gpu.format}
                 stageTexture={getSelectedTexture()}
                 renderVersion={renderVersion}
+                applySRGB={pipeline.settings.applySRGB}
+                selectedStageIndex={pipeline.selectedStageIndex}
               />
             </div>
 

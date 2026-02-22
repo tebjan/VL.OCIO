@@ -31,7 +31,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 5: Display Logic** - Final Display always sRGB, toggle scoping, DDS stage graying
 - [x] **Phase 6: Tooltips** - Explanatory tooltips on all pipeline stages and UI controls (completed 2026-02-22)
 - [ ] **Phase 6.1: Session Persistence** - INSERTED — Persist dropped image and selected view across page reload
-- [ ] **Phase 7: SDSL Stage Shaders** - Create 6 per-stage SDSL TextureFX shaders that compose from existing mixins
+- [x] **Phase 7: SDSL Stage Shaders** - Create 6 per-stage SDSL TextureFX shaders that compose from existing mixins (completed 2026-02-22)
 - [ ] **Phase 8: Transpiler Tool** - Build .NET console app that converts SDSL to WGSL via Stride compiler, DXC, and Naga
 - [ ] **Phase 9: Verification & Integration** - Validate mathematical parity, replace hand-ported WGSL, commit generated output
 
@@ -149,7 +149,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 07-01-PLAN.md -- Create 6 per-stage SDSL TextureFX shaders and verify in Stride
+- [x] 07-01-PLAN.md -- Create 6 per-stage SDSL TextureFX shaders and verify in Stride
 
 ### Phase 8: Transpiler Tool
 **Goal**: A .NET console app converts the 6 SDSL stage shaders to ready-to-use WGSL files via the Stride compiler, DXC, and Naga toolchain
@@ -187,6 +187,6 @@ Phases execute in numeric order: 7 -> 8 -> 9
 | 5. Display Logic | v1.1 | 1/1 | Complete | 2026-02-22 |
 | 6. Tooltips | 1/1 | Complete    | 2026-02-22 | - |
 | 6.1 Session Persistence | v1.1 | 1/1 | Complete | 2026-02-22 |
-| 7. SDSL Stage Shaders | v1.2 | 0/1 | Planned | - |
+| 7. SDSL Stage Shaders | v1.2 | 1/1 | Complete | 2026-02-22 |
 | 8. Transpiler Tool | v1.2 | 0/? | Not started | - |
 | 9. Verification & Integration | v1.2 | 0/? | Not started | - |

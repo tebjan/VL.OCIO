@@ -7,8 +7,9 @@ interface DropZoneProps {
   /**
    * Called when an EXR image is loaded from file drop.
    * imageData is Float32Array RGBA, width/height in pixels.
+   * rawBuffer is the original EXR ArrayBuffer (for session persistence).
    */
-  onExrLoaded: (imageData: Float32Array, width: number, height: number, fileType: LoadedFileType) => void;
+  onExrLoaded: (imageData: Float32Array, width: number, height: number, fileType: LoadedFileType, rawBuffer: ArrayBuffer, fileName: string) => void;
   /** Called when a DDS file is dropped. buffer is the raw ArrayBuffer. */
   onDdsLoaded: (buffer: ArrayBuffer, fileName: string) => void;
   /** Whether the app has BC texture compression support. */
@@ -61,7 +62,7 @@ export function DropZone({ onExrLoaded, onDdsLoaded, hasBC }: DropZoneProps) {
         }
 
         console.log(`[DropZone] Loaded EXR: ${fileName} (${width}x${height})`);
-        onExrLoaded(float32Data, width, height, 'exr');
+        onExrLoaded(float32Data, width, height, 'exr', buffer, fileName);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error(`[DropZone] EXR load error:`, err);

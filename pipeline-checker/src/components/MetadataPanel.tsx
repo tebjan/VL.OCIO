@@ -1,4 +1,4 @@
-import { Section } from './grading/Section';
+import { Section } from './ui';
 
 export interface ChannelStats {
   min: [number, number, number, number];
@@ -10,6 +10,7 @@ export interface ImageMetadata {
   height: number;
   channels: string;
   fileSizeMB: string;
+  fileName?: string;
   stats: ChannelStats | null;
 }
 
@@ -51,7 +52,7 @@ const VALUE_STYLE: React.CSSProperties = {
 export function MetadataPanel({ metadata }: MetadataPanelProps) {
   if (!metadata) return null;
 
-  const { width, height, channels, fileSizeMB, stats } = metadata;
+  const { width, height, channels, fileSizeMB, fileName, stats } = metadata;
   const channelNames = ['R', 'G', 'B', 'A'] as const;
 
   return (
@@ -63,6 +64,13 @@ export function MetadataPanel({ metadata }: MetadataPanelProps) {
           gap: '2px 12px',
         }}
       >
+        {fileName && (
+          <>
+            <span style={LABEL_STYLE}>File</span>
+            <span style={{ ...VALUE_STYLE, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={fileName}>{fileName}</span>
+          </>
+        )}
+
         <span style={LABEL_STYLE}>Resolution</span>
         <span style={VALUE_STYLE}>{width} x {height}</span>
 

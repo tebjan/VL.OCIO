@@ -17,6 +17,7 @@ import {
 } from './pipeline/PipelineUniforms';
 import type { PipelineSettings } from './types/settings';
 import { STAGE_NAMES } from './pipeline/types/StageInfo';
+import { saveImageData, loadImageData, saveViewState, loadViewState } from './lib/sessionStore';
 
 type AppState =
   | { kind: 'initializing' }
@@ -85,7 +86,7 @@ export default function App() {
 
   // Load an rgba16float source texture and transition to 'loaded' state
   const loadSourceTexture = useCallback(
-    (gpu: GPUContext, sourceTexture: GPUTexture, width: number, height: number, imageData: Float32Array, fileType: LoadedFileType) => {
+    (gpu: GPUContext, sourceTexture: GPUTexture, width: number, height: number, imageData: Float32Array, fileType: LoadedFileType, fileName?: string) => {
       sourceTextureRef.current?.destroy();
       sourceTextureRef.current = sourceTexture;
 
@@ -105,6 +106,7 @@ export default function App() {
         height,
         channels: 'RGBA Float32',
         fileSizeMB: (imageData.byteLength / (1024 * 1024)).toFixed(2),
+        fileName,
         stats,
       };
 
@@ -119,7 +121,7 @@ export default function App() {
     [pipeline],
   );
 
-  // Initialize WebGPU and auto-load sample image.
+  // Initialize WebGPU, restore session or auto-load sample image.
   // Cleanup handles React StrictMode double-init (dev mode runs effects twice).
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -128,7 +130,7 @@ export default function App() {
     let cancelled = false;
 
     initWebGPU(canvas)
-      .then((gpu) => {
+      .then(async (gpu) => {
         if (cancelled) return;
 
         // Destroy previous GPU resources (StrictMode re-init)
@@ -138,7 +140,63 @@ export default function App() {
         sourceTextureRef.current = null;
 
         gpuRef.current = gpu;
-        // Auto-load sample image — no start screen
+
+        // Try to restore a previously dropped image from IndexedDB
+        const stored = await loadImageData();
+        if (cancelled) return;
+
+        if (stored) {
+          console.log(`[App] Restoring session: ${stored.fileName} (${stored.fileType})`);
+
+          if (stored.fileType === 'exr') {
+            // Re-parse the EXR from the stored raw buffer
+            try {
+              const { EXRLoader } = await import('three/addons/loaders/EXRLoader.js');
+              if (cancelled) return;
+              const loader = new EXRLoader();
+              const result = loader.parse(stored.data);
+
+              if (result?.data) {
+                let float32Data: Float32Array;
+                if (result.data instanceof Float32Array) {
+                  float32Data = result.data;
+                } else {
+                  float32Data = new Float32Array(result.data.length);
+                  for (let i = 0; i < result.data.length; i++) {
+                    float32Data[i] = result.data[i] as number;
+                  }
+                }
+                const sourceTexture = uploadFloat32Texture(gpu.device, float32Data, result.width, result.height);
+                loadSourceTexture(gpu, sourceTexture, result.width, result.height, float32Data, 'exr', stored.fileName);
+
+                // Restore stage selection
+                const savedStage = loadViewState();
+                if (savedStage !== null) {
+                  pipeline.selectStage(savedStage);
+                }
+                return;
+              }
+            } catch (err) {
+              console.warn('[App] Failed to restore EXR session, loading sample:', err);
+            }
+          } else if (stored.fileType === 'dds') {
+            try {
+              handleDdsLoaded(stored.data, stored.fileName, true);
+
+              // Restore stage selection (after DDS sets its default)
+              const savedStage = loadViewState();
+              if (savedStage !== null) {
+                // Use setTimeout to let the DDS load complete its stage selection first
+                setTimeout(() => pipeline.selectStage(savedStage), 0);
+              }
+              return;
+            } catch (err) {
+              console.warn('[App] Failed to restore DDS session, loading sample:', err);
+            }
+          }
+        }
+
+        // Fallback: auto-load sample image — no start screen
         const sample = generateSampleImage();
         const sourceTexture = uploadFloat32Texture(gpu.device, sample.data, sample.width, sample.height);
         loadSourceTexture(gpu, sourceTexture, sample.width, sample.height, sample.data, 'sample');
@@ -151,21 +209,26 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Handle EXR image loaded from drop
+  // Handle EXR image loaded from drop (or session restore)
   const handleExrLoaded = useCallback(
-    (imageData: Float32Array, width: number, height: number, fileType: LoadedFileType) => {
+    (imageData: Float32Array, width: number, height: number, fileType: LoadedFileType, rawBuffer?: ArrayBuffer, fileName?: string) => {
       const gpu = gpuRef.current;
       if (!gpu) return;
 
       const sourceTexture = uploadFloat32Texture(gpu.device, imageData, width, height);
-      loadSourceTexture(gpu, sourceTexture, width, height, imageData, fileType);
+      loadSourceTexture(gpu, sourceTexture, width, height, imageData, fileType, fileName);
+
+      // Persist to IndexedDB (only user-dropped files, not sample)
+      if (rawBuffer && fileName && fileType === 'exr') {
+        saveImageData(rawBuffer, 'exr', fileName);
+      }
     },
     [loadSourceTexture],
   );
 
-  // Handle DDS file loaded from drop
+  // Handle DDS file loaded from drop (or session restore)
   const handleDdsLoaded = useCallback(
-    (buffer: ArrayBuffer, fileName: string) => {
+    (buffer: ArrayBuffer, fileName: string, skipPersist?: boolean) => {
       const gpu = gpuRef.current;
       if (!gpu) return;
 
@@ -195,18 +258,32 @@ export default function App() {
           height: dds.height,
           channels: dds.formatLabel,
           fileSizeMB: (buffer.byteLength / (1024 * 1024)).toFixed(2),
+          fileName,
           stats: null as any,
         };
 
         pipeline.selectStage(STAGE_FOR_FILE_TYPE['dds']);
         pipeline.setStageAvailability([0, 1], false);
         setState({ kind: 'loaded', gpu, sourceTexture, metadata });
+
+        // Persist to IndexedDB (skip if restoring from session)
+        if (!skipPersist) {
+          saveImageData(buffer, 'dds', fileName);
+        }
       } catch (err) {
         console.error(`[App] DDS load error for "${fileName}":`, err);
       }
     },
     [pipeline],
   );
+
+  // Persist selected stage index to localStorage whenever it changes.
+  // Only persist when a user-dropped image is loaded (not the sample).
+  useEffect(() => {
+    if (state.kind === 'loaded' && state.metadata.fileName) {
+      saveViewState(pipeline.selectedStageIndex);
+    }
+  }, [pipeline.selectedStageIndex, state]);
 
   // Sync RRT/ODT toggle settings to stage enable/disable.
   // Stage 4 = RRT, Stage 5 = ODT.

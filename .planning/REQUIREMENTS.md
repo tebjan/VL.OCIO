@@ -18,7 +18,7 @@
 - [x] **UI-01**: Color grading controls use the exact components from the existing `ui/` project (Slider, Select, ColorWheel, LiftGammaGain, Section)
 - [x] **UI-02**: Tailwind theme and styling matches the existing `ui/` project exactly
 - [x] **UI-03**: Color grading parameter names, ranges, and defaults match the existing `ui/` settings types
-- [ ] **UI-04**: Remove all duplicated/custom grading UI code from pipeline-checker
+- [x] **UI-04**: Remove all duplicated/custom grading UI code from pipeline-checker
 
 ### Testing Framework
 
@@ -58,7 +58,7 @@
 | UI-01 | Phase 2 | Complete |
 | UI-02 | Phase 2 | Complete |
 | UI-03 | Phase 2 | Complete |
-| UI-04 | Phase 2 | Pending |
+| UI-04 | Phase 2 | Complete |
 | TEST-01 | Phase 3 | Pending |
 | TEST-02 | Phase 3 | Pending |
 | TEST-03 | Phase 3 | Pending |

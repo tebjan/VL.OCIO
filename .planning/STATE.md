@@ -10,28 +10,28 @@ See: .planning/PROJECT.md (updated 2026-02-22)
 ## Current Position
 
 Phase: 2 of 3 (Grading UI Integration)
-Plan: 1 of 2 in current phase
-Status: In Progress
-Last activity: 2026-02-22 -- Completed 02-01-PLAN.md
+Plan: 2 of 2 in current phase
+Status: Phase Complete
+Last activity: 2026-02-22 -- Completed 02-02-PLAN.md
 
-Progress: [██████░░░░] 60%
+Progress: [████████░░] 80%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 3
+- Total plans completed: 4
 - Average duration: 5 min
-- Total execution time: 0.27 hours
+- Total execution time: 0.32 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01-pipeline-rendering | 2 | 12 min | 6 min |
-| 02-grading-ui-integration | 1 | 4 min | 4 min |
+| 02-grading-ui-integration | 2 | 7 min | 3.5 min  |
 
 **Recent Trend:**
-- Last 5 plans: 7 min, 5 min, 4 min
+- Last 5 plans: 7 min, 5 min, 4 min, 3 min
 - Trend: Fast
 
 *Updated after each plan completion*
@@ -50,6 +50,9 @@ Recent decisions affecting current work:
 - Set initial canvas size synchronously from getBoundingClientRect before ResizeObserver fires
 - Added Vector3 type alias in Task 1 instead of Task 2 to avoid compilation failure (Rule 3 auto-fix)
 - Used Tailwind v4 @theme directive for surface palette instead of CSS custom properties for proper utility class support
+- Used inline select for pipeline-specific numeric dropdowns (BC Format, ODT Target) since grading/Select is string-generic
+- Used individual R/G/B Sliders for Vec3 params without ColorWheel equivalent
+- Converted HeightmapControls numeric selects to string-based for grading/Select compatibility
 
 ### Pending Todos
 
@@ -62,5 +65,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-22
-Stopped at: Completed 02-01-PLAN.md
+Stopped at: Completed 02-02-PLAN.md (Phase 2 complete)
 Resume file: None

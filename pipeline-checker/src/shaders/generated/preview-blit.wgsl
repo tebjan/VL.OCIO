@@ -1,5 +1,6 @@
 // Preview blit shader — renders stage rgba16float texture to canvas.
-// Faithful display: raw pixel values clamped to 0-1. No gamma, no exposure, no transforms.
+// Supports multi-image side-by-side layout: each image occupies a horizontal
+// slot defined by slotLeft/slotRight in combined-row UV space.
 // Uses textureSample with linear filtering for correct downscaling in thumbnails.
 
 struct VertexOutput {
@@ -28,7 +29,13 @@ struct ViewUniforms {
     panY: f32,
     applySRGB: f32,
     canvasAspect: f32,
-    textureAspect: f32,
+    combinedAspect: f32,  // single image: textureAspect; multi: sum of all aspects
+    slotLeft: f32,        // left edge in combined-row UV [0,1]
+    slotRight: f32,       // right edge in combined-row UV [0,1]
+    borderR: f32,
+    borderG: f32,
+    borderB: f32,
+    borderWidth: f32,     // 0 = no border, >0 = border thickness in local UV
 };
 
 // sRGB transfer function (IEC 61966-2-1)
@@ -40,29 +47,49 @@ fn linearToSRGB(linear: vec3<f32>) -> vec3<f32> {
 
 @fragment
 fn fs(in: VertexOutput) -> @location(0) vec4<f32> {
-    // Aspect ratio correction: fit texture proportionally inside canvas
+    // Aspect ratio correction: fit combined row proportionally inside canvas
     var aspectScale = vec2<f32>(1.0, 1.0);
-    if (view.textureAspect > view.canvasAspect) {
-        // Texture wider than canvas: fit width, letterbox vertically
-        aspectScale.y = view.textureAspect / view.canvasAspect;
+    if (view.combinedAspect > view.canvasAspect) {
+        // Combined row wider than canvas: fit width, letterbox vertically
+        aspectScale.y = view.combinedAspect / view.canvasAspect;
     } else {
-        // Texture taller than canvas: fit height, pillarbox horizontally
-        aspectScale.x = view.canvasAspect / view.textureAspect;
+        // Combined row taller than canvas: fit height, pillarbox horizontally
+        aspectScale.x = view.canvasAspect / view.combinedAspect;
     }
 
-    // Transform UV by aspect correction, zoom, and pan
-    let uv = (in.uv - 0.5) * aspectScale / view.zoom + vec2<f32>(view.panX, view.panY) + 0.5;
+    // Transform UV to "world UV" in combined-row space [0,1]
+    let worldUV = (in.uv - 0.5) * aspectScale / view.zoom + vec2<f32>(view.panX, view.panY) + 0.5;
+
+    // Remap world UV to local texture UV [0,1] within this image's slot
+    let localU = (worldUV.x - view.slotLeft) / (view.slotRight - view.slotLeft);
+    let localV = worldUV.y;
+    let texUV = clamp(vec2<f32>(localU, localV), vec2<f32>(0.0), vec2<f32>(1.0));
 
     // Sample unconditionally (textureSample requires uniform control flow)
-    let clampedUV = clamp(uv, vec2<f32>(0.0), vec2<f32>(1.0));
-    let color = textureSample(stageTexture, texSampler, clampedUV);
+    let color = textureSample(stageTexture, texSampler, texUV);
+
+    // Discard fragments outside this image's slot
+    let inSlot = worldUV.x >= view.slotLeft && worldUV.x <= view.slotRight
+              && worldUV.y >= 0.0 && worldUV.y <= 1.0;
+    if (!inSlot) {
+        discard;
+    }
 
     // Clamp to 0-1, optionally apply linear → sRGB gamma
     let clamped = clamp(color.rgb, vec3<f32>(0.0), vec3<f32>(1.0));
     let display = select(clamped, linearToSRGB(clamped), view.applySRGB > 0.5);
 
-    // Out-of-bounds: dark border (applied after sampling to keep uniform control flow)
-    let border = vec4<f32>(0.05, 0.05, 0.05, 1.0);
-    let oob = uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0;
-    return select(vec4<f32>(display, color.a), border, oob);
+    // Colored border for selected pipeline
+    let bw = view.borderWidth;
+    if (bw > 0.0) {
+        let dx = min(localU, 1.0 - localU);
+        let dy = min(localV, 1.0 - localV);
+        let edgeDist = min(dx, dy);
+        if (edgeDist < bw) {
+            let borderColor = vec3<f32>(view.borderR, view.borderG, view.borderB);
+            return vec4<f32>(borderColor, 1.0);
+        }
+    }
+
+    return vec4<f32>(display, color.a);
 }

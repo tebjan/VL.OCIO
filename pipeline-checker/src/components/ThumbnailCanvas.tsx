@@ -51,13 +51,17 @@ function getOrCreateSharedGPU(device: GPUDevice, format: GPUTextureFormat): Shar
     primitive: { topology: 'triangle-list' },
   });
 
-  // Uniform buffer: exposure=0, zoom=1, pan=0,0, applySRGB=1, canvasAspect=1, textureAspect=1
-  // canvasAspect and textureAspect are updated per-render since texture sizes vary
+  // Uniform buffer: 13 floats (52 bytes) matching ViewUniforms struct.
+  // canvasAspect and combinedAspect are updated per-render since texture sizes vary.
   const uniformBuffer = device.createBuffer({
-    size: 28,
+    size: 52,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
-  device.queue.writeBuffer(uniformBuffer, 0, new Float32Array([0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0]));
+  device.queue.writeBuffer(uniformBuffer, 0, new Float32Array([
+    0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0,  // viewExp, zoom, panXY, sRGB, canvasAsp, combAsp
+    0.0, 1.0,                              // slotLeft=0, slotRight=1 (full canvas)
+    0.0, 0.0, 0.0, 0.0,                   // borderRGB=0, borderWidth=0
+  ]));
 
   const sampler = device.createSampler({
     magFilter: 'linear',

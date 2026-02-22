@@ -1,12 +1,11 @@
 import { Component, useState, useCallback, useEffect, lazy, Suspense } from 'react';
 import type { ReactNode, ErrorInfo } from 'react';
-import { Preview2D } from './Preview2D';
+import { Preview2D, type PreviewLayer } from './Preview2D';
 import { HeightmapControls } from './HeightmapControls';
 import {
   type HeightmapSettings,
   createDefaultHeightmapSettings,
 } from '../types/pipeline';
-import { STAGE_NAMES } from '../pipeline/types/StageInfo';
 
 /**
  * Error boundary that catches render/lifecycle errors from HeightmapView
@@ -71,10 +70,11 @@ const LazyHeightmapView = lazy(() =>
 export interface MainPreviewProps {
   device: GPUDevice;
   format: GPUTextureFormat;
+  /** Multi-pipeline layers for 2D side-by-side rendering. */
+  layers: PreviewLayer[];
+  /** Single texture for 3D heightmap (selected pipeline only). */
   stageTexture: GPUTexture | null;
   renderVersion?: number;
-  applySRGB?: boolean;
-  selectedStageIndex: number;
   stageName?: string;
 }
 
@@ -89,14 +89,11 @@ type ViewMode = '2d' | '3d';
 export function MainPreview({
   device,
   format,
+  layers,
   stageTexture,
   renderVersion,
-  applySRGB,
-  selectedStageIndex,
   stageName,
 }: MainPreviewProps) {
-  // Final Display (last stage) always renders with sRGB gamma applied
-  const effectiveApplySRGB = (selectedStageIndex === STAGE_NAMES.length - 1) ? true : applySRGB;
   const [mode, setMode] = useState<ViewMode>('2d');
   const [heightmapSettings, setHeightmapSettings] = useState<HeightmapSettings>(
     createDefaultHeightmapSettings,
@@ -176,9 +173,8 @@ export function MainPreview({
           <Preview2D
             device={device}
             format={format}
-            stageTexture={stageTexture}
+            layers={layers}
             renderVersion={renderVersion}
-            applySRGB={effectiveApplySRGB}
           />
         </div>
         {ever3D && (

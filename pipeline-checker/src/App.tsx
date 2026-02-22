@@ -8,7 +8,9 @@ import { MainPreview } from './components/MainPreview';
 import { MetadataPanel, computeChannelStats, type ImageMetadata, type ChannelStats } from './components/MetadataPanel';
 import { usePipelineManager } from './hooks/usePipelineManager';
 import { uploadFloat32Texture, uploadFloat16Texture, uploadDDSTexture } from './pipeline/TextureUtils';
-import { MAX_PIPELINES } from './types/PipelineInstance';
+import { MAX_PIPELINES, PIPELINE_COLORS } from './types/PipelineInstance';
+import { STAGE_NAMES } from './pipeline/types/StageInfo';
+import type { PreviewLayer } from './components/Preview2D';
 import { parseDDS } from './pipeline/DDSParser';
 import {
   serializeUniforms,
@@ -373,6 +375,24 @@ export default function App() {
     return inst.stageStates.map((_, i) => getStageTexture(i, inst));
   }, [getStageTexture]);
 
+  const buildPreviewLayers = useCallback((): PreviewLayer[] => {
+    const lastStageIdx = STAGE_NAMES.length - 1;
+    return manager.pipelines
+      .map((pipeline) => {
+        const texture = getStageTexture(pipeline.selectedStageIndex, pipeline);
+        if (!texture) return null;
+        const color = PIPELINE_COLORS[pipeline.colorIndex];
+        const isLastStage = pipeline.selectedStageIndex === lastStageIdx;
+        return {
+          texture,
+          borderColor: [color.rgb[0], color.rgb[1], color.rgb[2]] as [number, number, number],
+          isSelected: pipeline.id === manager.selectedPipelineId,
+          applySRGB: isLastStage ? true : (pipeline.settings.applySRGB ?? true),
+        };
+      })
+      .filter((l): l is PreviewLayer => l !== null);
+  }, [manager.pipelines, manager.selectedPipelineId, getStageTexture]);
+
   const gpu = state.kind === 'ready' ? state.gpu : null;
 
   return (
@@ -436,10 +456,9 @@ export default function App() {
               <MainPreview
                 device={gpu.device}
                 format={gpu.format}
+                layers={buildPreviewLayers()}
                 stageTexture={getSelectedTexture()}
                 renderVersion={manager.renderVersion}
-                applySRGB={manager.selectedSettings.applySRGB}
-                selectedStageIndex={manager.selectedStageIndex}
                 stageName={manager.selectedStages[manager.selectedStageIndex]?.name}
               />
             </div>

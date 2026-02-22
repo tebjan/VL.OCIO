@@ -1,14 +1,19 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
 import previewBlitWGSL from '../shaders/generated/preview-blit.wgsl?raw';
 
+export interface PreviewLayer {
+  texture: GPUTexture;
+  borderColor: [number, number, number];
+  isSelected: boolean;
+  applySRGB: boolean;
+}
+
 export interface Preview2DProps {
   device: GPUDevice;
   format: GPUTextureFormat;
-  stageTexture: GPUTexture | null;
+  layers: PreviewLayer[];
   /** Incremented after each pipeline render to trigger preview refresh. */
   renderVersion?: number;
-  /** Whether to apply linear→sRGB conversion in the preview shader. Default true. */
-  applySRGB?: boolean;
 }
 
 interface DragState {
@@ -18,7 +23,16 @@ interface DragState {
   panY: number;
 }
 
-export function Preview2D({ device, format, stageTexture, renderVersion, applySRGB = true }: Preview2DProps) {
+/** Uniform buffer stride per layer — must satisfy minUniformBufferOffsetAlignment (256). */
+const UNIFORM_STRIDE = 256;
+/** Max layers supported. */
+const MAX_LAYERS = 4;
+/** Uniform struct size: 13 x f32 = 52 bytes. */
+const UNIFORM_SIZE = 52;
+/** Selected pipeline border width in local UV space. */
+const SELECTED_BORDER_WIDTH = 0.008;
+
+export function Preview2D({ device, format, layers, renderVersion }: Preview2DProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const gpuRef = useRef<{
@@ -66,8 +80,9 @@ export function Preview2D({ device, format, stageTexture, renderVersion, applySR
       primitive: { topology: 'triangle-list' },
     });
 
+    // Uniform buffer sized for MAX_LAYERS with 256-byte alignment per layer
     const uniformBuffer = device.createBuffer({
-      size: 28, // 7 x f32: viewExposure, zoom, panX, panY, applySRGB, canvasAspect, textureAspect
+      size: UNIFORM_STRIDE * MAX_LAYERS,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
 
@@ -115,7 +130,7 @@ export function Preview2D({ device, format, stageTexture, renderVersion, applySR
   // Render frame when dependencies change
   useEffect(() => {
     const gpu = gpuRef.current;
-    if (!gpu || !stageTexture) return;
+    if (!gpu || layers.length === 0) return;
 
     cancelAnimationFrame(frameRef.current);
     frameRef.current = requestAnimationFrame(() => {
@@ -124,35 +139,71 @@ export function Preview2D({ device, format, stageTexture, renderVersion, applySR
       if (!canvas || canvas.width === 0 || canvas.height === 0) return;
 
       try {
-        // Write uniforms: viewExposure, zoom, panX, panY, applySRGB, canvasAspect, textureAspect
         const canvasAspect = canvas.width / canvas.height;
-        const textureAspect = stageTexture.width / stageTexture.height;
-        const data = new Float32Array([0, zoom, panX, panY, applySRGB ? 1.0 : 0.0, canvasAspect, textureAspect]);
-        device.queue.writeBuffer(gpu.uniformBuffer, 0, data);
 
-        // Create bind group for current stage texture
-        const bindGroup = device.createBindGroup({
-          layout: gpu.bindGroupLayout,
-          entries: [
-            { binding: 0, resource: stageTexture.createView() },
-            { binding: 1, resource: { buffer: gpu.uniformBuffer } },
-            { binding: 2, resource: gpu.sampler },
-          ],
-        });
+        // Compute side-by-side layout: each image scaled to same height, placed left-to-right
+        const aspects = layers.map((l) => l.texture.width / l.texture.height);
+        const combinedAspect = aspects.reduce((s, a) => s + a, 0);
 
+        // Slot positions in combined-row UV [0,1]
+        const slots: { left: number; right: number }[] = [];
+        let cumX = 0;
+        for (const a of aspects) {
+          const left = cumX / combinedAspect;
+          cumX += a;
+          slots.push({ left, right: cumX / combinedAspect });
+        }
+
+        // Write uniform data for each layer at 256-byte aligned offsets
+        for (let i = 0; i < layers.length; i++) {
+          const layer = layers[i];
+          const slot = slots[i];
+          const data = new Float32Array([
+            0,                              // viewExposure
+            zoom,                           // zoom
+            panX,                           // panX
+            panY,                           // panY
+            layer.applySRGB ? 1.0 : 0.0,   // applySRGB
+            canvasAspect,                   // canvasAspect
+            combinedAspect,                 // combinedAspect
+            slot.left,                      // slotLeft
+            slot.right,                     // slotRight
+            layer.borderColor[0],           // borderR
+            layer.borderColor[1],           // borderG
+            layer.borderColor[2],           // borderB
+            layer.isSelected ? SELECTED_BORDER_WIDTH : 0.0,  // borderWidth
+          ]);
+          device.queue.writeBuffer(gpu.uniformBuffer, i * UNIFORM_STRIDE, data);
+        }
+
+        // Multi-pass rendering: one pass per layer
+        const targetView = gpu.ctx.getCurrentTexture().createView();
         const encoder = device.createCommandEncoder();
-        const pass = encoder.beginRenderPass({
-          colorAttachments: [{
-            view: gpu.ctx.getCurrentTexture().createView(),
-            loadOp: 'clear',
-            storeOp: 'store',
-            clearValue: { r: 0.05, g: 0.05, b: 0.05, a: 1 },
-          }],
-        });
-        pass.setPipeline(gpu.pipeline);
-        pass.setBindGroup(0, bindGroup);
-        pass.draw(3);
-        pass.end();
+
+        for (let i = 0; i < layers.length; i++) {
+          const bindGroup = device.createBindGroup({
+            layout: gpu.bindGroupLayout,
+            entries: [
+              { binding: 0, resource: layers[i].texture.createView() },
+              { binding: 1, resource: { buffer: gpu.uniformBuffer, offset: i * UNIFORM_STRIDE, size: UNIFORM_SIZE } },
+              { binding: 2, resource: gpu.sampler },
+            ],
+          });
+
+          const pass = encoder.beginRenderPass({
+            colorAttachments: [{
+              view: targetView,
+              loadOp: i === 0 ? 'clear' : 'load',
+              storeOp: 'store',
+              ...(i === 0 ? { clearValue: { r: 0.05, g: 0.05, b: 0.05, a: 1 } } : {}),
+            }],
+          });
+          pass.setPipeline(gpu.pipeline);
+          pass.setBindGroup(0, bindGroup);
+          pass.draw(3);
+          pass.end();
+        }
+
         device.queue.submit([encoder.finish()]);
       } catch {
         // getCurrentTexture() can throw during resize — safe to skip this frame
@@ -160,7 +211,7 @@ export function Preview2D({ device, format, stageTexture, renderVersion, applySR
     });
 
     return () => cancelAnimationFrame(frameRef.current);
-  }, [device, stageTexture, zoom, panX, panY, applySRGB, renderVersion, canvasSize]);
+  }, [device, layers, zoom, panX, panY, renderVersion, canvasSize]);
 
   // Mouse wheel zoom (centered on cursor).
   // Uses a native event listener with { passive: false } to ensure preventDefault()
@@ -236,6 +287,8 @@ export function Preview2D({ device, format, stageTexture, renderVersion, applySR
     setPanY(0.0);
   }, []);
 
+  const hasAnyTexture = layers.length > 0;
+
   return (
     <div
       ref={containerRef}
@@ -261,7 +314,7 @@ export function Preview2D({ device, format, stageTexture, renderVersion, applySR
         onDoubleClick={handleDoubleClick}
         onContextMenu={(e) => e.preventDefault()}
       />
-      {!stageTexture && (
+      {!hasAnyTexture && (
         <div
           style={{
             position: 'absolute',

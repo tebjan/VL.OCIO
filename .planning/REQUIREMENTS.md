@@ -38,8 +38,35 @@ Requirements for usability polish milestone. Each maps to roadmap phases.
 
 ### Tooltips
 
-- [ ] **TIPS-01**: Each pipeline stage thumbnail shows an explanatory tooltip describing what that stage does (appears after ~1s delay)
-- [ ] **TIPS-02**: Each UI control in the pipeline/display panels shows an explanatory tooltip describing its function (appears after ~1s delay)
+- [x] **TIPS-01**: Each pipeline stage thumbnail shows an explanatory tooltip describing what that stage does (appears after ~1s delay)
+- [x] **TIPS-02**: Each UI control in the pipeline/display panels shows an explanatory tooltip describing its function (appears after ~1s delay)
+
+## v1.2 Requirements
+
+Requirements for shader transpiler milestone. Ensures SDSL is the single source of truth.
+
+### SDSL Stage Shaders
+
+- [ ] **SDSL-01**: Each pipeline stage (input-convert, color-grade, rrt, odt, output-encode, display-remap) has its own SDSL TextureFX shader that composes from existing mixins
+- [ ] **SDSL-02**: Per-stage SDSL shaders contain only the functions needed for that stage (no dead code)
+- [ ] **SDSL-03**: Per-stage SDSL shaders work in Stride/vvvv as standalone TextureFX nodes
+
+### Transpiler Tool
+
+- [ ] **TOOL-01**: .NET 8 console app at `tools/ShaderTranspiler/` references Stride NuGet packages for SDSL→HLSL
+- [ ] **TOOL-02**: Transpiler invokes DXC to convert HLSL→SPIR-V
+- [ ] **TOOL-03**: Transpiler invokes Naga to convert SPIR-V→WGSL
+- [ ] **TOOL-04**: Transpiler produces 6 ready-to-use WGSL files in `pipeline-checker/src/shaders/generated/`
+
+### Verification
+
+- [ ] **VRFY-01**: Automated script validates mathematical parity between SDSL and generated WGSL (transfer function round-trips, matrix compositions, mid-gray passthrough)
+- [ ] **VRFY-02**: Pipeline checker renders identically with generated WGSL vs. the current hand-ported WGSL
+
+### Integration
+
+- [ ] **INTG-01**: Generated WGSL files replace hand-ported files and pipeline checker builds successfully
+- [ ] **INTG-02**: Generated WGSL files are committed to git (transpiler runs on-demand, not at build time)
 
 ## Future Requirements
 
@@ -56,11 +83,11 @@ Requirements for usability polish milestone. Each maps to roadmap phases.
 
 | Feature | Reason |
 |---------|--------|
-| GPU testing framework | Deferred from v1.0, separate milestone |
-| New pipeline stages | Improve existing, don't add new |
-| Grading UI redesign | Already integrated in v1.0 Phase 2 |
-| Performance optimization | Not a usability concern for this milestone |
-| Mobile/touch support | Desktop-only tool |
+| GPU testing framework | Deferred from v1.0, separate concern |
+| preview-blit.wgsl transpilation | Pipeline-checker UI code, not SDSL-sourced color math |
+| Modifying existing monolithic SDSL shaders | New per-stage shaders compose from them |
+| Build-time transpilation | WGSL committed to git, transpiler runs on-demand |
+| C++/CLI OCIO wrapper changes | Transpiler is a separate tool |
 
 ## Traceability
 
@@ -81,16 +108,27 @@ Requirements for usability polish milestone. Each maps to roadmap phases.
 | DISP-01 | Phase 5 | Complete |
 | DISP-02 | Phase 5 | Complete |
 | DISP-03 | Phase 5 | Complete |
-| TIPS-01 | Phase 6 | Pending |
-| TIPS-02 | Phase 6 | Pending |
+| TIPS-01 | Phase 6 | Complete |
+| TIPS-02 | Phase 6 | Complete |
+| SDSL-01 | TBD | Pending |
+| SDSL-02 | TBD | Pending |
+| SDSL-03 | TBD | Pending |
+| TOOL-01 | TBD | Pending |
+| TOOL-02 | TBD | Pending |
+| TOOL-03 | TBD | Pending |
+| TOOL-04 | TBD | Pending |
+| VRFY-01 | TBD | Pending |
+| VRFY-02 | TBD | Pending |
+| INTG-01 | TBD | Pending |
+| INTG-02 | TBD | Pending |
 
 **Coverage:**
 
-- v1.1 requirements: 8 total
-- Mapped to phases: 8
-- Unmapped: 0
+- v1.2 requirements: 11 total
+- Mapped to phases: 0
+- Unmapped: 11 ⚠️
 
 ---
 
 *Requirements defined: 2026-02-22*
-*Last updated: 2026-02-22 after v1.1 roadmap created*
+*Last updated: 2026-02-22 after v1.2 requirements defined*

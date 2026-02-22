@@ -4,24 +4,22 @@
 
 See: .planning/PROJECT.md (updated 2026-02-22)
 
-**Core value:** The user should always know what they're looking at and be able to inspect any stage without accidental interactions
-**Current focus:** Phase 5 - Display Logic -- COMPLETE
+**Core value:** Every pipeline stage must render correctly — SDSL shaders are the single source of truth for both Stride and the pipeline-checker
+**Current focus:** Milestone v1.2 - Shader Transpiler
 
 ## Current Position
 
-Phase: 5 of 6 (Display Logic) -- COMPLETE
+Phase: 6 of 6 (Tooltips) -- COMPLETE
 Plan: 1 of 1 in current phase
-Status: Phase complete
-Last activity: 2026-02-22 -- Completed 05-01 sRGB scoping and DDS stage graying
-
-Progress: [################....] 83% (5/6 phases complete)
+Status: All phases complete
+Last activity: 2026-02-22 -- Completed 06-01 tooltips plan
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 6
+- Total plans completed: 7
 - Average duration: 5 min
-- Total execution time: 0.44 hours
+- Total execution time: 0.52 hours
 
 **By Phase:**
 
@@ -31,9 +29,10 @@ Progress: [################....] 83% (5/6 phases complete)
 | 02-grading-ui-integration | 2 | 7 min | 3.5 min |
 | 04-interaction-clarity | 1 | 3 min | 3 min |
 | 05-display-logic | 1 | 4 min | 4 min |
+| 06-tooltips | 1 | 5 min | 5 min |
 
 **Recent Trend:**
-- Last 5 plans: 5 min, 4 min, 3 min, 3 min, 4 min
+- Last 5 plans: 4 min, 3 min, 3 min, 4 min, 5 min
 - Trend: Fast
 
 *Updated after each plan completion*
@@ -52,6 +51,8 @@ Recent decisions affecting current work:
 - Used inline select for pipeline-specific numeric dropdowns since grading/Select is string-generic
 - sRGB override computed at caller level (MainPreview, Filmstrip) not inside StageCard -- keeps StageCard a pure display component
 - unavailableStages tracked as Set<number> in usePipeline for O(1) lookup in selectStage guard
+- Used native HTML title attributes for tooltips -- zero JS, no tooltip library, no DOM overlays
+- Wrapped shared Select/Slider components in div title rather than modifying shared component API
 
 ### Pending Todos
 
@@ -64,5 +65,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-22
-Stopped at: Completed 05-01-PLAN.md (sRGB scoping and DDS stage graying)
+Stopped at: Completed 06-01-PLAN.md (tooltips for pipeline stages and UI controls)
 Resume file: None

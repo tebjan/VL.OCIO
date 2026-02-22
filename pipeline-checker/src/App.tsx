@@ -6,9 +6,7 @@ import { Filmstrip } from './components/Filmstrip';
 import { ControlsPanel } from './components/ControlsPanel';
 import { MainPreview } from './components/MainPreview';
 import { MetadataPanel, computeChannelStats, type ImageMetadata, type ChannelStats } from './components/MetadataPanel';
-import { usePipeline } from './hooks/usePipeline';
-import { PipelineRenderer } from './pipeline/PipelineRenderer';
-import { createColorPipelineStages } from './pipeline/stages';
+import { usePipelineManager } from './hooks/usePipelineManager';
 import { uploadFloat32Texture, uploadFloat16Texture, uploadDDSTexture } from './pipeline/TextureUtils';
 import { parseDDS } from './pipeline/DDSParser';
 import {
@@ -16,13 +14,12 @@ import {
   type PipelineSettings as GPUPipelineSettings,
 } from './pipeline/PipelineUniforms';
 import type { PipelineSettings } from './types/settings';
-import { STAGE_NAMES } from './pipeline/types/StageInfo';
 import { saveFileHandle, loadFileHandle, saveViewState, loadViewState } from './lib/sessionStore';
 
 type AppState =
   | { kind: 'initializing' }
   | { kind: 'error'; message: string }
-  | { kind: 'loaded'; gpu: GPUContext; sourceTexture: GPUTexture; metadata: ImageMetadata };
+  | { kind: 'ready'; gpu: GPUContext };
 
 /**
  * Map UI-facing PipelineSettings to the GPU uniform buffer format.
@@ -67,13 +64,6 @@ function toGPUSettings(s: PipelineSettings, viewExposure: number): GPUPipelineSe
   };
 }
 
-/** Stage index to auto-select based on loaded file type. */
-const STAGE_FOR_FILE_TYPE: Record<LoadedFileType, number> = {
-  exr: STAGE_NAMES.length - 1,   // Final Display
-  dds: 2,                         // BC Decompress
-  sample: STAGE_NAMES.length - 1, // Final Display
-};
-
 /**
  * Compute per-channel min/max stats directly from a Uint16Array of half-float RGBA data.
  * Avoids allocating a full Float32Array (~362 MB for 4K+ images).
@@ -95,9 +85,6 @@ function computeStatsFromHalf(data: Uint16Array, width: number, height: number):
 
 /**
  * Parse EXR buffer and upload to GPU, returning the texture and stats.
- * Uses uploadFloat16Texture for half-float EXRs (direct, no staging texture),
- * uploadFloat32Texture for full-float EXRs.
- * Downscales if image exceeds GPU maxTextureDimension2D.
  */
 async function parseAndUploadExr(
   device: GPUDevice,
@@ -112,7 +99,6 @@ async function parseAndUploadExr(
   let { data, width, height } = result;
   const maxDim = device.limits.maxTextureDimension2D;
 
-  // Downscale if image exceeds GPU texture limits
   if (width > maxDim || height > maxDim) {
     const scale = Math.min(maxDim / width, maxDim / height);
     const newW = Math.floor(width * scale);
@@ -130,7 +116,6 @@ async function parseAndUploadExr(
     stats = computeChannelStats(data, width, height);
     sourceTexture = uploadFloat32Texture(device, data, width, height);
   } else {
-    // Half-float EXR: compute stats directly from Uint16, upload without conversion
     stats = computeStatsFromHalf(data as Uint16Array, width, height);
     sourceTexture = uploadFloat16Texture(device, data as Uint16Array, width, height);
   }
@@ -138,21 +123,12 @@ async function parseAndUploadExr(
   return { sourceTexture, stats, width, height };
 }
 
-/**
- * Downsample RGBA pixel data (Float32Array or Uint16Array) using box filter.
- * Returns same type as input.
- */
+/** Downsample RGBA pixel data using box filter. */
 function downsampleRGBA<T extends Float32Array | Uint16Array>(
-  src: T,
-  srcW: number,
-  srcH: number,
-  dstW: number,
-  dstH: number,
+  src: T, srcW: number, srcH: number, dstW: number, dstH: number,
 ): T {
   const isFloat32 = src instanceof Float32Array;
   const dst = (isFloat32 ? new Float32Array(dstW * dstH * 4) : new Uint16Array(dstW * dstH * 4)) as T;
-
-  // For half-float, work in float32 for accurate averaging, then convert back
   const scaleX = srcW / dstW;
   const scaleY = srcH / dstH;
 
@@ -177,7 +153,6 @@ function downsampleRGBA<T extends Float32Array | Uint16Array>(
       if (isFloat32) {
         for (let c = 0; c < 4; c++) (dst as Float32Array)[di + c] = acc[c] / count;
       } else {
-        // Convert averaged float back to half-float
         for (let c = 0; c < 4; c++) (dst as Uint16Array)[di + c] = floatToHalf(acc[c] / count);
       }
     }
@@ -193,59 +168,44 @@ function floatToHalf(v: number): number {
   const sign = (f >>> 16) & 0x8000;
   const exponent = ((f >>> 23) & 0xff) - 127;
   const mantissa = f & 0x7fffff;
-  if (exponent >= 16) return sign | 0x7c00; // Inf/NaN
-  if (exponent < -14) return sign; // zero/denorm
+  if (exponent >= 16) return sign | 0x7c00;
+  if (exponent < -14) return sign;
   return sign | ((exponent + 15) << 10) | (mantissa >>> 13);
 }
 
 export default function App() {
   const [state, setState] = useState<AppState>({ kind: 'initializing' });
-  const [renderVersion, setRenderVersion] = useState(0);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const rendererRef = useRef<PipelineRenderer | null>(null);
-  const sourceTextureRef = useRef<GPUTexture | null>(null);
   const gpuRef = useRef<GPUContext | null>(null);
 
-  const pipeline = usePipeline();
+  const manager = usePipelineManager();
 
-  // Load an rgba16float source texture and transition to 'loaded' state
-  const loadSourceTexture = useCallback(
-    (gpu: GPUContext, sourceTexture: GPUTexture, width: number, height: number, stats: ChannelStats | null, fileSizeMB: string, fileType: LoadedFileType, fileName?: string) => {
-      sourceTextureRef.current?.destroy();
-      sourceTextureRef.current = sourceTexture;
-
-      if (!rendererRef.current) {
-        const renderer = new PipelineRenderer(gpu.device);
-        const stages = createColorPipelineStages();
-        renderer.setStages(stages);
-        renderer.setSize(width, height);
-        rendererRef.current = renderer;
-      } else {
-        rendererRef.current.setSize(width, height);
-      }
-
+  // Load a file into the pipeline manager — creates or replaces a pipeline
+  const loadFile = useCallback(
+    (gpu: GPUContext, sourceTexture: GPUTexture, width: number, height: number, stats: ChannelStats | null, fileSizeMB: string, fileType: LoadedFileType, fileName?: string, fileHandle?: FileSystemFileHandle) => {
       const metadata: ImageMetadata = {
         width,
         height,
-        channels: 'RGBA Float16',
+        channels: fileType === 'dds' ? 'BC Compressed' : 'RGBA Float16',
         fileSizeMB,
         fileName,
         stats,
       };
 
-      pipeline.selectStage(STAGE_FOR_FILE_TYPE[fileType]);
-      if (fileType === 'dds') {
-        pipeline.setStageAvailability([0, 1], false);
+      // For now (single pipeline behavior): replace or create the first pipeline
+      if (manager.pipelines.length === 0) {
+        manager.addPipeline(gpu.device, sourceTexture, width, height, metadata, fileType, fileName, fileHandle);
       } else {
-        pipeline.setStageAvailability([0, 1], true);
+        const first = manager.pipelines[0];
+        manager.replacePipelineSource(first.id, gpu.device, sourceTexture, width, height, metadata, fileType, fileName, fileHandle);
       }
-      setState({ kind: 'loaded', gpu, sourceTexture, metadata });
+
+      setState({ kind: 'ready', gpu });
     },
-    [pipeline],
+    [manager],
   );
 
   // Initialize WebGPU, restore session or auto-load sample image.
-  // Cleanup handles React StrictMode double-init (dev mode runs effects twice).
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -255,12 +215,6 @@ export default function App() {
     initWebGPU(canvas)
       .then(async (gpu) => {
         if (cancelled) return;
-
-        // Destroy previous GPU resources (StrictMode re-init)
-        rendererRef.current?.destroy();
-        rendererRef.current = null;
-        sourceTextureRef.current?.destroy();
-        sourceTextureRef.current = null;
 
         gpuRef.current = gpu;
 
@@ -280,16 +234,19 @@ export default function App() {
               if (cancelled) return;
               if (parsed) {
                 const sizeMB = (buffer.byteLength / (1024 * 1024)).toFixed(2);
-                loadSourceTexture(gpu, parsed.sourceTexture, parsed.width, parsed.height, parsed.stats, sizeMB, 'exr' as LoadedFileType, stored.fileName);
+                loadFile(gpu, parsed.sourceTexture, parsed.width, parsed.height, parsed.stats, sizeMB, 'exr', stored.fileName);
                 const savedStage = loadViewState();
-                if (savedStage !== null) pipeline.selectStage(savedStage);
+                if (savedStage !== null) manager.selectStage(savedStage);
                 return;
               }
             } else if (stored.fileType === 'dds') {
-              handleDdsLoaded(buffer, stored.fileName);
+              const dds = parseDDS(buffer);
+              const sourceTexture = uploadDDSTexture(gpu.device, dds);
+              const sizeMB = (buffer.byteLength / (1024 * 1024)).toFixed(2);
+              loadFile(gpu, sourceTexture, dds.width, dds.height, null, sizeMB, 'dds', stored.fileName);
               const savedStage = loadViewState();
               if (savedStage !== null) {
-                setTimeout(() => pipeline.selectStage(savedStage), 0);
+                setTimeout(() => manager.selectStage(savedStage), 0);
               }
               return;
             }
@@ -298,12 +255,12 @@ export default function App() {
           }
         }
 
-        // Fallback: auto-load sample image — no start screen
+        // Fallback: auto-load sample image
         const sample = generateSampleImage();
         const sourceTexture = uploadFloat32Texture(gpu.device, sample.data, sample.width, sample.height);
         const sampleStats = computeChannelStats(sample.data, sample.width, sample.height);
         const sampleSizeMB = (sample.data.byteLength / (1024 * 1024)).toFixed(2);
-        loadSourceTexture(gpu, sourceTexture, sample.width, sample.height, sampleStats, sampleSizeMB, 'sample');
+        loadFile(gpu, sourceTexture, sample.width, sample.height, sampleStats, sampleSizeMB, 'sample');
       })
       .catch((err) => {
         if (!cancelled) setState({ kind: 'error', message: err.message });
@@ -313,7 +270,7 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Handle EXR buffer from drop — parse and upload via the efficient path
+  // Handle EXR buffer from drop
   const handleExrBuffer = useCallback(
     async (buffer: ArrayBuffer, fileName: string, fileHandle?: FileSystemFileHandle) => {
       const gpu = gpuRef.current;
@@ -323,17 +280,14 @@ export default function App() {
       if (!parsed) throw new Error(`Failed to parse EXR file "${fileName}": no image data returned.`);
 
       const sizeMB = (buffer.byteLength / (1024 * 1024)).toFixed(2);
-      loadSourceTexture(gpu, parsed.sourceTexture, parsed.width, parsed.height, parsed.stats, sizeMB, 'exr', fileName);
+      loadFile(gpu, parsed.sourceTexture, parsed.width, parsed.height, parsed.stats, sizeMB, 'exr', fileName, fileHandle);
 
-      // Persist file handle for session restore
-      if (fileHandle) {
-        saveFileHandle(fileHandle, 'exr', fileName);
-      }
+      if (fileHandle) saveFileHandle(fileHandle, 'exr', fileName);
     },
-    [loadSourceTexture],
+    [loadFile],
   );
 
-  // Handle DDS file loaded from drop (or session restore)
+  // Handle DDS file loaded from drop
   const handleDdsLoaded = useCallback(
     (buffer: ArrayBuffer, fileName: string, fileHandle?: FileSystemFileHandle) => {
       const gpu = gpuRef.current;
@@ -342,115 +296,90 @@ export default function App() {
       try {
         const dds = parseDDS(buffer);
         console.log(`[App] Parsed DDS: ${fileName} (${dds.width}x${dds.height}, ${dds.formatLabel})`);
-
         const sourceTexture = uploadDDSTexture(gpu.device, dds);
+        const sizeMB = (buffer.byteLength / (1024 * 1024)).toFixed(2);
+        loadFile(gpu, sourceTexture, dds.width, dds.height, null, sizeMB, 'dds', fileName, fileHandle);
 
-        sourceTextureRef.current?.destroy();
-        sourceTextureRef.current = sourceTexture;
-
-        if (!rendererRef.current) {
-          const renderer = new PipelineRenderer(gpu.device);
-          const stages = createColorPipelineStages();
-          renderer.setStages(stages);
-          renderer.setSize(dds.width, dds.height);
-          rendererRef.current = renderer;
-        } else {
-          rendererRef.current.setSize(dds.width, dds.height);
-        }
-
-        const metadata: ImageMetadata = {
-          width: dds.width,
-          height: dds.height,
-          channels: dds.formatLabel,
-          fileSizeMB: (buffer.byteLength / (1024 * 1024)).toFixed(2),
-          fileName,
-          stats: null as any,
-        };
-
-        pipeline.selectStage(STAGE_FOR_FILE_TYPE['dds']);
-        pipeline.setStageAvailability([0, 1], false);
-        setState({ kind: 'loaded', gpu, sourceTexture, metadata });
-
-        // Persist file handle for session restore
-        if (fileHandle) {
-          saveFileHandle(fileHandle, 'dds', fileName);
-        }
+        if (fileHandle) saveFileHandle(fileHandle, 'dds', fileName);
       } catch (err) {
         console.error(`[App] DDS load error for "${fileName}":`, err);
       }
     },
-    [pipeline],
+    [loadFile],
   );
 
   // Persist selected stage index to localStorage whenever it changes.
-  // Only persist when a user-dropped image is loaded (not the sample).
   useEffect(() => {
-    if (state.kind === 'loaded' && state.metadata.fileName) {
-      saveViewState(pipeline.selectedStageIndex);
+    const sel = manager.selectedPipeline;
+    if (sel && sel.fileName) {
+      saveViewState(manager.selectedStageIndex);
     }
-  }, [pipeline.selectedStageIndex, state]);
+  }, [manager.selectedStageIndex, manager.selectedPipeline]);
 
   // Sync RRT/ODT toggle settings to stage enable/disable.
-  // Stage 4 = RRT, Stage 5 = ODT.
   useEffect(() => {
-    pipeline.toggleStage(4, pipeline.settings.rrtEnabled);
-    pipeline.toggleStage(5, pipeline.settings.odtEnabled);
-  }, [pipeline.settings.rrtEnabled, pipeline.settings.odtEnabled, pipeline.toggleStage]);
+    manager.toggleStage(4, manager.selectedSettings.rrtEnabled);
+    manager.toggleStage(5, manager.selectedSettings.odtEnabled);
+  }, [manager.selectedSettings.rrtEnabled, manager.selectedSettings.odtEnabled, manager.toggleStage]);
 
-  // Re-render the pipeline whenever settings, stage toggles, or view exposure change.
-  // Synchronous in useEffect — every change triggers one GPU submission.
+  // Re-render ALL pipelines whenever any settings or stage toggles change.
   useEffect(() => {
-    if (state.kind !== 'loaded' || !rendererRef.current) return;
-    const renderer = rendererRef.current;
+    if (state.kind !== 'ready') return;
 
-    // Sync stage enable/disable from UI state to renderer stages.
-    // Renderer stages 0-5 correspond to UI stage indices 3-8.
-    const pipelineStages = renderer.getStages();
-    for (let i = 0; i < pipelineStages.length; i++) {
-      const uiStage = pipeline.stages[i + 3];
-      if (uiStage) {
-        (pipelineStages[i] as { enabled: boolean }).enabled = uiStage.enabled;
+    for (const inst of manager.pipelines) {
+      const renderer = inst.renderer;
+
+      // Sync stage enable/disable from instance state to renderer stages.
+      // Renderer stages 0-5 correspond to UI stage indices 3-8.
+      const pipelineStages = renderer.getStages();
+      for (let i = 0; i < pipelineStages.length; i++) {
+        const uiStageIdx = i + 3;
+        const enabled = inst.stageStates[uiStageIdx]?.enabled ?? true;
+        (pipelineStages[i] as { enabled: boolean }).enabled = enabled;
       }
+
+      // Serialize UI settings → GPU uniform buffer layout
+      const gpuSettings = toGPUSettings(inst.settings, 0);
+      renderer.updateUniforms(serializeUniforms(gpuSettings));
+
+      // Render all enabled stages
+      renderer.render(inst.sourceTexture);
     }
 
-    // Serialize UI settings → GPU uniform buffer layout
-    const gpuSettings = toGPUSettings(pipeline.settings, 0);
-    renderer.updateUniforms(serializeUniforms(gpuSettings));
+    // Bump version so Preview2D + thumbnails re-render
+    manager.bumpRenderVersion();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state, manager.pipelines, manager.selectedSettings, manager.selectedStages]);
 
-    // Render all enabled stages
-    renderer.render(state.sourceTexture);
-
-    // Bump version so Preview2D + thumbnails re-render (same texture ref, new content)
-    setRenderVersion((v) => v + 1);
-  }, [state, pipeline.settings, pipeline.stages]);
-
-  // Get the output texture for a given UI stage index
-  const getStageTexture = useCallback((stageIndex: number): GPUTexture | null => {
-    if (state.kind !== 'loaded') return null;
-    const renderer = rendererRef.current;
-    if (!renderer) return state.sourceTexture;
-
-    if (stageIndex < 3) return state.sourceTexture;
-
-    const rendererIndex = Math.min(stageIndex - 3, renderer.getStages().length - 1);
-    return renderer.getStageOutput(rendererIndex) ?? state.sourceTexture;
-  }, [state]);
+  // Get the output texture for a given UI stage index of a specific pipeline
+  const getStageTexture = useCallback((stageIndex: number, inst?: { renderer: { getStageOutput(i: number): GPUTexture | null; getStages(): ReadonlyArray<unknown> }; sourceTexture: GPUTexture }): GPUTexture | null => {
+    if (!inst) {
+      const sel = manager.selectedPipeline;
+      if (!sel) return null;
+      inst = sel;
+    }
+    if (stageIndex < 3) return inst.sourceTexture;
+    const rendererIndex = Math.min(stageIndex - 3, inst.renderer.getStages().length - 1);
+    return inst.renderer.getStageOutput(rendererIndex) ?? inst.sourceTexture;
+  }, [manager.selectedPipeline]);
 
   const getSelectedTexture = (): GPUTexture | null => {
-    return getStageTexture(pipeline.selectedStageIndex);
+    return getStageTexture(manager.selectedStageIndex);
   };
 
   const stageTextures = useMemo((): (GPUTexture | null)[] => {
-    if (state.kind !== 'loaded') return [];
-    return pipeline.stages.map((_, i) => getStageTexture(i));
+    const sel = manager.selectedPipeline;
+    if (!sel) return [];
+    return manager.selectedStages.map((_, i) => getStageTexture(i, sel));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state, renderVersion, pipeline.stages, getStageTexture]);
+  }, [manager.selectedPipeline, manager.renderVersion, manager.selectedStages, getStageTexture]);
+
+  const gpu = state.kind === 'ready' ? state.gpu : null;
 
   return (
     <div className="w-full h-full flex flex-col" style={{ background: 'var(--color-bg)' }}>
       <WebGPUCanvas ref={canvasRef} />
 
-      {/* Global drag-and-drop overlay — always active, invisible until dragging */}
       {gpuRef.current && (
         <DropZone
           onExrBuffer={handleExrBuffer}
@@ -486,41 +415,43 @@ export default function App() {
         </div>
       )}
 
-      {state.kind === 'loaded' && (
+      {gpu && manager.selectedPipeline && (
         <>
           <Filmstrip
-            stages={pipeline.stages}
-            selectedIndex={pipeline.selectedStageIndex}
-            onSelect={pipeline.selectStage}
-            onToggle={pipeline.toggleStage}
-            device={state.gpu.device}
-            format={state.gpu.format}
+            stages={manager.selectedStages}
+            selectedIndex={manager.selectedStageIndex}
+            onSelect={(i) => manager.selectStage(i)}
+            onToggle={(i, enabled) => manager.toggleStage(i, enabled)}
+            device={gpu.device}
+            format={gpu.format}
             stageTextures={stageTextures}
-            renderVersion={renderVersion}
-            applySRGB={pipeline.settings.applySRGB}
-            settings={pipeline.settings}
+            renderVersion={manager.renderVersion}
+            applySRGB={manager.selectedSettings.applySRGB}
+            settings={manager.selectedSettings}
           />
 
           <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
             <div style={{ flex: 1, overflow: 'hidden' }}>
               <MainPreview
-                device={state.gpu.device}
-                format={state.gpu.format}
+                device={gpu.device}
+                format={gpu.format}
                 stageTexture={getSelectedTexture()}
-                renderVersion={renderVersion}
-                applySRGB={pipeline.settings.applySRGB}
-                selectedStageIndex={pipeline.selectedStageIndex}
-                stageName={pipeline.stages[pipeline.selectedStageIndex]?.name}
+                renderVersion={manager.renderVersion}
+                applySRGB={manager.selectedSettings.applySRGB}
+                selectedStageIndex={manager.selectedStageIndex}
+                stageName={manager.selectedStages[manager.selectedStageIndex]?.name}
               />
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
               <ControlsPanel
-                settings={pipeline.settings}
-                onSettingsChange={pipeline.updateSettings}
-                onReset={pipeline.resetAll}
+                settings={manager.selectedSettings}
+                onSettingsChange={(patch) => manager.updateSettings(patch)}
+                onReset={() => manager.resetAll()}
               />
-              <MetadataPanel metadata={state.metadata} />
+              {manager.selectedMetadata && (
+                <MetadataPanel metadata={manager.selectedMetadata} />
+              )}
             </div>
           </div>
         </>

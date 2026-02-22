@@ -8,8 +8,12 @@ import FULLSCREEN_TRIANGLE_VERTEX_WGSL from '../shaders/generated/fullscreen-ver
  *
  * The vertex shader is prepended automatically. The bind group layout is:
  *   binding 0: input texture (unfilterable-float)
- *   binding 1: sampler (non-filtering / nearest)
- *   binding 2: uniform buffer (PipelineUniforms)
+ *   binding 1: uniform buffer (PipelineUniforms)
+ *
+ * Shaders use textureLoad() (not textureSample) because rgba32float textures
+ * are unfilterable-float and cannot be used with textureSample unless the
+ * float32-filterable feature is enabled. textureLoad with integer coords
+ * works universally.
  */
 export class FragmentStage implements PipelineStage {
   readonly name: string;
@@ -20,7 +24,6 @@ export class FragmentStage implements PipelineStage {
   private device!: GPUDevice;
   private pipeline: GPURenderPipeline | null = null;
   private bindGroupLayout!: GPUBindGroupLayout;
-  private sampler!: GPUSampler;
   private shaderCode: string;
 
   constructor(name: string, index: number, fragmentWGSL: string) {
@@ -32,15 +35,7 @@ export class FragmentStage implements PipelineStage {
   initialize(device: GPUDevice, width: number, height: number): void {
     this.device = device;
 
-    // Nearest-neighbor sampler — no interpolation, exact pixel values
-    this.sampler = device.createSampler({
-      magFilter: 'nearest',
-      minFilter: 'nearest',
-      addressModeU: 'clamp-to-edge',
-      addressModeV: 'clamp-to-edge',
-    });
-
-    // Bind group layout shared by all fragment stages
+    // Bind group layout: texture + uniform buffer (no sampler needed with textureLoad)
     this.bindGroupLayout = device.createBindGroupLayout({
       label: `Stage ${this.index} bind group layout`,
       entries: [
@@ -52,11 +47,6 @@ export class FragmentStage implements PipelineStage {
         {
           binding: 1,
           visibility: GPUShaderStage.FRAGMENT,
-          sampler: { type: 'non-filtering' },
-        },
-        {
-          binding: 2,
-          visibility: GPUShaderStage.FRAGMENT,
           buffer: { type: 'uniform' },
         },
       ],
@@ -67,6 +57,17 @@ export class FragmentStage implements PipelineStage {
     const shaderModule = device.createShaderModule({
       label: `Stage ${this.index}: ${this.name}`,
       code: combinedWGSL,
+    });
+
+    // Log shader compilation info for diagnostics
+    shaderModule.getCompilationInfo().then((info) => {
+      for (const msg of info.messages) {
+        if (msg.type === 'error') {
+          console.error(`[Stage ${this.index}: ${this.name}] Shader error: ${msg.message} (line ${msg.lineNum})`);
+        } else if (msg.type === 'warning') {
+          console.warn(`[Stage ${this.index}: ${this.name}] Shader warning: ${msg.message}`);
+        }
+      }
     });
 
     this.pipeline = this.createRenderPipeline(device, shaderModule, this.bindGroupLayout);
@@ -81,13 +82,12 @@ export class FragmentStage implements PipelineStage {
   encode(encoder: GPUCommandEncoder, input: GPUTexture, uniforms: GPUBuffer): void {
     if (!this.output || !this.pipeline) return;
 
-    // Create bind group with current input texture
+    // Create bind group with current input texture and uniform buffer
     const bindGroup = this.device.createBindGroup({
       layout: this.bindGroupLayout,
       entries: [
         { binding: 0, resource: input.createView() },
-        { binding: 1, resource: this.sampler },
-        { binding: 2, resource: { buffer: uniforms } },
+        { binding: 1, resource: { buffer: uniforms } },
       ],
     });
 

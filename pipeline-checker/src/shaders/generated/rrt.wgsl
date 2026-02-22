@@ -55,8 +55,7 @@ struct Uniforms {
 };
 
 @group(0) @binding(0) var inputTexture: texture_2d<f32>;
-@group(0) @binding(1) var inputSampler: sampler;
-@group(0) @binding(2) var<uniform> u: Uniforms;
+@group(0) @binding(1) var<uniform> u: Uniforms;
 
 // ============================================================================
 // Math Helpers
@@ -579,7 +578,8 @@ fn ApplyTonemap(color: vec3<f32>, op: i32, exposure: f32, wp: f32) -> vec3<f32> 
 
 @fragment
 fn fs(in: VertexOutput) -> @location(0) vec4<f32> {
-    let tex0col = textureSample(inputTexture, inputSampler, in.uv);
+    let texCoord = vec2<i32>(in.uv * vec2<f32>(textureDimensions(inputTexture)));
+    let tex0col = textureLoad(inputTexture, texCoord, 0);
     let color = tex0col.rgb;
 
     // ACES 1.3/2.0: full RRT pipeline, output AP1 for Stage 7 ODT

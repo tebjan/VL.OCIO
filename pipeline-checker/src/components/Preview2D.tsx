@@ -6,6 +6,8 @@ export interface Preview2DProps {
   format: GPUTextureFormat;
   stageTexture: GPUTexture | null;
   viewExposure: number;
+  /** Incremented after each pipeline render to trigger preview refresh. */
+  renderVersion?: number;
 }
 
 interface DragState {
@@ -15,13 +17,12 @@ interface DragState {
   panY: number;
 }
 
-export function Preview2D({ device, format, stageTexture, viewExposure }: Preview2DProps) {
+export function Preview2D({ device, format, stageTexture, viewExposure, renderVersion }: Preview2DProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const gpuRef = useRef<{
     ctx: GPUCanvasContext;
     pipeline: GPURenderPipeline;
-    sampler: GPUSampler;
     uniformBuffer: GPUBuffer;
     bindGroupLayout: GPUBindGroupLayout;
   } | null>(null);
@@ -43,8 +44,7 @@ export function Preview2D({ device, format, stageTexture, viewExposure }: Previe
     const bindGroupLayout = device.createBindGroupLayout({
       entries: [
         { binding: 0, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'unfilterable-float' } },
-        { binding: 1, visibility: GPUShaderStage.FRAGMENT, sampler: { type: 'non-filtering' } },
-        { binding: 2, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
+        { binding: 1, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
       ],
     });
 
@@ -61,17 +61,12 @@ export function Preview2D({ device, format, stageTexture, viewExposure }: Previe
       primitive: { topology: 'triangle-list' },
     });
 
-    const sampler = device.createSampler({
-      magFilter: 'nearest',
-      minFilter: 'nearest',
-    });
-
     const uniformBuffer = device.createBuffer({
       size: 16, // 4 x f32: viewExposure, zoom, panX, panY
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
 
-    gpuRef.current = { ctx, pipeline, sampler, uniformBuffer, bindGroupLayout };
+    gpuRef.current = { ctx, pipeline, uniformBuffer, bindGroupLayout };
 
     return () => {
       uniformBuffer.destroy();
@@ -113,8 +108,7 @@ export function Preview2D({ device, format, stageTexture, viewExposure }: Previe
         layout: gpu.bindGroupLayout,
         entries: [
           { binding: 0, resource: stageTexture.createView() },
-          { binding: 1, resource: gpu.sampler },
-          { binding: 2, resource: { buffer: gpu.uniformBuffer } },
+          { binding: 1, resource: { buffer: gpu.uniformBuffer } },
         ],
       });
 
@@ -135,7 +129,7 @@ export function Preview2D({ device, format, stageTexture, viewExposure }: Previe
     });
 
     return () => cancelAnimationFrame(frameRef.current);
-  }, [device, stageTexture, viewExposure, zoom, panX, panY]);
+  }, [device, stageTexture, viewExposure, zoom, panX, panY, renderVersion]);
 
   // Mouse wheel zoom (centered on cursor)
   const handleWheel = useCallback((e: React.WheelEvent<HTMLCanvasElement>) => {

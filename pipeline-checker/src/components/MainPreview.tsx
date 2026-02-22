@@ -12,6 +12,7 @@ export interface MainPreviewProps {
   format: GPUTextureFormat;
   stageTexture: GPUTexture | null;
   viewExposure: number;
+  renderVersion?: number;
 }
 
 type ViewMode = '2d' | '3d';
@@ -26,6 +27,7 @@ export function MainPreview({
   format,
   stageTexture,
   viewExposure,
+  renderVersion,
 }: MainPreviewProps) {
   const [mode, setMode] = useState<ViewMode>('2d');
   const [heightmapSettings, setHeightmapSettings] = useState<HeightmapSettings>(
@@ -87,6 +89,7 @@ export function MainPreview({
             format={format}
             stageTexture={stageTexture}
             viewExposure={viewExposure}
+            renderVersion={renderVersion}
           />
         </div>
         <HeightmapView stageTexture={stageTexture} active={mode === '3d'} />

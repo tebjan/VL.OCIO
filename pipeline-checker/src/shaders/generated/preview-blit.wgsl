@@ -18,7 +18,6 @@ fn vs(@builtin(vertex_index) i: u32) -> VertexOutput {
 }
 
 @group(0) @binding(0) var stageTexture: texture_2d<f32>;
-@group(0) @binding(1) var stageSampler: sampler;
 
 struct ViewUniforms {
     viewExposure: f32,
@@ -26,7 +25,7 @@ struct ViewUniforms {
     panX: f32,
     panY: f32,
 };
-@group(0) @binding(2) var<uniform> view: ViewUniforms;
+@group(0) @binding(1) var<uniform> view: ViewUniforms;
 
 @fragment
 fn fs(in: VertexOutput) -> @location(0) vec4<f32> {
@@ -38,7 +37,10 @@ fn fs(in: VertexOutput) -> @location(0) vec4<f32> {
         return vec4<f32>(0.05, 0.05, 0.05, 1.0);
     }
 
-    var color = textureSample(stageTexture, stageSampler, uv);
+    // Use textureLoad with integer coords (unfilterable-float cannot use textureSample)
+    let dims = vec2<f32>(textureDimensions(stageTexture));
+    let texCoord = vec2<i32>(clamp(uv * dims, vec2<f32>(0.0), dims - 1.0));
+    var color = textureLoad(stageTexture, texCoord, 0);
 
     // View exposure (does NOT affect pipeline output)
     color = vec4<f32>(color.rgb * exp2(view.viewExposure), color.a);

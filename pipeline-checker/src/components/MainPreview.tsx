@@ -127,6 +127,7 @@ export function MainPreview({
       >
         <button
           onClick={() => setMode('2d')}
+          title="Flat 2D preview of the selected pipeline stage"
           style={{
             padding: '4px 12px',
             borderRadius: '4px',
@@ -141,6 +142,7 @@ export function MainPreview({
         </button>
         <button
           onClick={() => setMode('3d')}
+          title="3D heightmap visualization using pixel values as elevation"
           style={{
             padding: '4px 12px',
             borderRadius: '4px',

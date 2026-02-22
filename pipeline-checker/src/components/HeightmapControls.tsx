@@ -1,7 +1,5 @@
-import { Section } from './grading/Section';
-import { Slider } from './grading/Slider';
-import { Select } from './grading/Select';
-import { Toggle } from './grading/Toggle';
+import { Section, Slider, Select } from './ui';
+import { Toggle } from './Toggle';
 import {
   type HeightmapSettings,
   HeightMode,
@@ -39,76 +37,85 @@ export function HeightmapControls({ settings, onChange }: HeightmapControlsProps
       }}
     >
       <Section title="Height" defaultOpen>
-        <Select<string>
-          label="Mode"
-          value={String(settings.heightMode)}
-          options={HEIGHT_MODE_OPTIONS}
-          onChange={(v) => patch({ heightMode: Number(v) as HeightMode })}
-        />
-        <Slider
-          label="Scale"
-          value={settings.heightScale}
-          min={0.01}
-          max={2.0}
-          step={0.01}
-          defaultValue={0.1}
-          onChange={(v) => patch({ heightScale: v })}
-        />
-        <Slider
-          label="Exponent"
-          value={settings.exponent}
-          min={0.1}
-          max={5.0}
-          step={0.1}
-          defaultValue={1.0}
-          decimals={1}
-          onChange={(v) => patch({ exponent: v })}
-        />
+        <div title="How pixel values are mapped to height (luminance, individual channel, etc.)">
+          <Select<string>
+            label="Mode"
+            value={String(settings.heightMode)}
+            options={HEIGHT_MODE_OPTIONS}
+            onChange={(v) => patch({ heightMode: Number(v) as HeightMode })}
+          />
+        </div>
+        <div title="Multiplier for the height displacement">
+          <Slider
+            label="Scale"
+            value={settings.heightScale}
+            min={0.01}
+            max={2.0}
+            step={0.01}
+            defaultValue={0.25}
+            onChange={(v) => patch({ heightScale: v })}
+          />
+        </div>
+        <div title="Power curve applied to height values (1.0 = linear)">
+          <Slider
+            label="Exponent"
+            value={settings.exponent}
+            min={0.1}
+            max={5.0}
+            step={0.1}
+            defaultValue={1.0}
+            decimals={1}
+            onChange={(v) => patch({ exponent: v })}
+          />
+        </div>
         <Toggle
           label="Stops (-log2)"
           value={settings.stopsMode}
           onChange={(v) => patch({ stopsMode: v })}
+          title="Interpret values as photographic stops (logarithmic scale)"
         />
         <Toggle
           label="Perceptual"
           value={settings.perceptualMode}
           onChange={(v) => patch({ perceptualMode: v })}
+          title="Apply perceptual weighting to height values"
         />
       </Section>
 
       <Section title="Range" defaultOpen>
-        <Slider
-          label="Min"
-          value={settings.rangeMin}
-          min={0}
-          max={1}
-          step={0.01}
-          defaultValue={0.0}
-          onChange={(v) => patch({ rangeMin: v })}
-        />
-        <Slider
-          label="Max"
-          value={settings.rangeMax}
-          min={0}
-          max={1}
-          step={0.01}
-          defaultValue={1.0}
-          onChange={(v) => patch({ rangeMax: v })}
-        />
+        <div title="Minimum value mapped to zero height">
+          <Slider
+            label="Min"
+            value={settings.rangeMin}
+            min={0}
+            max={1}
+            step={0.01}
+            defaultValue={0.0}
+            onChange={(v) => patch({ rangeMin: v })}
+          />
+        </div>
+        <div title="Maximum value mapped to full height">
+          <Slider
+            label="Max"
+            value={settings.rangeMax}
+            min={0}
+            max={1}
+            step={0.01}
+            defaultValue={1.0}
+            onChange={(v) => patch({ rangeMax: v })}
+          />
+        </div>
       </Section>
 
       <Section title="Display" defaultOpen>
-        <Select<string>
-          label="Downsample"
-          value={String(settings.downsample)}
-          options={DOWNSAMPLE_OPTIONS}
-          onChange={(v) => patch({ downsample: Number(v) as 1 | 2 | 4 | 8 | 16 })}
-        />
-        <Toggle
-          label="Column Mode"
-          value={settings.columnMode}
-          onChange={(v) => patch({ columnMode: v })}
-        />
+        <div title="Reduce mesh resolution for performance (1x = full detail)">
+          <Select<string>
+            label="Downsample"
+            value={String(settings.downsample)}
+            options={DOWNSAMPLE_OPTIONS}
+            onChange={(v) => patch({ downsample: Number(v) as 1 | 2 | 4 | 8 | 16 })}
+          />
+        </div>
       </Section>
     </div>
   );

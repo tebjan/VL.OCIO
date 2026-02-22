@@ -10,6 +10,7 @@ export interface StageCardProps {
   format: GPUTextureFormat;
   stageTexture: GPUTexture | null;
   renderVersion?: number;
+  applySRGB?: boolean;
 }
 
 /**
@@ -17,7 +18,7 @@ export interface StageCardProps {
  * Fixed size: 160x120px (160x90 thumbnail + 160x30 label row).
  * Renders a live GPU thumbnail of the stage's output texture.
  */
-export function StageCard({ stage, isSelected, onSelect, onToggle, device, format, stageTexture, renderVersion }: StageCardProps) {
+export function StageCard({ stage, isSelected, onSelect, onToggle, device, format, stageTexture, renderVersion, applySRGB }: StageCardProps) {
   const isAvailable = stage.available !== false;
   const isEnabled = stage.enabled && isAvailable;
   const hasThumbnail = device && stageTexture && isAvailable;
@@ -33,14 +34,12 @@ export function StageCard({ stage, isSelected, onSelect, onToggle, device, forma
     : '1px solid var(--surface-600)';
 
   return (
-    <button
-      onClick={onSelect}
+    <div
       style={{
         background: bg,
         border,
         borderRadius: '6px',
         padding: '4px',
-        cursor: 'pointer',
         opacity,
         transition: 'opacity 0.15s, border-color 0.15s',
         display: 'flex',
@@ -53,8 +52,9 @@ export function StageCard({ stage, isSelected, onSelect, onToggle, device, forma
         position: 'relative',
       }}
     >
-      {/* Thumbnail area: 152x90 (with 4px padding on each side = 160px card width) */}
-      <div
+      {/* Thumbnail area: 152x90 — clickable to select stage */}
+      <button
+        onClick={onSelect}
         style={{
           width: '152px',
           height: '90px',
@@ -65,6 +65,9 @@ export function StageCard({ stage, isSelected, onSelect, onToggle, device, forma
           justifyContent: 'center',
           position: 'relative',
           overflow: 'hidden',
+          cursor: 'pointer',
+          border: 'none',
+          padding: 0,
         }}
       >
         {hasThumbnail ? (
@@ -75,6 +78,7 @@ export function StageCard({ stage, isSelected, onSelect, onToggle, device, forma
             width={152}
             height={90}
             renderVersion={renderVersion}
+            applySRGB={applySRGB}
           />
         ) : !isAvailable ? (
           <span style={{ color: 'var(--surface-500)', fontSize: '11px' }}>
@@ -101,9 +105,9 @@ export function StageCard({ stage, isSelected, onSelect, onToggle, device, forma
             &darr;
           </span>
         )}
-      </div>
+      </button>
 
-      {/* Label row: shortName + enable checkbox (30px height) */}
+      {/* Label row: shortName + enable checkbox (30px height) — not clickable */}
       <div
         style={{
           display: 'flex',
@@ -140,6 +144,6 @@ export function StageCard({ stage, isSelected, onSelect, onToggle, device, forma
           />
         )}
       </div>
-    </button>
+    </div>
   );
 }

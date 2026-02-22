@@ -10,16 +10,16 @@ See: .planning/PROJECT.md (updated 2026-02-22)
 ## Current Position
 
 Phase: 7 of 9 (SDSL Stage Shaders)
-Plan: 0 of ? in current phase
-Status: Ready to plan
-Last activity: 2026-02-22 -- Completed Phase 6.1 Session Persistence
+Plan: 1 of 1 in current phase
+Status: Phase complete
+Last activity: 2026-02-22 -- Completed Phase 7 SDSL Stage Shaders
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 8
-- Average duration: 5 min
-- Total execution time: 0.58 hours
+- Total plans completed: 9
+- Average duration: 4 min
+- Total execution time: 0.62 hours
 
 **By Phase:**
 
@@ -31,9 +31,10 @@ Last activity: 2026-02-22 -- Completed Phase 6.1 Session Persistence
 | 05-display-logic | 1 | 4 min | 4 min |
 | 06-tooltips | 1 | 5 min | 5 min |
 | 6.1-session-persistence | 1 | 4 min | 4 min |
+| 07-sdsl-stage-shaders | 1 | 2 min | 2 min |
 
 **Recent Trend:**
-- Last 5 plans: 3 min, 3 min, 4 min, 5 min, 4 min
+- Last 5 plans: 3 min, 4 min, 5 min, 4 min, 2 min
 - Trend: Fast
 
 *Updated after each plan completion*
@@ -50,6 +51,9 @@ Recent decisions affecting current work:
 - Generated WGSL committed to git, transpiler runs on-demand (not at build time)
 - Raw IndexedDB API for session persistence (no idb library) -- zero new dependencies
 - Store original file ArrayBuffer for session restore, not parsed Float32Array -- smaller storage
+- Per-stage SDSL TextureFX shaders compose from existing mixins, no duplicated math
+- ColorGradeStage outputs Linear AP1 (no EncodeOutput) for RRT stage handoff
+- RRTStage output varies by operator (AP1 for ACES, Linear709 for others)
 
 ### Pending Todos
 
@@ -62,5 +66,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-22
-Stopped at: Completed 6.1-01-PLAN.md (Session Persistence)
+Stopped at: Completed 07-01-PLAN.md (SDSL Stage Shaders)
 Resume file: None

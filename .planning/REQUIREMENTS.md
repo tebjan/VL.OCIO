@@ -52,9 +52,9 @@ Requirements for shader transpiler milestone. Ensures SDSL is the single source 
 
 ### SDSL Stage Shaders
 
-- [ ] **SDSL-01**: Each pipeline stage (input-convert, color-grade, rrt, odt, output-encode, display-remap) has its own SDSL TextureFX shader that composes from existing mixins
-- [ ] **SDSL-02**: Per-stage SDSL shaders contain only the functions needed for that stage (no dead code)
-- [ ] **SDSL-03**: Per-stage SDSL shaders work in Stride/vvvv as standalone TextureFX nodes
+- [x] **SDSL-01**: Each pipeline stage (input-convert, color-grade, rrt, odt, output-encode, display-remap) has its own SDSL TextureFX shader that composes from existing mixins
+- [x] **SDSL-02**: Per-stage SDSL shaders contain only the functions needed for that stage (no dead code)
+- [x] **SDSL-03**: Per-stage SDSL shaders work in Stride/vvvv as standalone TextureFX nodes
 
 ### Transpiler Tool
 
@@ -117,9 +117,9 @@ Requirements for shader transpiler milestone. Ensures SDSL is the single source 
 | TIPS-02 | Phase 6 | Complete |
 | PERS-01 | Phase 6.1 | Complete |
 | PERS-02 | Phase 6.1 | Complete |
-| SDSL-01 | Phase 7 | Pending |
-| SDSL-02 | Phase 7 | Pending |
-| SDSL-03 | Phase 7 | Pending |
+| SDSL-01 | Phase 7 | Complete |
+| SDSL-02 | Phase 7 | Complete |
+| SDSL-03 | Phase 7 | Complete |
 | TOOL-01 | Phase 8 | Pending |
 | TOOL-02 | Phase 8 | Pending |
 | TOOL-03 | Phase 8 | Pending |

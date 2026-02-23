@@ -38,6 +38,10 @@ Desktop.ini
 *.log
 nul
 
+# Tauri build output
+src-tauri/target/
+pipeline-checker/pipeline-checker.zip
+
 # Color grading runtime files
 ocio_presets/
 .planning/

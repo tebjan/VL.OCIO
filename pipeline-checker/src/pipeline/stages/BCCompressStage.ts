@@ -49,7 +49,10 @@ export class BCCompressStage implements PipelineStage {
   }
 
   setFormat(format: BCFormat): void {
-    this.format = format;
+    if (format !== this.format) {
+      this.format = format;
+      this.lastEncodeKey = '';
+    }
   }
 
   getFormat(): BCFormat {
@@ -57,7 +60,10 @@ export class BCCompressStage implements PipelineStage {
   }
 
   setQuality(quality: BCQuality): void {
-    this.quality = quality;
+    if (quality !== this.quality) {
+      this.quality = quality;
+      this.lastEncodeKey = '';
+    }
   }
 
   getQuality(): BCQuality {
@@ -94,9 +100,14 @@ export class BCCompressStage implements PipelineStage {
       return this.encodeResult;
     }
 
-    // Avoid duplicate concurrent encodes
+    // Wait for any in-flight encode to finish before starting a new one.
+    // This prevents returning stale results when format/quality changed mid-encode.
     if (this.pendingEncode) {
-      return this.pendingEncode;
+      await this.pendingEncode;
+      // Re-check cache — the completed encode may have produced our result
+      if (key === this.lastEncodeKey && this.encodeResult) {
+        return this.encodeResult;
+      }
     }
 
     this.pendingEncode = this.encoder.encode(input, this.format, this.quality);
@@ -105,6 +116,10 @@ export class BCCompressStage implements PipelineStage {
       this.encodeResult = await this.pendingEncode;
       this.lastEncodeKey = key;
       return this.encodeResult;
+    } catch (err) {
+      console.error(`[BCCompressStage] Encode failed for ${this.format}/${this.quality}:`, err);
+      this.encodeResult = null;
+      return null;
     } finally {
       this.pendingEncode = null;
     }

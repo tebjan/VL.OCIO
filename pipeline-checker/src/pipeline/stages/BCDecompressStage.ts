@@ -1,6 +1,7 @@
 import type { PipelineStage } from '../PipelineStage';
 import { BC_FORMAT_TO_GPU, type BCEncodeResult } from '@vl-ocio/webgpu-bc-encoder';
 import decompressWGSL from '../shaders/bc-decompress.wgsl?raw';
+import deltaWGSL from '../shaders/bc-delta.wgsl?raw';
 
 /**
  * Stage 3: BC Decompress
@@ -9,9 +10,9 @@ import decompressWGSL from '../shaders/bc-decompress.wgsl?raw';
  * it back to an rgba16float render target using WebGPU native
  * texture-compression-bc hardware decompression.
  *
- * The BC blocks are uploaded as a native compressed texture, and the GPU
- * hardware automatically decompresses during sampling via a fullscreen
- * triangle pass.
+ * Supports a "delta view" mode that shows the compression error:
+ * abs(original - decompressed) * amplification, useful for visualizing
+ * BC compression artifacts.
  */
 export class BCDecompressStage implements PipelineStage {
   readonly name = 'BC Decompress';
@@ -20,11 +21,21 @@ export class BCDecompressStage implements PipelineStage {
   available: boolean;
   output: GPUTexture | null = null;
 
+  /** When true, output shows amplified error instead of decompressed image. */
+  showDelta = false;
+  /** Amplification factor for delta visualization (1-100). */
+  amplification = 10;
+
   private device!: GPUDevice;
-  private renderTarget: GPUTexture | null = null;
+  private decompressedTarget: GPUTexture | null = null;
+  private deltaTarget: GPUTexture | null = null;
   private pipeline: GPURenderPipeline | null = null;
+  private deltaPipeline: GPURenderPipeline | null = null;
   private sampler: GPUSampler | null = null;
   private bcTexture: GPUTexture | null = null;
+  private deltaUniformBuffer: GPUBuffer | null = null;
+  /** Track last uploaded result to skip redundant destroy/recreate cycles. */
+  private lastUploadedResult: BCEncodeResult | null = null;
 
   constructor(hasBC: boolean) {
     this.available = hasBC;
@@ -41,31 +52,50 @@ export class BCDecompressStage implements PipelineStage {
       minFilter: 'linear',
     });
 
-    this.createRenderTarget(width, height);
-    this.createPipeline();
+    this.deltaUniformBuffer = device.createBuffer({
+      size: 16, // DeltaParams: f32 amplification + 3x f32 padding
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+      label: 'BC Delta Params',
+    });
+
+    this.createRenderTargets(width, height);
+    this.createPipelines();
   }
 
   resize(width: number, height: number): void {
     if (!this.available) return;
-    this.renderTarget?.destroy();
-    this.createRenderTarget(width, height);
+    this.decompressedTarget?.destroy();
+    this.deltaTarget?.destroy();
+    this.createRenderTargets(width, height);
   }
 
-  private createRenderTarget(width: number, height: number): void {
-    this.renderTarget = this.device.createTexture({
+  private createRenderTargets(width: number, height: number): void {
+    const usage =
+      GPUTextureUsage.RENDER_ATTACHMENT |
+      GPUTextureUsage.TEXTURE_BINDING |
+      GPUTextureUsage.COPY_SRC;
+
+    this.decompressedTarget = this.device.createTexture({
       size: [width, height],
       format: 'rgba16float',
-      usage:
-        GPUTextureUsage.RENDER_ATTACHMENT |
-        GPUTextureUsage.TEXTURE_BINDING |
-        GPUTextureUsage.COPY_SRC,
-      label: 'Stage 3: BC Decompress',
+      usage,
+      label: 'BC Decompress Output',
     });
-    this.output = this.renderTarget;
+
+    this.deltaTarget = this.device.createTexture({
+      size: [width, height],
+      format: 'rgba16float',
+      usage,
+      label: 'BC Delta Output',
+    });
+
+    // Don't set this.output here — it stays null until encode() actually
+    // renders data. This prevents filmstrip from showing uninitialized GPU memory.
   }
 
-  private createPipeline(): void {
-    const shaderModule = this.device.createShaderModule({
+  private createPipelines(): void {
+    // Normal decompress pipeline
+    const decompressModule = this.device.createShaderModule({
       label: 'BC Decompress Shader',
       code: decompressWGSL,
     });
@@ -73,16 +103,33 @@ export class BCDecompressStage implements PipelineStage {
     this.pipeline = this.device.createRenderPipeline({
       layout: 'auto',
       vertex: {
-        module: shaderModule,
+        module: decompressModule,
         entryPoint: 'vs',
       },
       fragment: {
-        module: shaderModule,
+        module: decompressModule,
         entryPoint: 'fs',
-        targets: [{
-          format: 'rgba16float',
-          blend: undefined, // REQUIRED: no hardware blending on float32
-        }],
+        targets: [{ format: 'rgba16float', blend: undefined }],
+      },
+      primitive: { topology: 'triangle-list' },
+    });
+
+    // Delta visualization pipeline
+    const deltaModule = this.device.createShaderModule({
+      label: 'BC Delta Shader',
+      code: deltaWGSL,
+    });
+
+    this.deltaPipeline = this.device.createRenderPipeline({
+      layout: 'auto',
+      vertex: {
+        module: deltaModule,
+        entryPoint: 'vs',
+      },
+      fragment: {
+        module: deltaModule,
+        entryPoint: 'fs',
+        targets: [{ format: 'rgba16float', blend: undefined }],
       },
       primitive: { topology: 'triangle-list' },
     });
@@ -90,11 +137,20 @@ export class BCDecompressStage implements PipelineStage {
 
   /**
    * Upload BC block data as a native compressed texture.
-   * Called by PipelineRenderer when BCCompressStage has a new encodeResult.
+   * Called when BCCompressStage has a new encodeResult.
+   * Returns true if data was actually uploaded, false if skipped (same data).
    */
-  uploadBCData(encodeResult: BCEncodeResult): void {
-    if (!this.available) return;
+  uploadBCData(encodeResult: BCEncodeResult): boolean {
+    if (!this.available) return false;
+
+    // Skip if the exact same encode result is already uploaded.
+    // The async encode effect can re-run due to unrelated state changes
+    // (e.g. stage selection) — destroying and recreating the bcTexture
+    // would cause a race with in-flight GPU commands using the old texture.
+    if (this.lastUploadedResult === encodeResult) return false;
+
     this.bcTexture?.destroy();
+    this.lastUploadedResult = encodeResult;
 
     const gpuFormat = BC_FORMAT_TO_GPU[encodeResult.format];
 
@@ -111,6 +167,8 @@ export class BCDecompressStage implements PipelineStage {
       { bytesPerRow: encodeResult.blocksPerRow * encodeResult.blockSize },
       { width: encodeResult.width, height: encodeResult.height }
     );
+
+    return true;
   }
 
   encode(
@@ -118,13 +176,14 @@ export class BCDecompressStage implements PipelineStage {
     input: GPUTexture,
     _uniforms: GPUBuffer
   ): void {
-    if (!this.bcTexture || !this.pipeline || !this.renderTarget) {
+    if (!this.bcTexture || !this.pipeline || !this.decompressedTarget) {
       // No BC data available — pass through input
       this.output = input;
       return;
     }
 
-    const bindGroup = this.device.createBindGroup({
+    // Pass 1: Normal BC decompress → decompressedTarget
+    const decompressBindGroup = this.device.createBindGroup({
       layout: this.pipeline.getBindGroupLayout(0),
       entries: [
         { binding: 0, resource: this.bcTexture.createView() },
@@ -132,28 +191,72 @@ export class BCDecompressStage implements PipelineStage {
       ],
     });
 
-    const pass = encoder.beginRenderPass({
+    const decompressPass = encoder.beginRenderPass({
       colorAttachments: [{
-        view: this.renderTarget.createView(),
+        view: this.decompressedTarget.createView(),
         loadOp: 'clear' as GPULoadOp,
         storeOp: 'store' as GPUStoreOp,
         clearValue: { r: 0, g: 0, b: 0, a: 1 },
       }],
     });
+    decompressPass.setPipeline(this.pipeline);
+    decompressPass.setBindGroup(0, decompressBindGroup);
+    decompressPass.draw(3);
+    decompressPass.end();
 
-    pass.setPipeline(this.pipeline);
-    pass.setBindGroup(0, bindGroup);
-    pass.draw(3); // Fullscreen triangle
-    pass.end();
+    // Pass 2 (optional): Delta visualization → deltaTarget
+    if (this.showDelta && this.deltaPipeline && this.deltaTarget && this.deltaUniformBuffer) {
+      // Update amplification uniform
+      const data = new Float32Array([this.amplification, 0, 0, 0]);
+      this.device.queue.writeBuffer(this.deltaUniformBuffer, 0, data);
 
-    this.output = this.renderTarget;
+      const deltaBindGroup = this.device.createBindGroup({
+        layout: this.deltaPipeline.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: input.createView() },                     // original source
+          { binding: 1, resource: this.decompressedTarget.createView() },   // decompressed
+          { binding: 2, resource: this.sampler! },
+          { binding: 3, resource: { buffer: this.deltaUniformBuffer } },
+        ],
+      });
+
+      const deltaPass = encoder.beginRenderPass({
+        colorAttachments: [{
+          view: this.deltaTarget.createView(),
+          loadOp: 'clear' as GPULoadOp,
+          storeOp: 'store' as GPUStoreOp,
+          clearValue: { r: 0, g: 0, b: 0, a: 1 },
+        }],
+      });
+      deltaPass.setPipeline(this.deltaPipeline);
+      deltaPass.setBindGroup(0, deltaBindGroup);
+      deltaPass.draw(3);
+      deltaPass.end();
+
+      this.output = this.deltaTarget;
+    } else {
+      this.output = this.decompressedTarget;
+    }
+  }
+
+  /**
+   * Always returns the decompressed (non-delta) texture.
+   * Used by the color pipeline which should always receive clean decompressed data.
+   */
+  getDecompressedOutput(): GPUTexture | null {
+    return this.decompressedTarget;
   }
 
   destroy(): void {
-    this.renderTarget?.destroy();
+    this.decompressedTarget?.destroy();
+    this.deltaTarget?.destroy();
     this.bcTexture?.destroy();
-    this.renderTarget = null;
+    this.deltaUniformBuffer?.destroy();
+    this.decompressedTarget = null;
+    this.deltaTarget = null;
     this.bcTexture = null;
+    this.deltaUniformBuffer = null;
+    this.lastUploadedResult = null;
     this.output = null;
   }
 }

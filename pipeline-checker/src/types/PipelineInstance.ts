@@ -1,5 +1,7 @@
 import type { LoadedFileType } from '../components/DropZone';
 import type { PipelineRenderer } from '../pipeline/PipelineRenderer';
+import type { BCCompressStage } from '../pipeline/stages/BCCompressStage';
+import type { BCDecompressStage } from '../pipeline/stages/BCDecompressStage';
 import type { ImageMetadata } from '../components/MetadataPanel';
 import type { PipelineSettings } from './settings';
 import type { StageState } from './pipeline';
@@ -23,8 +25,11 @@ export interface PipelineInstance {
   fileHandle?: FileSystemFileHandle;
   /** DDS format label (e.g. "BC6H", "BC7") — stored so reset can determine scene-linearity. */
   ddsFormatLabel?: string;
+  device: GPUDevice;
   renderer: PipelineRenderer;
   sourceTexture: GPUTexture;
+  bcCompress: BCCompressStage | null;
+  bcDecompress: BCDecompressStage | null;
   settings: PipelineSettings;
   stageStates: StageState[];
   selectedStageIndex: number;

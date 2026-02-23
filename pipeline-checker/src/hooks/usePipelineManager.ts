@@ -6,6 +6,8 @@ import type { LoadedFileType } from '../components/DropZone';
 import type { ImageMetadata } from '../components/MetadataPanel';
 import { PipelineRenderer } from '../pipeline/PipelineRenderer';
 import { createColorPipelineStages } from '../pipeline/stages';
+import { BCCompressStage } from '../pipeline/stages/BCCompressStage';
+import { BCDecompressStage } from '../pipeline/stages/BCDecompressStage';
 import { type PipelineId, type PipelineInstance, PIPELINE_COLORS, MAX_PIPELINES } from '../types/PipelineInstance';
 
 const STAGE_COUNT = STAGE_NAMES.length;
@@ -119,11 +121,16 @@ export interface PipelineManagerReturn {
   selectPipeline(id: PipelineId): void;
 
   // Per-pipeline mutations (operate on selected pipeline if id omitted)
+  // When linkedSettings is true, updateSettings/toggleStage/resetAll apply to ALL pipelines
   updateSettings(patch: Partial<PipelineSettings>, id?: PipelineId): void;
   toggleStage(index: number, enabled: boolean, id?: PipelineId): void;
   selectStage(index: number, id?: PipelineId): void;
   setStageAvailability(indices: number[], available: boolean, id?: PipelineId): void;
   resetAll(id?: PipelineId): void;
+
+  // Link mode: apply settings to all pipelines simultaneously
+  linkedSettings: boolean;
+  setLinkedSettings(linked: boolean): void;
 
   // Derived helpers for selected pipeline
   selectedStages: StageInfo[];
@@ -131,6 +138,8 @@ export interface PipelineManagerReturn {
   selectedStageIndex: number;
   selectedMetadata: ImageMetadata | null;
 
+  bcEncodeVersion: number;
+  bumpBcEncodeVersion(): void;
   bumpRenderVersion(): void;
 }
 
@@ -138,10 +147,16 @@ export function usePipelineManager(): PipelineManagerReturn {
   const [instanceMap, setInstanceMap] = useState<Map<PipelineId, PipelineInstance>>(new Map());
   const [selectedId, setSelectedId] = useState<PipelineId | null>(null);
   const [renderVersion, setRenderVersion] = useState(0);
+  const [bcEncodeVersion, setBcEncodeVersion] = useState(0);
+  const [linkedSettings, setLinkedSettings] = useState(false);
   const nextIdRef = useRef(0);
 
   const bumpRenderVersion = useCallback(() => {
     setRenderVersion((v) => v + 1);
+  }, []);
+
+  const bumpBcEncodeVersion = useCallback(() => {
+    setBcEncodeVersion((v) => v + 1);
   }, []);
 
   const updateInstance = useCallback((id: PipelineId, updater: (inst: PipelineInstance) => PipelineInstance) => {
@@ -184,6 +199,22 @@ export function usePipelineManager(): PipelineManagerReturn {
       stageStates[4] = { enabled: settings.rrtEnabled };
       stageStates[5] = { enabled: settings.odtEnabled };
 
+      // Create BC stages (only for non-DDS files on hardware that supports BC)
+      const hasBC = device.features.has('texture-compression-bc');
+      const createBC = hasBC && fileType !== 'dds';
+      let bcCompress: BCCompressStage | null = null;
+      let bcDecompress: BCDecompressStage | null = null;
+      if (createBC) {
+        bcCompress = new BCCompressStage(device, true);
+        bcDecompress = new BCDecompressStage(true);
+        bcDecompress.initialize(device, width, height);
+      }
+      // Mark BC stages unavailable for DDS (already compressed) or unsupported hardware
+      if (!createBC) {
+        unavailableStages.add(1);
+        unavailableStages.add(2);
+      }
+
       const instance: PipelineInstance = {
         id,
         colorIndex,
@@ -191,8 +222,11 @@ export function usePipelineManager(): PipelineManagerReturn {
         fileType,
         fileHandle,
         ddsFormatLabel,
+        device,
         renderer,
         sourceTexture,
+        bcCompress,
+        bcDecompress,
         settings,
         stageStates,
         selectedStageIndex: STAGE_FOR_FILE_TYPE[fileType],
@@ -215,6 +249,8 @@ export function usePipelineManager(): PipelineManagerReturn {
       if (!inst) return prev;
 
       // Destroy GPU resources
+      inst.bcCompress?.destroy();
+      inst.bcDecompress?.destroy();
       inst.renderer.destroy();
       inst.sourceTexture.destroy();
 
@@ -256,9 +292,28 @@ export function usePipelineManager(): PipelineManagerReturn {
       stageStates[4] = { enabled: settings.rrtEnabled };
       stageStates[5] = { enabled: settings.odtEnabled };
 
+      // Recreate BC stages for new source dimensions / file type
+      inst.bcCompress?.destroy();
+      inst.bcDecompress?.destroy();
+      const hasBC = inst.device.features.has('texture-compression-bc');
+      const createBC = hasBC && fileType !== 'dds';
+      let bcCompress: BCCompressStage | null = null;
+      let bcDecompress: BCDecompressStage | null = null;
+      if (createBC) {
+        bcCompress = new BCCompressStage(inst.device, true);
+        bcDecompress = new BCDecompressStage(true);
+        bcDecompress.initialize(inst.device, width, height);
+      }
+      if (!createBC) {
+        unavailableStages.add(1);
+        unavailableStages.add(2);
+      }
+
       return {
         ...inst,
         sourceTexture,
+        bcCompress,
+        bcDecompress,
         metadata,
         fileType,
         fileName: fileName ?? null,
@@ -277,19 +332,28 @@ export function usePipelineManager(): PipelineManagerReturn {
   }, []);
 
   const updateSettings = useCallback((patch: Partial<PipelineSettings>, id?: PipelineId) => {
-    const targetId = id ?? selectedId;
-    if (!targetId) return;
-    updateInstance(targetId, (inst) => ({
-      ...inst,
-      settings: { ...inst.settings, ...patch },
-    }));
-  }, [selectedId, updateInstance]);
+    if (linkedSettings && !id) {
+      // Apply to all pipelines
+      setInstanceMap((prev) => {
+        const next = new Map(prev);
+        for (const [pid, inst] of prev) {
+          next.set(pid, { ...inst, settings: { ...inst.settings, ...patch } });
+        }
+        return next;
+      });
+    } else {
+      const targetId = id ?? selectedId;
+      if (!targetId) return;
+      updateInstance(targetId, (inst) => ({
+        ...inst,
+        settings: { ...inst.settings, ...patch },
+      }));
+    }
+  }, [selectedId, updateInstance, linkedSettings]);
 
   const toggleStage = useCallback((index: number, enabled: boolean, id?: PipelineId) => {
     if (LOCKED_STAGES.has(index)) return;
-    const targetId = id ?? selectedId;
-    if (!targetId) return;
-    updateInstance(targetId, (inst) => {
+    const applyToggle = (inst: PipelineInstance): PipelineInstance => {
       const nextStates = inst.stageStates.slice();
       nextStates[index] = { enabled };
       let nextSettings = inst.settings;
@@ -300,8 +364,22 @@ export function usePipelineManager(): PipelineManagerReturn {
         nextSettings = { ...nextSettings, odtEnabled: enabled };
       }
       return { ...inst, stageStates: nextStates, settings: nextSettings };
-    });
-  }, [selectedId, updateInstance]);
+    };
+
+    if (linkedSettings && !id) {
+      setInstanceMap((prev) => {
+        const next = new Map(prev);
+        for (const [pid, inst] of prev) {
+          next.set(pid, applyToggle(inst));
+        }
+        return next;
+      });
+    } else {
+      const targetId = id ?? selectedId;
+      if (!targetId) return;
+      updateInstance(targetId, applyToggle);
+    }
+  }, [selectedId, updateInstance, linkedSettings]);
 
   const selectStage = useCallback((index: number, id?: PipelineId) => {
     const targetId = id ?? selectedId;
@@ -328,25 +406,29 @@ export function usePipelineManager(): PipelineManagerReturn {
   }, [selectedId, updateInstance]);
 
   const resetAll = useCallback((id?: PipelineId) => {
-    const targetId = id ?? selectedId;
-    if (!targetId) return;
-    updateInstance(targetId, (inst) => {
-      // Respect the loaded file type — same logic as addPipeline / replacePipelineSource
+    const applyReset = (inst: PipelineInstance): PipelineInstance => {
       const settings = createSettingsForFileType(inst.fileType, inst.ddsFormatLabel);
       const stageStates = createDefaultStages();
       stageStates[4] = { enabled: settings.rrtEnabled };
       stageStates[5] = { enabled: settings.odtEnabled };
       const unavailableStages = inst.fileType === 'dds' ? new Set([0, 1]) : new Set<number>();
+      return { ...inst, settings, stageStates, selectedStageIndex: STAGE_FOR_FILE_TYPE[inst.fileType], unavailableStages };
+    };
 
-      return {
-        ...inst,
-        settings,
-        stageStates,
-        selectedStageIndex: STAGE_FOR_FILE_TYPE[inst.fileType],
-        unavailableStages,
-      };
-    });
-  }, [selectedId, updateInstance]);
+    if (linkedSettings && !id) {
+      setInstanceMap((prev) => {
+        const next = new Map(prev);
+        for (const [pid, inst] of prev) {
+          next.set(pid, applyReset(inst));
+        }
+        return next;
+      });
+    } else {
+      const targetId = id ?? selectedId;
+      if (!targetId) return;
+      updateInstance(targetId, applyReset);
+    }
+  }, [selectedId, updateInstance, linkedSettings]);
 
   const pipelines = useMemo(() => Array.from(instanceMap.values()), [instanceMap]);
   const selectedPipeline = selectedId ? instanceMap.get(selectedId) ?? null : null;
@@ -370,6 +452,8 @@ export function usePipelineManager(): PipelineManagerReturn {
     selectedPipelineId: selectedId,
     selectedPipeline,
     renderVersion,
+    bcEncodeVersion,
+    bumpBcEncodeVersion,
     addPipeline,
     removePipeline,
     replacePipelineSource,
@@ -379,6 +463,8 @@ export function usePipelineManager(): PipelineManagerReturn {
     selectStage,
     setStageAvailability,
     resetAll,
+    linkedSettings,
+    setLinkedSettings,
     selectedStages,
     selectedSettings,
     selectedStageIndex,

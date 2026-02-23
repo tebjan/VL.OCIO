@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import {
   type PipelineSettings,
   BC_FORMATS,
+  BC_QUALITIES,
   ODT_TARGETS,
 } from '../types/settings';
 import {
@@ -25,6 +26,9 @@ export interface ControlsPanelProps {
   settings: PipelineSettings;
   onSettingsChange: (patch: Partial<PipelineSettings>) => void;
   onReset?: () => void;
+  linkedSettings?: boolean;
+  onLinkedSettingsChange?: (linked: boolean) => void;
+  pipelineCount?: number;
 }
 
 const colorSpaceOptions = Object.entries(COLOR_SPACE_LABELS).map(
@@ -39,7 +43,8 @@ const gradingSpaceOptions = Object.entries(GRADING_SPACE_LABELS).map(
   ([value, label]) => ({ value: value as GradingSpaceString, label }),
 );
 
-export function ControlsPanel({ settings, onSettingsChange, onReset }: ControlsPanelProps) {
+export function ControlsPanel({ settings, onSettingsChange, onReset, linkedSettings, onLinkedSettingsChange, pipelineCount }: ControlsPanelProps) {
+  const showLinkToggle = (pipelineCount ?? 0) > 1;
   const set = (patch: Partial<PipelineSettings>) => onSettingsChange(patch);
 
   // Master controls for Lift/Gamma/Gain (affects all RGB channels uniformly)
@@ -87,6 +92,36 @@ export function ControlsPanel({ settings, onSettingsChange, onReset }: ControlsP
     <div className="w-80 min-w-64 h-full overflow-y-auto bg-surface-950 border-l border-surface-700 shrink-0">
       <div className="p-3 space-y-4">
 
+        {/* ========== LINK ALL TOGGLE ========== */}
+        {showLinkToggle && (
+          <button
+            onClick={() => onLinkedSettingsChange?.(!linkedSettings)}
+            title={linkedSettings ? 'Settings apply to ALL pipelines. Click to apply to selected only.' : 'Settings apply to selected pipeline only. Click to apply to all.'}
+            className={`w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded text-xs font-medium cursor-pointer border transition-colors ${
+              linkedSettings
+                ? 'bg-surface-700 border-surface-500 text-surface-200 hover:bg-surface-600'
+                : 'bg-surface-800 border-surface-600 text-surface-400 hover:bg-surface-700'
+            }`}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              {linkedSettings ? (
+                <>
+                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                </>
+              ) : (
+                <>
+                  <path d="M16.5 9.4l-2-1.4" />
+                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                  <line x1="2" y1="2" x2="22" y2="22" />
+                </>
+              )}
+            </svg>
+            {linkedSettings ? 'Linked — All Pipelines' : 'Selected Pipeline Only'}
+          </button>
+        )}
+
         {/* ========== PIPELINE ========== */}
         <div className="bg-surface-900 rounded-lg p-3">
           <Section title="Pipeline" defaultOpen>
@@ -108,6 +143,26 @@ export function ControlsPanel({ settings, onSettingsChange, onReset }: ControlsP
                   ))}
                 </select>
               </div>
+
+              <div className="flex flex-col gap-1">
+                <div className="text-sm text-surface-300">BC Quality</div>
+                <select
+                  value={settings.bcQuality}
+                  onChange={(e) => set({ bcQuality: parseInt(e.target.value) })}
+                  title="Compression quality — higher quality takes longer to encode"
+                  className="w-full px-3 py-2 text-sm bg-surface-800 border border-surface-700 rounded text-surface-200 focus:outline-none focus:border-surface-500 cursor-pointer"
+                >
+                  {BC_QUALITIES.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <Toggle label="Show Error" value={settings.bcShowDelta} onChange={(v) => set({ bcShowDelta: v })} title="Show compression error: abs(original - decoded) × amplification" />
+
+              {settings.bcShowDelta && (
+                <Slider mobile label="Amplification" value={settings.bcDeltaAmplification} min={1} max={100} step={1} defaultValue={1} decimals={0} unit="×" onChange={(v) => set({ bcDeltaAmplification: v })} />
+              )}
 
               <Toggle label="vvvv viewer" value={settings.applySRGB} onChange={(v) => set({ applySRGB: v })} title="Simulate vvvv's sRGB viewer transform (applies gamma for correct display)" />
               <Toggle label="RRT Enabled" value={settings.rrtEnabled} onChange={(v) => set({ rrtEnabled: v })} title="Enable/disable the Reference Rendering Transform stage" />
@@ -228,9 +283,11 @@ export function ControlsPanel({ settings, onSettingsChange, onReset }: ControlsP
               <div title="Pre-tonemap exposure adjustment in stops">
                 <Slider mobile label="Exposure" value={settings.tonemapExposure} min={-2} max={2} step={0.01} defaultValue={0} decimals={2} onChange={(v) => set({ tonemapExposure: v })} />
               </div>
-              <div title="Maximum scene brightness mapped to display white (Reinhard parameter)">
-                <Slider mobile label="White Point" value={settings.tonemapWhitePoint} min={1} max={8} step={0.1} defaultValue={4} decimals={1} onChange={(v) => set({ tonemapWhitePoint: v })} />
-              </div>
+              {settings.tonemapOperator === 10 && (
+                <div title="Maximum scene brightness mapped to display white (Reinhard parameter)">
+                  <Slider mobile label="White Point" value={settings.tonemapWhitePoint} min={1} max={8} step={0.1} defaultValue={4} decimals={1} onChange={(v) => set({ tonemapWhitePoint: v })} />
+                </div>
+              )}
 
               <div className="border-t border-surface-700 my-1" />
 
@@ -238,12 +295,14 @@ export function ControlsPanel({ settings, onSettingsChange, onReset }: ControlsP
                 <Select<ColorSpaceString> mobile label="Output Space" value={indexToColorSpace(settings.outputSpace)} options={colorSpaceOptions} onChange={(v) => set({ outputSpace: colorSpaceToIndex(v) })} />
               </div>
 
-              <div title="Reference white brightness for HDR output (nits)">
-                <Slider mobile label="Paper White" value={settings.outputPaperWhite} min={80} max={400} step={1} defaultValue={200} decimals={0} unit=" nits" onChange={(v) => set({ outputPaperWhite: v })} />
-              </div>
-              <div title="Maximum display brightness for HDR tone mapping (nits)">
-                <Slider mobile label="Peak Brightness" value={settings.tonemapPeakBrightness} min={400} max={10000} step={100} defaultValue={1000} decimals={0} unit=" nits" onChange={(v) => set({ tonemapPeakBrightness: v })} />
-              </div>
+              {(settings.outputSpace === 6 || settings.outputSpace === 7 || settings.outputSpace === 8) && (<>
+                <div title="Reference white brightness for HDR output (nits)">
+                  <Slider mobile label="Paper White" value={settings.outputPaperWhite} min={80} max={400} step={1} defaultValue={200} decimals={0} unit=" nits" onChange={(v) => set({ outputPaperWhite: v })} />
+                </div>
+                <div title="Maximum display brightness for HDR tone mapping (nits)">
+                  <Slider mobile label="Peak Brightness" value={settings.tonemapPeakBrightness} min={400} max={10000} step={100} defaultValue={1000} decimals={0} unit=" nits" onChange={(v) => set({ tonemapPeakBrightness: v })} />
+                </div>
+              </>)}
 
               <div className="border-t border-surface-700 my-1" />
 

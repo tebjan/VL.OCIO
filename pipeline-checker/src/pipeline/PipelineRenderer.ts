@@ -74,8 +74,11 @@ export class PipelineRenderer {
    * individual stages — they always receive an input and produce output.
    *
    * @param sourceTexture - The EXR source texture (stage 0/1 output).
+   * @param preEncode - Optional callback to encode additional passes
+   *   (e.g. BC decompress) into the same command encoder before color
+   *   pipeline stages. Ensures all passes share a single submission.
    */
-  render(sourceTexture: GPUTexture): void {
+  render(sourceTexture: GPUTexture, preEncode?: (encoder: GPUCommandEncoder) => void): void {
     // Use error scope on first render to catch validation issues
     const isFirst = !this.hasLoggedFirstRender;
     if (isFirst) {
@@ -83,6 +86,10 @@ export class PipelineRenderer {
     }
 
     const encoder = this.device.createCommandEncoder();
+
+    // Run pre-encode passes (e.g. BC decompress) in the same command buffer
+    if (preEncode) preEncode(encoder);
+
     let currentInput = sourceTexture;
 
     for (const stage of this.stages) {

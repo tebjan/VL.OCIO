@@ -49,6 +49,13 @@ export const BC_FORMATS = [
   { value: 6, label: 'BC7', gpuFormat: 'bc7-rgba-unorm' },
 ] as const;
 
+// --- BC Qualities (3 values) ---
+export const BC_QUALITIES = [
+  { value: 0, label: 'Fast', key: 'fast' as const },
+  { value: 1, label: 'Normal', key: 'normal' as const },
+  { value: 2, label: 'High', key: 'high' as const },
+] as const;
+
 // --- ODT Targets ---
 export const ODT_TARGETS = [
   { value: 0, label: 'Rec.709 100 nits' },
@@ -65,9 +72,12 @@ export interface Vec3 {
 export type Vector3 = Vec3;
 
 export interface PipelineSettings {
-  // Input (Stages 1-4)
+  // Input / BC Compression (Stages 0-2)
   inputColorSpace: number;
   bcFormat: number;
+  bcQuality: number;
+  bcShowDelta: boolean;
+  bcDeltaAmplification: number;
 
   // Color Grading (Stage 5)
   gradingSpace: number;
@@ -174,6 +184,9 @@ export function createDefaultSettings(): PipelineSettings {
   return {
     inputColorSpace: 2,  // ACEScg
     bcFormat: 5,
+    bcQuality: 2,              // high
+    bcShowDelta: false,
+    bcDeltaAmplification: 1,  // 1x default
     gradingSpace: 0,
     gradeExposure: 0,
     gradeContrast: 1,

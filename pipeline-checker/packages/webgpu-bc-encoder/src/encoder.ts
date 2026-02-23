@@ -79,6 +79,10 @@ export class BCEncoder {
 
     // Get or create compute pipeline
     const pipeline = this.getPipeline(format, quality);
+    console.log(`[BCEncoder] Encoding ${format} quality=${quality} ${originalWidth}x${originalHeight} (${totalBlocks} blocks)`);
+
+    // Push error scope to catch validation errors during encode
+    this.device.pushErrorScope('validation');
 
     // Create params uniform buffer (width, height, quality)
     const qualityValue = quality === 'fast' ? 0 : quality === 'normal' ? 1 : 2;
@@ -122,10 +126,25 @@ export class BCEncoder {
 
     this.device.queue.submit([commandEncoder.finish()]);
 
+    // Check for validation errors from the encode dispatch
+    const gpuError = await this.device.popErrorScope();
+    if (gpuError) {
+      console.error(`[BCEncoder] GPU validation error during ${format} encode: ${gpuError.message}`);
+    }
+
     // Read back results
     await stagingBuffer.mapAsync(GPUMapMode.READ);
     const data = new Uint8Array(stagingBuffer.getMappedRange()).slice();
     stagingBuffer.unmap();
+
+    // Quick sanity check: are all output bytes zero?
+    let allZero = true;
+    for (let i = 0; i < Math.min(data.length, 256); i++) {
+      if (data[i] !== 0) { allZero = false; break; }
+    }
+    if (allZero) {
+      console.error(`[BCEncoder] WARNING: ${format} output is all zeros — shader may have failed to execute`);
+    }
 
     // Clean up per-encode resources
     paramsBuffer.destroy();
@@ -133,6 +152,7 @@ export class BCEncoder {
     stagingBuffer.destroy();
 
     const compressionTimeMs = performance.now() - startTime;
+    console.log(`[BCEncoder] ${format} encode complete in ${compressionTimeMs.toFixed(1)}ms`);
 
     return {
       data,

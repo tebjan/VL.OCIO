@@ -184,14 +184,18 @@ function OutputTab(props: MobileLayoutProps) {
     <>
       <Select mobile label="Tonemap" value={tm.tonemap} options={tonemapOptions} onChange={(v) => updateTonemap({ tonemap: v })} />
       <Slider mobile label="Exposure" value={tm.exposure} min={-2} max={2} step={0.01} defaultValue={0} decimals={2} onChange={(v) => updateTonemap({ exposure: v })} />
-      <Slider mobile label="White Point" value={tm.whitePoint} min={1} max={8} step={0.1} defaultValue={4} decimals={1} onChange={(v) => updateTonemap({ whitePoint: v })} />
+      {tm.tonemap === 'ReinhardExtended' && (
+        <Slider mobile label="White Point" value={tm.whitePoint} min={1} max={8} step={0.1} defaultValue={4} decimals={1} onChange={(v) => updateTonemap({ whitePoint: v })} />
+      )}
 
       <div className="border-t border-surface-700 my-2" />
 
       <Select mobile label="Output Space" value={tm.outputSpace} options={colorSpaceOptions} onChange={(v) => updateTonemap({ outputSpace: v })} />
 
-      <Slider mobile label="Paper White" value={tm.paperWhite} min={80} max={400} step={1} defaultValue={200} decimals={0} unit=" nits" onChange={(v) => updateTonemap({ paperWhite: v })} />
-      <Slider mobile label="Peak Brightness" value={tm.peakBrightness} min={400} max={10000} step={100} defaultValue={1000} decimals={0} unit=" nits" onChange={(v) => updateTonemap({ peakBrightness: v })} />
+      {(tm.outputSpace === 'PQ_Rec2020' || tm.outputSpace === 'HLG_Rec2020' || tm.outputSpace === 'scRGB') && (<>
+        <Slider mobile label="Paper White" value={tm.paperWhite} min={80} max={400} step={1} defaultValue={200} decimals={0} unit=" nits" onChange={(v) => updateTonemap({ paperWhite: v })} />
+        <Slider mobile label="Peak Brightness" value={tm.peakBrightness} min={400} max={10000} step={100} defaultValue={1000} decimals={0} unit=" nits" onChange={(v) => updateTonemap({ peakBrightness: v })} />
+      </>)}
 
       <div className="border-t border-surface-700 my-2" />
 

@@ -17,7 +17,13 @@ import {
   type PipelineSettings as GPUPipelineSettings,
 } from './pipeline/PipelineUniforms';
 import type { PipelineSettings } from './types/settings';
+import type { BCFormat, BCQuality } from '@vl-ocio/webgpu-bc-encoder';
 import { saveFileHandle, loadFileHandle, saveViewState, loadViewState } from './lib/sessionStore';
+
+/** Map bcFormat setting index (0-6) to BCFormat string key. */
+const BC_FORMAT_KEYS: BCFormat[] = ['bc1', 'bc2', 'bc3', 'bc4', 'bc5', 'bc6h', 'bc7'];
+/** Map bcQuality setting index (0-2) to BCQuality string key. */
+const BC_QUALITY_KEYS: BCQuality[] = ['fast', 'normal', 'high'];
 
 /** Extensions decodable by the browser via createImageBitmap. */
 const BROWSER_IMAGE_EXTS = new Set([
@@ -414,6 +420,32 @@ export default function App() {
     manager.toggleStage(5, manager.selectedSettings.odtEnabled);
   }, [manager.selectedSettings.rrtEnabled, manager.selectedSettings.odtEnabled, manager.toggleStage]);
 
+  // Trigger async BC encoding when source texture or BC settings change.
+  useEffect(() => {
+    if (state.kind !== 'ready') return;
+    let cancelled = false;
+
+    (async () => {
+      for (const inst of manager.pipelines) {
+        const bc = inst.bcCompress;
+        if (!bc?.enabled || cancelled) continue;
+
+        // Sync format/quality from settings
+        bc.setFormat(BC_FORMAT_KEYS[inst.settings.bcFormat] ?? 'bc6h');
+        bc.setQuality(BC_QUALITY_KEYS[inst.settings.bcQuality] ?? 'normal');
+
+        const result = await bc.runEncode(inst.sourceTexture);
+        if (result && inst.bcDecompress && !cancelled) {
+          const didUpload = inst.bcDecompress.uploadBCData(result);
+          if (didUpload) manager.bumpBcEncodeVersion();
+        }
+      }
+    })();
+
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state, manager.pipelines, manager.selectedSettings.bcFormat, manager.selectedSettings.bcQuality]);
+
   // Re-render ALL pipelines whenever any settings or stage toggles change.
   useEffect(() => {
     if (state.kind !== 'ready') return;
@@ -434,23 +466,45 @@ export default function App() {
       const gpuSettings = toGPUSettings(inst.settings, 0);
       renderer.updateUniforms(serializeUniforms(gpuSettings));
 
-      // Render all enabled stages
-      renderer.render(inst.sourceTexture);
+      // Run BC decompress + color pipeline in a single command buffer submission.
+      // BC decompress is encoded as a preEncode callback so all render passes
+      // share one encoder — WebGPU guarantees writes from earlier passes are
+      // visible to reads in later passes within the same submission.
+      let colorPipelineInput = inst.sourceTexture;
+      let preEncode: ((encoder: GPUCommandEncoder) => void) | undefined;
+
+      if (inst.bcDecompress?.enabled && inst.bcCompress?.encodeResult) {
+        inst.bcDecompress.showDelta = inst.settings.bcShowDelta;
+        inst.bcDecompress.amplification = inst.settings.bcDeltaAmplification;
+
+        const bcDecompress = inst.bcDecompress;
+        const srcTex = inst.sourceTexture;
+        const uniforms = renderer.getUniformBuffer();
+        preEncode = (encoder) => {
+          bcDecompress.encode(encoder, srcTex, uniforms);
+        };
+
+        colorPipelineInput = inst.bcDecompress.getDecompressedOutput() ?? inst.sourceTexture;
+      }
+
+      // Render all enabled color pipeline stages
+      renderer.render(colorPipelineInput, preEncode);
     }
 
     // Bump version so Preview2D + thumbnails re-render
     manager.bumpRenderVersion();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state, manager.pipelines, manager.selectedSettings, manager.selectedStages]);
+  }, [state, manager.pipelines, manager.selectedSettings, manager.selectedStages, manager.bcEncodeVersion]);
 
   // Get the output texture for a given UI stage index of a specific pipeline
-  const getStageTexture = useCallback((stageIndex: number, inst?: { renderer: { getStageOutput(i: number): GPUTexture | null; getStages(): ReadonlyArray<unknown> }; sourceTexture: GPUTexture }): GPUTexture | null => {
+  const getStageTexture = useCallback((stageIndex: number, inst?: { renderer: { getStageOutput(i: number): GPUTexture | null; getStages(): ReadonlyArray<unknown> }; sourceTexture: GPUTexture; bcDecompress?: { output: GPUTexture | null } | null }): GPUTexture | null => {
     if (!inst) {
       const sel = manager.selectedPipeline;
       if (!sel) return null;
       inst = sel;
     }
-    if (stageIndex < 3) return inst.sourceTexture;
+    if (stageIndex <= 1) return inst.sourceTexture;
+    if (stageIndex === 2) return inst.bcDecompress?.output ?? inst.sourceTexture;
     const rendererIndex = Math.min(stageIndex - 3, inst.renderer.getStages().length - 1);
     return inst.renderer.getStageOutput(rendererIndex) ?? inst.sourceTexture;
   }, [manager.selectedPipeline]);
@@ -570,6 +624,9 @@ export default function App() {
                 settings={manager.selectedSettings}
                 onSettingsChange={(patch) => manager.updateSettings(patch)}
                 onReset={() => manager.resetAll()}
+                linkedSettings={manager.linkedSettings}
+                onLinkedSettingsChange={manager.setLinkedSettings}
+                pipelineCount={manager.pipelines.length}
               />
               {manager.selectedMetadata && (
                 <MetadataPanel metadata={manager.selectedMetadata} />

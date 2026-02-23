@@ -225,6 +225,11 @@ export default function App() {
   const [dropLoading, setDropLoading] = useState(false);
   const [dropError, setDropError] = useState<string | null>(null);
 
+  // Shader compilation indicator — true while GPU is compiling pipelines for the first render.
+  // Set when a new pipeline is created; cleared by onSubmittedWorkDone() after the first render.
+  const [isShaderCompiling, setIsShaderCompiling] = useState(false);
+  const shaderCompilePendingRef = useRef(false);
+
   // Auto-clear error toast after 5 seconds
   useEffect(() => {
     if (!dropError) return;
@@ -244,6 +249,11 @@ export default function App() {
         fileName,
         stats,
       };
+
+      // Signal that new GPU pipelines are being created — shaders will compile
+      // on the first render. onSubmittedWorkDone() in the render effect clears this.
+      shaderCompilePendingRef.current = true;
+      setIsShaderCompiling(true);
 
       if (targetPipelineId) {
         // Replace a specific pipeline
@@ -424,6 +434,7 @@ export default function App() {
   useEffect(() => {
     if (state.kind !== 'ready') return;
     let cancelled = false;
+    let trackingCompile = false;
 
     (async () => {
       for (const inst of manager.pipelines) {
@@ -434,15 +445,22 @@ export default function App() {
         bc.setFormat(BC_FORMAT_KEYS[inst.settings.bcFormat] ?? 'bc6h');
         bc.setQuality(BC_QUALITY_KEYS[inst.settings.bcQuality] ?? 'normal');
 
+        // Show indicator on first pipeline that actually has work to do
+        if (!trackingCompile) {
+          trackingCompile = true;
+          setIsShaderCompiling(true);
+        }
+
         const result = await bc.runEncode(inst.sourceTexture);
         if (result && inst.bcDecompress && !cancelled) {
           const didUpload = inst.bcDecompress.uploadBCData(result);
           if (didUpload) manager.bumpBcEncodeVersion();
         }
       }
+      if (trackingCompile && !cancelled) setIsShaderCompiling(false);
     })();
 
-    return () => { cancelled = true; };
+    return () => { cancelled = true; if (trackingCompile) setIsShaderCompiling(false); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, manager.pipelines, manager.selectedSettings.bcFormat, manager.selectedSettings.bcQuality]);
 
@@ -493,6 +511,14 @@ export default function App() {
 
     // Bump version so Preview2D + thumbnails re-render
     manager.bumpRenderVersion();
+
+    // After the first render following pipeline creation, wait for the GPU to finish.
+    // The first render stalls until shader compilation is complete — onSubmittedWorkDone
+    // resolves only after that stall, giving us an accurate "done compiling" signal.
+    if (shaderCompilePendingRef.current) {
+      shaderCompilePendingRef.current = false;
+      void state.gpu.device.queue.onSubmittedWorkDone().then(() => setIsShaderCompiling(false));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, manager.pipelines, manager.selectedSettings, manager.selectedStages, manager.bcEncodeVersion]);
 
@@ -636,6 +662,18 @@ export default function App() {
             </div>
           </div>
         </>
+      )}
+
+      {/* Shader compilation indicator */}
+      {isShaderCompiling && (
+        <div style={{
+          position: 'fixed', bottom: '16px', left: '50%', transform: 'translateX(-50%)',
+          background: 'var(--surface-700, #333)', color: 'var(--color-text, #ccc)',
+          padding: '8px 20px', borderRadius: '6px', fontSize: '13px',
+          boxShadow: '0 2px 12px rgba(0,0,0,0.4)', zIndex: 100,
+        }}>
+          Compiling shaders...
+        </div>
       )}
 
       {/* Loading / error toasts */}

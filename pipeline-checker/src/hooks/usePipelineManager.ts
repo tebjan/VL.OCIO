@@ -20,7 +20,7 @@ function createDefaultStages(): StageState[] {
 /** Stage index to auto-select based on loaded file type. */
 const STAGE_FOR_FILE_TYPE: Record<LoadedFileType, number> = {
   exr: STAGE_COUNT - 1,
-  dds: 2,
+  dds: STAGE_COUNT - 1,
   image: STAGE_COUNT - 1,
   sample: STAGE_COUNT - 1,
 };
@@ -191,7 +191,7 @@ export function usePipelineManager(): PipelineManagerReturn {
       renderer.setStages(stages);
       renderer.setSize(width, height);
 
-      const unavailableStages = fileType === 'dds' ? new Set([0, 1]) : new Set<number>();
+      const unavailableStages = new Set<number>();
       const settings = createSettingsForFileType(fileType, ddsFormatLabel);
 
       // Sync stage enable/disable for RRT (4) and ODT (5) from settings
@@ -209,8 +209,13 @@ export function usePipelineManager(): PipelineManagerReturn {
         bcDecompress = new BCDecompressStage(true);
         bcDecompress.initialize(device, width, height);
       }
-      // Mark BC stages unavailable for DDS (already compressed) or unsupported hardware
-      if (!createBC) {
+      // Mark stage availability for BC stages
+      if (fileType === 'dds') {
+        // DDS: stage 0 (load) and 1 (compress) not applicable; stage 2 shows the decoded DDS
+        unavailableStages.add(0);
+        unavailableStages.add(1);
+      } else if (!createBC) {
+        // No BC hardware: both compress and decompress unavailable
         unavailableStages.add(1);
         unavailableStages.add(2);
       }
@@ -284,7 +289,7 @@ export function usePipelineManager(): PipelineManagerReturn {
     updateInstance(id, (inst) => {
       inst.sourceTexture.destroy();
       inst.renderer.setSize(width, height);
-      const unavailableStages = fileType === 'dds' ? new Set([0, 1]) : new Set<number>();
+      const unavailableStages = new Set<number>();
       const settings = createSettingsForFileType(fileType, ddsFormatLabel);
 
       // Sync stage enable/disable for RRT (4) and ODT (5) from settings
@@ -304,7 +309,10 @@ export function usePipelineManager(): PipelineManagerReturn {
         bcDecompress = new BCDecompressStage(true);
         bcDecompress.initialize(inst.device, width, height);
       }
-      if (!createBC) {
+      if (fileType === 'dds') {
+        unavailableStages.add(0);
+        unavailableStages.add(1);
+      } else if (!createBC) {
         unavailableStages.add(1);
         unavailableStages.add(2);
       }
@@ -411,7 +419,14 @@ export function usePipelineManager(): PipelineManagerReturn {
       const stageStates = createDefaultStages();
       stageStates[4] = { enabled: settings.rrtEnabled };
       stageStates[5] = { enabled: settings.odtEnabled };
-      const unavailableStages = inst.fileType === 'dds' ? new Set([0, 1]) : new Set<number>();
+      const unavailableStages = new Set<number>();
+      if (inst.fileType === 'dds') {
+        unavailableStages.add(0);
+        unavailableStages.add(1);
+      } else if (!inst.bcCompress) {
+        unavailableStages.add(1);
+        unavailableStages.add(2);
+      }
       return { ...inst, settings, stageStates, selectedStageIndex: STAGE_FOR_FILE_TYPE[inst.fileType], unavailableStages };
     };
 

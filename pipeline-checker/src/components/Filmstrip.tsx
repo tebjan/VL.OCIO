@@ -1,5 +1,5 @@
 import { type StageInfo } from '../pipeline/types/StageInfo';
-import { type PipelineSettings, getStageColorSpace } from '../types/settings';
+import { type PipelineSettings, getStageColorSpace, isLinearStageOutput } from '../types/settings';
 import { getStageVolume } from '../lib/colorSpaceVolume';
 import { StageCard } from './StageCard';
 import { GamutCone } from './GamutCone';
@@ -34,10 +34,15 @@ export function Filmstrip({ stages, selectedIndex, onSelect, onToggle, device, f
       }}
     >
       {stages.map((stage, i) => {
-        // Stages 0-2 show raw source data. For sRGB input, data is still
-        // gamma-encoded → don't apply extra sRGB curve in the viewer.
+        // Per-stage sRGB logic:
+        // - Stage 8 (Final Display): sRGB based on whether pipeline output is linear,
+        //   independent of vvvv viewer toggle (simulates DX11 sRGB backbuffer)
+        // - Stages 0-2 with sRGB input: don't double-apply gamma
+        // - All others: use vvvv viewer toggle
         const isInputSRGB = settings.inputColorSpace === 5;
-        const effectiveApplySRGB = (i < 3 && isInputSRGB) ? false : applySRGB;
+        const effectiveApplySRGB = i === 8
+          ? isLinearStageOutput(getStageColorSpace(7, settings, isEnabled))
+          : (i < 3 && isInputSRGB) ? false : applySRGB;
         const colorSpace = getStageColorSpace(i, settings, isEnabled);
         return (
           <div key={stage.index} style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>

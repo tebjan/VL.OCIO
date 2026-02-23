@@ -16,7 +16,7 @@ import {
   serializeUniforms,
   type PipelineSettings as GPUPipelineSettings,
 } from './pipeline/PipelineUniforms';
-import type { PipelineSettings } from './types/settings';
+import { type PipelineSettings, getStageColorSpace, isLinearStageOutput } from './types/settings';
 import type { BCFormat, BCQuality } from '@vl-ocio/webgpu-bc-encoder';
 import { saveFileHandle, loadFileHandle, saveViewState, loadViewState } from './lib/sessionStore';
 
@@ -523,9 +523,11 @@ export default function App() {
           texture,
           borderColor: [color.rgb[0], color.rgb[1], color.rgb[2]] as [number, number, number],
           isSelected: manager.pipelines.length > 1 && pipeline.id === manager.selectedPipelineId,
-          applySRGB: (pipeline.selectedStageIndex < 3 && pipeline.settings.inputColorSpace === 5)
-            ? false
-            : (pipeline.settings.applySRGB ?? true),
+          applySRGB: pipeline.selectedStageIndex === 8
+            ? isLinearStageOutput(getStageColorSpace(7, pipeline.settings, (idx) => pipeline.stageStates[idx]?.enabled ?? true))
+            : (pipeline.selectedStageIndex < 3 && pipeline.settings.inputColorSpace === 5)
+              ? false
+              : (pipeline.settings.applySRGB ?? true),
         };
       })
       .filter((l): l is PreviewLayer => l !== null);

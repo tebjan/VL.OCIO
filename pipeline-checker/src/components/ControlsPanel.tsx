@@ -32,7 +32,7 @@ export interface ControlsPanelProps {
 }
 
 const colorSpaceOptions = Object.entries(COLOR_SPACE_LABELS).map(
-  ([value, label]) => ({ value: value as ColorSpaceString, label }),
+  ([value, label]) => ({ value: value as ColorSpaceString, label: value === 'Linear_Rec709' ? `${label} (vvvv)` : label }),
 );
 
 const tonemapOptions = Object.entries(TONEMAP_LABELS).map(

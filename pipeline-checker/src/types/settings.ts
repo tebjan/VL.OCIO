@@ -136,6 +136,11 @@ function csShort(index: number): string {
   return CS_SHORT[index] ?? '?';
 }
 
+/** Whether a stage color space label represents a linear (scene-referred) format */
+export function isLinearStageOutput(label: string): boolean {
+  return /^Lin|^ACEScg$|^scRGB$|^AP1|^OCES/.test(label);
+}
+
 export function getStageColorSpace(
   stageIndex: number,
   settings: PipelineSettings,

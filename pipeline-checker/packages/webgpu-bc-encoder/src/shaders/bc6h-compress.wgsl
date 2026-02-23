@@ -391,7 +391,7 @@ fn unquantizeI(val: i32, prec: u32) -> i32 {
     if (prec >= 15u) { return val; }
     if (val == 0i) { return 0i; }
     if (val == i32((1u << prec) - 1u)) { return i32(0xFFFFu); }
-    return i32(((u32(val) << 16u) + 0x8000u) >> prec);
+    return ((val << 16) + 0x8000) >> prec;
 }
 
 // ─── Mode 10 Encoder (1-subset, 10-bit endpoints, 4-bit indices) ─────────────

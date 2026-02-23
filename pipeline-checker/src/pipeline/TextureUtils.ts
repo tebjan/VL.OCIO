@@ -8,7 +8,6 @@
  */
 
 import type { DDSParseResult } from './DDSParser';
-import decompressWGSL from './shaders/bc-decompress.wgsl?raw';
 
 /** Bytes per pixel for rgba16float: 4 channels x 2 bytes. */
 export const BYTES_PER_PIXEL = 8;
@@ -228,19 +227,45 @@ export function uploadFloat16Texture(
 }
 
 /**
+ * WGSL shader for decompressing BC textures via textureLoad.
+ * Uses textureLoad (not textureSample) to avoid sampler compatibility issues
+ * with BC6H float formats. Works with all BC format sample types.
+ */
+const DDS_DECOMPRESS_WGSL = `
+@group(0) @binding(0) var bcTexture: texture_2d<f32>;
+
+@vertex fn vs(@builtin(vertex_index) i: u32) -> @builtin(position) vec4<f32> {
+  let uv = vec2<f32>(f32((i << 1u) & 2u), f32(i & 2u));
+  return vec4<f32>(uv * 2.0 - 1.0, 0.0, 1.0);
+}
+
+@fragment fn fs(@builtin(position) pos: vec4<f32>) -> @location(0) vec4<f32> {
+  return textureLoad(bcTexture, vec2<u32>(u32(pos.x), u32(pos.y)), 0);
+}
+`;
+
+/**
  * Upload DDS block data as a native compressed texture and decompress it
  * to an rgba16float texture via a one-shot GPU render pass.
  *
- * The GPU hardware handles decompression automatically during textureSample.
+ * Uses textureLoad for decompression — compatible with all BC formats
+ * including BC6H float types that may not support filtered sampling
+ * on all WebGPU implementations.
+ *
  * Returns the decompressed rgba16float texture ready for the color pipeline.
  */
 export function uploadDDSTexture(
   device: GPUDevice,
   dds: DDSParseResult,
 ): GPUTexture {
-  // 1. Create the compressed texture and upload block data
+  // WebGPU requires compressed texture dimensions to be multiples of the block size (4).
+  // DDS files may store non-aligned dimensions; pad up to the next block boundary.
+  const alignedW = Math.ceil(dds.width / 4) * 4;
+  const alignedH = Math.ceil(dds.height / 4) * 4;
+
+  // 1. Create the compressed texture at block-aligned dimensions and upload block data
   const compressedTex = device.createTexture({
-    size: [dds.width, dds.height],
+    size: [alignedW, alignedH],
     format: dds.format,
     usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
     label: `DDS Compressed (${dds.formatLabel})`,
@@ -250,10 +275,10 @@ export function uploadDDSTexture(
     { texture: compressedTex },
     dds.blockData as Uint8Array<ArrayBuffer>,
     { bytesPerRow: dds.blocksPerRow * dds.blockSize },
-    { width: dds.width, height: dds.height },
+    { width: alignedW, height: alignedH },
   );
 
-  // 2. Create rgba16float render target for decompressed output (with mip levels)
+  // 2. Create rgba16float render target at original dimensions (with mip levels)
   const mipCount = mipLevelCount(dds.width, dds.height);
   const outputTex = device.createTexture({
     size: [dds.width, dds.height],
@@ -265,14 +290,24 @@ export function uploadDDSTexture(
     label: 'DDS Decompressed',
   });
 
-  // 3. One-shot decompress pass using the bc-decompress shader
+  // 3. One-shot decompress pass using textureLoad (no sampler needed).
+  //    Explicit bind group layout with 'float' sample type — all BC formats
+  //    (unorm BC1-BC5/BC7 and float BC6H) have 'float' sample type.
   const shaderModule = device.createShaderModule({
     label: 'DDS Decompress (one-shot)',
-    code: decompressWGSL,
+    code: DDS_DECOMPRESS_WGSL,
+  });
+
+  const bgl = device.createBindGroupLayout({
+    entries: [{
+      binding: 0,
+      visibility: GPUShaderStage.FRAGMENT,
+      texture: { sampleType: 'float' },
+    }],
   });
 
   const pipeline = device.createRenderPipeline({
-    layout: 'auto',
+    layout: device.createPipelineLayout({ bindGroupLayouts: [bgl] }),
     vertex: { module: shaderModule, entryPoint: 'vs' },
     fragment: {
       module: shaderModule,
@@ -282,16 +317,10 @@ export function uploadDDSTexture(
     primitive: { topology: 'triangle-list' },
   });
 
-  const sampler = device.createSampler({
-    magFilter: 'nearest',
-    minFilter: 'nearest',
-  });
-
   const bindGroup = device.createBindGroup({
-    layout: pipeline.getBindGroupLayout(0),
+    layout: bgl,
     entries: [
       { binding: 0, resource: compressedTex.createView() },
-      { binding: 1, resource: sampler },
     ],
   });
 

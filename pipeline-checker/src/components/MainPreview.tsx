@@ -95,12 +95,12 @@ export function MainPreview({
   renderVersion,
   stageName,
 }: MainPreviewProps) {
-  const [mode, setMode] = useState<ViewMode>('2d');
+  const [mode, setMode] = useState<ViewMode>('3d');
   const [heightmapSettings, setHeightmapSettings] = useState<HeightmapSettings>(
     createDefaultHeightmapSettings,
   );
   // Track whether 3D was ever activated — once true, keep HeightmapView mounted
-  const [ever3D, setEver3D] = useState(false);
+  const [ever3D, setEver3D] = useState(true);
 
   useEffect(() => {
     if (mode === '3d') setEver3D(true);

@@ -20,6 +20,8 @@ export interface PipelineRowProps {
   onFileDrop?: (file: File, fileHandle?: FileSystemFileHandle) => void;
   /** True when a file is being dragged over the window. */
   isDraggingFile?: boolean;
+  /** Per-stage visibility for compact mode (indexed by stage index). */
+  stageVisibility?: boolean[];
 }
 
 export function PipelineRow({
@@ -36,6 +38,7 @@ export function PipelineRow({
   onStageToggle,
   onFileDrop,
   isDraggingFile,
+  stageVisibility,
 }: PipelineRowProps) {
   const color = PIPELINE_COLORS[pipeline.colorIndex];
   const applySRGB = pipeline.settings.applySRGB;
@@ -135,6 +138,7 @@ export function PipelineRow({
           renderVersion={renderVersion}
           applySRGB={applySRGB}
           settings={pipeline.settings}
+          stageVisibility={stageVisibility}
         />
       </div>
 

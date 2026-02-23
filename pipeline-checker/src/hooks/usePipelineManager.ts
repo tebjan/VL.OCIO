@@ -364,6 +364,11 @@ export function usePipelineManager(): PipelineManagerReturn {
     const applyToggle = (inst: PipelineInstance): PipelineInstance => {
       const nextStates = inst.stageStates.slice();
       nextStates[index] = { enabled };
+      // Link BC Compress (1) and BC Decompress (2) — always toggle together
+      if (index === 1 || index === 2) {
+        nextStates[1] = { enabled };
+        nextStates[2] = { enabled };
+      }
       let nextSettings = inst.settings;
       if (index === 4 && inst.settings.rrtEnabled !== enabled) {
         nextSettings = { ...nextSettings, rrtEnabled: enabled };

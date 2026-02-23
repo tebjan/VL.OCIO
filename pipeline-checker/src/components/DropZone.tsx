@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+export { generateSampleImage } from '../sampleImage';
 
 /** File types the pipeline can load. */
 export type LoadedFileType = 'exr' | 'dds' | 'image' | 'sample';
@@ -115,31 +116,6 @@ export function extractDroppedFile(
   return { file, handlePromise };
 }
 
-/**
- * Generate a procedural 256x256 HDR gradient for quick testing.
- * X = brightness 0.0 to 10.0+, Y = hue sweep (HSL).
- */
-export function generateSampleImage(): { data: Float32Array; width: number; height: number } {
-  const width = 256;
-  const height = 256;
-  const data = new Float32Array(width * height * 4);
-
-  for (let y = 0; y < height; y++) {
-    const hue = y / height;
-    for (let x = 0; x < width; x++) {
-      const brightness = (x / (width - 1)) * 10.0;
-      const [r, g, b] = hslToLinear(hue, 0.8, 0.5);
-      const idx = (y * width + x) * 4;
-      data[idx + 0] = r * brightness;
-      data[idx + 1] = g * brightness;
-      data[idx + 2] = b * brightness;
-      data[idx + 3] = 1.0;
-    }
-  }
-
-  return { data, width, height };
-}
-
 export function halfToFloat(h: number): number {
   const sign = (h >>> 15) & 0x1;
   const exponent = (h >>> 10) & 0x1f;
@@ -157,22 +133,4 @@ export function halfToFloat(h: number): number {
   }
 
   return (sign ? -1 : 1) * Math.pow(2, exponent - 15) * (1 + mantissa / 1024);
-}
-
-function hslToLinear(h: number, s: number, l: number): [number, number, number] {
-  const c = (1 - Math.abs(2 * l - 1)) * s;
-  const x = c * (1 - Math.abs(((h * 6) % 2) - 1));
-  const m = l - c / 2;
-
-  let r = 0, g = 0, b = 0;
-  const sector = Math.floor(h * 6) % 6;
-  if (sector === 0)      { r = c; g = x; b = 0; }
-  else if (sector === 1) { r = x; g = c; b = 0; }
-  else if (sector === 2) { r = 0; g = c; b = x; }
-  else if (sector === 3) { r = 0; g = x; b = c; }
-  else if (sector === 4) { r = x; g = 0; b = c; }
-  else                   { r = c; g = 0; b = x; }
-
-  const toLinear = (v: number) => Math.pow(Math.max(v + m, 0), 2.2);
-  return [toLinear(r), toLinear(g), toLinear(b)];
 }

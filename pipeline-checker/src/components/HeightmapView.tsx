@@ -697,20 +697,21 @@ class HeightmapScene {
   }
 
   startRenderLoop(): void {
-    if (this.disposed) return;
+    if (this.disposed || this.animationId !== 0) return; // Prevent double-start
     const loop = async () => {
-      if (this.disposed) return;
+      if (this.disposed) { this.animationId = 0; return; }
       try {
         if (this.controls) this.controls.update();
-        if (this.disposed || !this.renderer) return;
+        if (this.disposed || !this.renderer) { this.animationId = 0; return; }
         await this.renderer.renderAsync(this.scene, this.camera);
       } catch (err) {
+        this.animationId = 0;
         if (this.disposed) return;
         console.error('[HeightmapView] Render loop error:', err);
         this.onError?.(`3D render error: ${(err as Error).message}`);
         return;
       }
-      if (this.disposed) return;
+      if (this.disposed) { this.animationId = 0; return; }
       this.animationId = requestAnimationFrame(loop);
     };
     this.animationId = requestAnimationFrame(loop);
@@ -762,25 +763,18 @@ export function HeightmapView({ layers, device, active, renderVersion, settings 
   // Stable selection key: changes when isSelected flags change
   const selectionKey = layers.map(l => l.isSelected ? '1' : '0').join('');
 
-  // Initialise Three.js scene + renderer
+  // Initialise Three.js scene + renderer (once, on first activation)
   useEffect(() => {
-    if (!active || initRef.current || !canvasRef.current) return;
+    if (!active || initRef.current || !canvasRef.current || !device) return;
     initRef.current = true;
 
     const scene = new HeightmapScene();
     scene.onError = setError;
     sceneRef.current = scene;
 
-    if (!device) {
-      setError('No GPU device available for 3D view');
-      return;
-    }
-
-    let cancelled = false;
-
     scene.init(canvasRef.current, device)
       .then(() => {
-        if (cancelled || scene.disposed) return;
+        if (scene.disposed) return;
         const container = containerRef.current;
         if (container) {
           const rect = container.getBoundingClientRect();
@@ -790,19 +784,27 @@ export function HeightmapView({ layers, device, active, renderVersion, settings 
         setSceneReady(true);
       })
       .catch((err) => {
-        if (cancelled) return;
+        if (scene.disposed) return;
         console.error('[HeightmapView] Init failed:', err);
         setError(`3D initialization failed: ${(err as Error).message}`);
       });
 
+    // No cleanup — scene persists across active toggles.
+    // Unmount cleanup is handled by the separate effect below.
+  }, [active, device]);
+
+  // Cleanup only on component unmount
+  useEffect(() => {
     return () => {
-      cancelled = true;
-      scene.dispose();
-      sceneRef.current = null;
+      const scene = sceneRef.current;
+      if (scene) {
+        scene.dispose();
+        sceneRef.current = null;
+      }
       initRef.current = false;
       setSceneReady(false);
     };
-  }, [active, device]);
+  }, []);
 
   // Setup or redispatch layers when structure/content changes
   useEffect(() => {
@@ -835,13 +837,21 @@ export function HeightmapView({ layers, device, active, renderVersion, settings 
   // Render loop start/stop on visibility
   useEffect(() => {
     const scene = sceneRef.current;
-    if (!scene) return;
+    if (!scene || !sceneReady) return;
+    scene.stopRenderLoop();
     if (active) {
-      scene.startRenderLoop();
-    } else {
-      scene.stopRenderLoop();
+      // Delay start so container display:block takes effect and dimensions are valid
+      const id = requestAnimationFrame(() => {
+        const container = containerRef.current;
+        if (container) {
+          const { width, height } = container.getBoundingClientRect();
+          if (width > 0 && height > 0) scene.resize(width, height);
+        }
+        scene.startRenderLoop();
+      });
+      return () => cancelAnimationFrame(id);
     }
-  }, [active]);
+  }, [active, sceneReady]);
 
   // Container resize
   useEffect(() => {

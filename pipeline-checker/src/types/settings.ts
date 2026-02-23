@@ -146,8 +146,17 @@ export function getStageColorSpace(
   settings: PipelineSettings,
   stageEnabled: (index: number) => boolean,
 ): string {
-  // Pre-pipeline stages: always the raw input color space
-  if (stageIndex <= 2) return csShort(settings.inputColorSpace);
+  // Stage 0 (EXR Load): always the raw input color space
+  if (stageIndex === 0) return csShort(settings.inputColorSpace);
+
+  // Stages 1-2 (BC Compress/Decompress): BC6H + sRGB linearizes to Rec.709
+  if (stageIndex <= 2) {
+    const bcActive = stageEnabled(1) && stageEnabled(2);
+    if (bcActive && settings.bcFormat === 5 /* BC6H */ && settings.inputColorSpace === 5 /* sRGB */) {
+      return 'Lin 709';
+    }
+    return csShort(settings.inputColorSpace);
+  }
 
   // If this stage is disabled, propagate from previous stage
   if (!stageEnabled(stageIndex)) {
@@ -183,6 +192,27 @@ export function getStageColorSpace(
     default:
       return '';
   }
+}
+
+/**
+ * Compute per-stage visibility for compact filmstrip mode.
+ * In compact mode, two stages are always hidden:
+ * - BC Compress (1): always identical to Source (passthrough display)
+ * - Output Encode (6): transfer function only, less diagnostic value
+ */
+export function getStageVisibility(compactMode: boolean): boolean[] {
+  if (!compactMode) return Array(9).fill(true);
+  return [
+    true,   // 0: Source
+    false,  // 1: BC Compress — hidden (always identical to Source)
+    true,   // 2: BC Decompress
+    true,   // 3: Color Grade
+    true,   // 4: RRT
+    true,   // 5: ODT
+    false,  // 6: Output Encode — hidden (transfer function only)
+    true,   // 7: Display Remap
+    true,   // 8: Final Display
+  ];
 }
 
 export function createDefaultSettings(): PipelineSettings {

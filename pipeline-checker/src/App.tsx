@@ -16,7 +16,7 @@ import {
   serializeUniforms,
   type PipelineSettings as GPUPipelineSettings,
 } from './pipeline/PipelineUniforms';
-import { type PipelineSettings, getStageColorSpace, isLinearStageOutput } from './types/settings';
+import { type PipelineSettings, getStageColorSpace, isLinearStageOutput, getStageVisibility } from './types/settings';
 import type { BCFormat, BCQuality } from '@vl-ocio/webgpu-bc-encoder';
 import { saveFileHandle, loadFileHandle, saveViewState, loadViewState } from './lib/sessionStore';
 
@@ -38,9 +38,21 @@ type AppState =
 /**
  * Map UI-facing PipelineSettings to the GPU uniform buffer format.
  */
-function toGPUSettings(s: PipelineSettings, viewExposure: number): GPUPipelineSettings {
+/**
+ * Compute effective input color space after BC stages.
+ * BC6H stores linear data — when input is sRGB, the BC pipeline linearizes it,
+ * so stages after BC see Linear Rec.709.
+ */
+function getEffectiveInputSpace(s: PipelineSettings, bcEnabled: boolean): number {
+  if (bcEnabled && s.bcFormat === 5 /* BC6H */ && s.inputColorSpace === 5 /* sRGB */) {
+    return 0; // Linear Rec.709
+  }
+  return s.inputColorSpace;
+}
+
+function toGPUSettings(s: PipelineSettings, viewExposure: number, effectiveInputSpace: number): GPUPipelineSettings {
   return {
-    inputSpace: s.inputColorSpace,
+    inputSpace: effectiveInputSpace,
     gradingSpace: s.gradingSpace,
     gradeExposure: s.gradeExposure,
     contrast: s.gradeContrast,
@@ -219,6 +231,7 @@ export default function App() {
   const gpuRef = useRef<GPUContext | null>(null);
 
   const [isDragging, setIsDragging] = useState(false);
+  const [compactMode, setCompactMode] = useState(true);
   const manager = usePipelineManager();
 
   // Loading / error toast state
@@ -302,8 +315,11 @@ export default function App() {
               if (parsed) {
                 const sizeMB = (buffer.byteLength / (1024 * 1024)).toFixed(2);
                 loadFile(gpu, parsed.sourceTexture, parsed.width, parsed.height, parsed.stats, sizeMB, 'exr', stored.fileName);
-                const savedStage = loadViewState();
-                if (savedStage !== null) manager.selectStage(savedStage);
+                const saved = loadViewState();
+                if (saved !== null) {
+                  manager.selectStage(saved.stageIndex);
+                  if (saved.compactMode !== undefined) setCompactMode(saved.compactMode);
+                }
                 return;
               }
             } else if (stored.fileType === 'dds') {
@@ -311,9 +327,10 @@ export default function App() {
               const sourceTexture = uploadDDSTexture(gpu.device, dds);
               const sizeMB = (buffer.byteLength / (1024 * 1024)).toFixed(2);
               loadFile(gpu, sourceTexture, dds.width, dds.height, null, sizeMB, 'dds', stored.fileName, undefined, null, dds.formatLabel);
-              const savedStage = loadViewState();
-              if (savedStage !== null) {
-                setTimeout(() => manager.selectStage(savedStage), 0);
+              const saved = loadViewState();
+              if (saved !== null) {
+                setTimeout(() => manager.selectStage(saved.stageIndex), 0);
+                if (saved.compactMode !== undefined) setCompactMode(saved.compactMode);
               }
               return;
             } else if (stored.fileType === 'image') {
@@ -324,8 +341,11 @@ export default function App() {
               const sourceTexture = uploadFloat32Texture(gpu.device, decoded.data, decoded.width, decoded.height, true);
               const sizeMB = (buffer.byteLength / (1024 * 1024)).toFixed(2);
               loadFile(gpu, sourceTexture, decoded.width, decoded.height, stats, sizeMB, 'image', stored.fileName);
-              const savedStage = loadViewState();
-              if (savedStage !== null) manager.selectStage(savedStage);
+              const saved = loadViewState();
+              if (saved !== null) {
+                manager.selectStage(saved.stageIndex);
+                if (saved.compactMode !== undefined) setCompactMode(saved.compactMode);
+              }
               return;
             }
           } catch (err) {
@@ -416,13 +436,13 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [manager.pipelines, manager.selectedPipelineId, manager.selectPipeline]);
 
-  // Persist selected stage index to localStorage whenever it changes.
+  // Persist view state to localStorage whenever it changes.
   useEffect(() => {
     const sel = manager.selectedPipeline;
     if (sel && sel.fileName) {
-      saveViewState(manager.selectedStageIndex);
+      saveViewState({ stageIndex: manager.selectedStageIndex, compactMode });
     }
-  }, [manager.selectedStageIndex, manager.selectedPipeline]);
+  }, [manager.selectedStageIndex, manager.selectedPipeline, compactMode]);
 
   // Sync RRT/ODT toggle settings to stage enable/disable.
   useEffect(() => {
@@ -439,11 +459,12 @@ export default function App() {
     (async () => {
       for (const inst of manager.pipelines) {
         const bc = inst.bcCompress;
-        if (!bc?.enabled || cancelled) continue;
+        if (!bc?.available || inst.stageStates[1]?.enabled === false || cancelled) continue;
 
-        // Sync format/quality from settings
+        // Sync format/quality/color space from settings
         bc.setFormat(BC_FORMAT_KEYS[inst.settings.bcFormat] ?? 'bc6h');
         bc.setQuality(BC_QUALITY_KEYS[inst.settings.bcQuality] ?? 'normal');
+        bc.inputColorSpace = inst.settings.inputColorSpace;
 
         // Show indicator on first pipeline that actually has work to do
         if (!trackingCompile) {
@@ -462,7 +483,7 @@ export default function App() {
 
     return () => { cancelled = true; if (trackingCompile) setIsShaderCompiling(false); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state, manager.pipelines, manager.selectedSettings.bcFormat, manager.selectedSettings.bcQuality]);
+  }, [state, manager.pipelines, manager.selectedSettings.bcFormat, manager.selectedSettings.bcQuality, manager.selectedSettings.inputColorSpace]);
 
   // Re-render ALL pipelines whenever any settings or stage toggles change.
   useEffect(() => {
@@ -480,8 +501,12 @@ export default function App() {
         (pipelineStages[i] as { enabled: boolean }).enabled = enabled;
       }
 
+      // Compute effective input space (BC6H + sRGB → Linear Rec.709)
+      const bcEnabled = inst.stageStates[1]?.enabled !== false && inst.stageStates[2]?.enabled !== false;
+      const effectiveInputSpace = getEffectiveInputSpace(inst.settings, bcEnabled);
+
       // Serialize UI settings → GPU uniform buffer layout
-      const gpuSettings = toGPUSettings(inst.settings, 0);
+      const gpuSettings = toGPUSettings(inst.settings, 0, effectiveInputSpace);
       renderer.updateUniforms(serializeUniforms(gpuSettings));
 
       // Run BC decompress + color pipeline in a single command buffer submission.
@@ -491,9 +516,13 @@ export default function App() {
       let colorPipelineInput = inst.sourceTexture;
       let preEncode: ((encoder: GPUCommandEncoder) => void) | undefined;
 
-      if (inst.bcDecompress?.enabled && inst.bcCompress?.encodeResult) {
+      if (bcEnabled && inst.bcDecompress && inst.bcCompress?.encodeResult) {
         inst.bcDecompress.showDelta = inst.settings.bcShowDelta;
         inst.bcDecompress.amplification = inst.settings.bcDeltaAmplification;
+        const LINEAR_INPUTS = new Set([0, 1, 2, 8]);
+        inst.bcDecompress.isLinear = LINEAR_INPUTS.has(effectiveInputSpace);
+        // For BC6H + sRGB, delta should compare against linearized source
+        inst.bcDecompress.deltaReference = inst.bcCompress.linearizedSource;
 
         const bcDecompress = inst.bcDecompress;
         const srcTex = inst.sourceTexture;
@@ -551,9 +580,13 @@ export default function App() {
           isSelected: manager.pipelines.length > 1 && pipeline.id === manager.selectedPipelineId,
           applySRGB: pipeline.selectedStageIndex === 8
             ? isLinearStageOutput(getStageColorSpace(7, pipeline.settings, (idx) => pipeline.stageStates[idx]?.enabled ?? true))
-            : (pipeline.selectedStageIndex < 3 && pipeline.settings.inputColorSpace === 5)
-              ? false
-              : (pipeline.settings.applySRGB ?? true),
+            : (pipeline.selectedStageIndex === 2 && pipeline.settings.bcShowDelta)
+              ? false  // Delta view: raw error values, no curves
+              : (pipeline.selectedStageIndex <= 1 && pipeline.settings.inputColorSpace === 5)
+                ? false
+                : (pipeline.selectedStageIndex === 2 && pipeline.settings.inputColorSpace === 5)
+                  ? isLinearStageOutput(getStageColorSpace(2, pipeline.settings, (idx) => pipeline.stageStates[idx]?.enabled ?? true))
+                  : (pipeline.settings.applySRGB ?? true),
         };
       })
       .filter((l): l is PreviewLayer => l !== null);
@@ -632,6 +665,20 @@ export default function App() {
             getStageTextures={getStageTexturesForPipeline}
             isDragging={isDragging}
             onFileDrop={handleFileDrop}
+            compactMode={compactMode}
+            onCompactModeChange={(compact) => {
+              setCompactMode(compact);
+              // Auto-select nearest visible stage if current one becomes hidden
+              if (compact && manager.selectedPipeline) {
+                const vis = getStageVisibility(compact);
+                const idx = manager.selectedPipeline.selectedStageIndex;
+                if (!vis[idx]) {
+                  for (let j = idx - 1; j >= 0; j--) {
+                    if (vis[j]) { manager.selectStage(j); break; }
+                  }
+                }
+              }
+            }}
           />
 
           <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>

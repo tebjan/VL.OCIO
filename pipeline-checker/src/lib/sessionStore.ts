@@ -112,26 +112,31 @@ export async function loadFileHandle(): Promise<StoredFileRef | null> {
   }
 }
 
+export interface ViewState {
+  stageIndex: number;
+  compactMode?: boolean;
+}
+
 /**
- * Save the currently selected stage index to localStorage.
+ * Save the current view state to localStorage.
  */
-export function saveViewState(stageIndex: number): void {
+export function saveViewState(viewState: ViewState): void {
   try {
-    localStorage.setItem(VIEW_STATE_KEY, JSON.stringify({ stageIndex }));
+    localStorage.setItem(VIEW_STATE_KEY, JSON.stringify(viewState));
   } catch {
     // localStorage may be unavailable in some contexts
   }
 }
 
 /**
- * Load the previously selected stage index, or null if none.
+ * Load the previously saved view state, or null if none.
  */
-export function loadViewState(): number | null {
+export function loadViewState(): ViewState | null {
   try {
     const raw = localStorage.getItem(VIEW_STATE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (typeof parsed?.stageIndex === 'number') return parsed.stageIndex;
+    if (typeof parsed?.stageIndex === 'number') return parsed;
     return null;
   } catch {
     return null;

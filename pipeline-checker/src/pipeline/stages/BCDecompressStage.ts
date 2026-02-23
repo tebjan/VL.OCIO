@@ -1,5 +1,6 @@
 import type { PipelineStage } from '../PipelineStage';
 import { BC_FORMAT_TO_GPU, type BCEncodeResult } from '@vl-ocio/webgpu-bc-encoder';
+import { mipLevelCount, encodeMipmaps } from '../TextureUtils';
 import decompressWGSL from '../shaders/bc-decompress.wgsl?raw';
 import deltaWGSL from '../shaders/bc-delta.wgsl?raw';
 
@@ -25,6 +26,14 @@ export class BCDecompressStage implements PipelineStage {
   showDelta = false;
   /** Amplification factor for delta visualization (1-100). */
   amplification = 10;
+  /** Whether input is linear/HDR (true) or already perceptually encoded like sRGB (false). */
+  isLinear = true;
+  /**
+   * Override reference texture for delta visualization.
+   * When BC6H + sRGB, this should be the linearized source (not raw sRGB)
+   * so the delta compares like-for-like in linear space.
+   */
+  deltaReference: GPUTexture | null = null;
 
   private device!: GPUDevice;
   private decompressedTarget: GPUTexture | null = null;
@@ -75,9 +84,12 @@ export class BCDecompressStage implements PipelineStage {
       GPUTextureUsage.TEXTURE_BINDING |
       GPUTextureUsage.COPY_SRC;
 
+    const mips = mipLevelCount(width, height);
+
     this.decompressedTarget = this.device.createTexture({
       size: [width, height],
       format: 'rgba16float',
+      mipLevelCount: mips,
       usage,
       label: 'BC Decompress Output',
     });
@@ -85,6 +97,7 @@ export class BCDecompressStage implements PipelineStage {
     this.deltaTarget = this.device.createTexture({
       size: [width, height],
       format: 'rgba16float',
+      mipLevelCount: mips,
       usage,
       label: 'BC Delta Output',
     });
@@ -193,7 +206,7 @@ export class BCDecompressStage implements PipelineStage {
 
     const decompressPass = encoder.beginRenderPass({
       colorAttachments: [{
-        view: this.decompressedTarget.createView(),
+        view: this.decompressedTarget.createView({ baseMipLevel: 0, mipLevelCount: 1 }),
         loadOp: 'clear' as GPULoadOp,
         storeOp: 'store' as GPUStoreOp,
         clearValue: { r: 0, g: 0, b: 0, a: 1 },
@@ -206,14 +219,14 @@ export class BCDecompressStage implements PipelineStage {
 
     // Pass 2 (optional): Delta visualization → deltaTarget
     if (this.showDelta && this.deltaPipeline && this.deltaTarget && this.deltaUniformBuffer) {
-      // Update amplification uniform
-      const data = new Float32Array([this.amplification, 0, 0, 0]);
+      // Update delta params: amplification + isLinear flag
+      const data = new Float32Array([this.amplification, this.isLinear ? 1.0 : 0.0, 0, 0]);
       this.device.queue.writeBuffer(this.deltaUniformBuffer, 0, data);
 
       const deltaBindGroup = this.device.createBindGroup({
         layout: this.deltaPipeline.getBindGroupLayout(0),
         entries: [
-          { binding: 0, resource: input.createView() },                     // original source
+          { binding: 0, resource: (this.deltaReference ?? input).createView() }, // original source (or linearized for BC6H+sRGB)
           { binding: 1, resource: this.decompressedTarget.createView() },   // decompressed
           { binding: 2, resource: this.sampler! },
           { binding: 3, resource: { buffer: this.deltaUniformBuffer } },
@@ -222,7 +235,7 @@ export class BCDecompressStage implements PipelineStage {
 
       const deltaPass = encoder.beginRenderPass({
         colorAttachments: [{
-          view: this.deltaTarget.createView(),
+          view: this.deltaTarget.createView({ baseMipLevel: 0, mipLevelCount: 1 }),
           loadOp: 'clear' as GPULoadOp,
           storeOp: 'store' as GPUStoreOp,
           clearValue: { r: 0, g: 0, b: 0, a: 1 },
@@ -234,8 +247,10 @@ export class BCDecompressStage implements PipelineStage {
       deltaPass.end();
 
       this.output = this.deltaTarget;
+      encodeMipmaps(this.device, encoder, this.deltaTarget);
     } else {
       this.output = this.decompressedTarget;
+      encodeMipmaps(this.device, encoder, this.decompressedTarget);
     }
   }
 

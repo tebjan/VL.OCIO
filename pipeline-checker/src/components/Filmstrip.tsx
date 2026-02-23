@@ -16,10 +16,13 @@ export interface FilmstripProps {
   renderVersion?: number;
   applySRGB?: boolean;
   settings: PipelineSettings;
+  /** Per-stage visibility (indexed by stage index). Hidden stages are skipped in rendering. */
+  stageVisibility?: boolean[];
 }
 
-export function Filmstrip({ stages, selectedIndex, onSelect, onToggle, device, format, stageTextures, renderVersion, applySRGB, settings }: FilmstripProps) {
+export function Filmstrip({ stages, selectedIndex, onSelect, onToggle, device, format, stageTextures, renderVersion, applySRGB, settings, stageVisibility }: FilmstripProps) {
   const isEnabled = (i: number) => stages[i]?.enabled ?? true;
+  const vis = stageVisibility ?? Array(stages.length).fill(true);
 
   return (
     <div
@@ -34,6 +37,8 @@ export function Filmstrip({ stages, selectedIndex, onSelect, onToggle, device, f
       }}
     >
       {stages.map((stage, i) => {
+        if (!vis[i]) return null;
+
         // Per-stage sRGB logic:
         // - Stage 8 (Final Display): sRGB based on whether pipeline output is linear,
         //   independent of vvvv viewer toggle (simulates DX11 sRGB backbuffer)
@@ -42,14 +47,24 @@ export function Filmstrip({ stages, selectedIndex, onSelect, onToggle, device, f
         const isInputSRGB = settings.inputColorSpace === 5;
         const effectiveApplySRGB = i === 8
           ? isLinearStageOutput(getStageColorSpace(7, settings, isEnabled))
-          : (i < 3 && isInputSRGB) ? false : applySRGB;
+          : (i === 2 && settings.bcShowDelta) ? false  // Delta view: raw error values, no curves
+          : (i <= 1 && isInputSRGB) ? false  // Stages 0-1: thumbnail shows raw sRGB input
+          : (i === 2 && isInputSRGB) ? isLinearStageOutput(getStageColorSpace(2, settings, isEnabled))  // Stage 2: linear after BC6H+sRGB decompression
+          : applySRGB;
         const colorSpace = getStageColorSpace(i, settings, isEnabled);
+
+        // Find previous visible stage for GamutCone bridging
+        let prevVisible = -1;
+        for (let j = i - 1; j >= 0; j--) {
+          if (vis[j]) { prevVisible = j; break; }
+        }
+
         return (
           <div key={stage.index} style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
-            {/* Gamut/range cone between adjacent stages */}
-            {i > 0 && (
+            {/* Gamut/range cone bridging to previous visible stage */}
+            {prevVisible >= 0 && (
               <GamutCone
-                leftVolume={getStageVolume(i - 1, settings, isEnabled)}
+                leftVolume={getStageVolume(prevVisible, settings, isEnabled)}
                 rightVolume={getStageVolume(i, settings, isEnabled)}
               />
             )}

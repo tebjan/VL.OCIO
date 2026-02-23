@@ -10,6 +10,11 @@ For use with vvvv, the visual live-programming environment for .NET: http://vvvv
 
 - Usage examples and more information are included in the pack and can be found via the [Help Browser](https://thegraybook.vvvv.org/reference/hde/findinghelp.html)
 
+## Pipeline Checker
+An interactive WebGPU tool for visualizing HDR/SDR color pipelines stage by stage. Drop in an EXR, DDS, or standard image and inspect how each processing step transforms the data — from BC texture compression through color grading, tonemapping, and display output.
+
+**[Try it in your browser](https://tebjan.github.io/VL.OCIO/)** (requires Chrome/Edge with WebGPU)
+
 ## Contributing
 - Report issues on [the vvvv forum](https://discourse.vvvv.org/c/vvvv-gamma/28)
 - When making a pull-request, please make sure to read the general [guidelines on contributing to vvvv libraries](https://thegraybook.vvvv.org/reference/extending/contributing.html)

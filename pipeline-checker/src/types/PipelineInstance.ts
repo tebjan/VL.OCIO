@@ -33,6 +33,7 @@ export interface PipelineInstance {
   settings: PipelineSettings;
   stageStates: StageState[];
   selectedStageIndex: number;
+  compactMode: boolean;
   unavailableStages: Set<number>;
   metadata: ImageMetadata;
 }

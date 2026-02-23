@@ -16,7 +16,7 @@ import {
   serializeUniforms,
   type PipelineSettings as GPUPipelineSettings,
 } from './pipeline/PipelineUniforms';
-import { type PipelineSettings, getStageColorSpace, isLinearStageOutput, getStageVisibility } from './types/settings';
+import { type PipelineSettings, getStageColorSpace, isLinearStageOutput } from './types/settings';
 import type { BCFormat, BCQuality } from '@vl-ocio/webgpu-bc-encoder';
 import { saveFileHandle, loadFileHandle, saveViewState, loadViewState } from './lib/sessionStore';
 
@@ -231,7 +231,6 @@ export default function App() {
   const gpuRef = useRef<GPUContext | null>(null);
 
   const [isDragging, setIsDragging] = useState(false);
-  const [compactMode, setCompactMode] = useState(true);
   const manager = usePipelineManager();
 
   // Loading / error toast state
@@ -316,10 +315,7 @@ export default function App() {
                 const sizeMB = (buffer.byteLength / (1024 * 1024)).toFixed(2);
                 loadFile(gpu, parsed.sourceTexture, parsed.width, parsed.height, parsed.stats, sizeMB, 'exr', stored.fileName);
                 const saved = loadViewState();
-                if (saved !== null) {
-                  manager.selectStage(saved.stageIndex);
-                  if (saved.compactMode !== undefined) setCompactMode(saved.compactMode);
-                }
+                if (saved !== null) manager.selectStage(saved.stageIndex);
                 return;
               }
             } else if (stored.fileType === 'dds') {
@@ -328,10 +324,7 @@ export default function App() {
               const sizeMB = (buffer.byteLength / (1024 * 1024)).toFixed(2);
               loadFile(gpu, sourceTexture, dds.width, dds.height, null, sizeMB, 'dds', stored.fileName, undefined, null, dds.formatLabel);
               const saved = loadViewState();
-              if (saved !== null) {
-                setTimeout(() => manager.selectStage(saved.stageIndex), 0);
-                if (saved.compactMode !== undefined) setCompactMode(saved.compactMode);
-              }
+              if (saved !== null) setTimeout(() => manager.selectStage(saved.stageIndex), 0);
               return;
             } else if (stored.fileType === 'image') {
               const restoredFile = await stored.handle.getFile();
@@ -342,10 +335,7 @@ export default function App() {
               const sizeMB = (buffer.byteLength / (1024 * 1024)).toFixed(2);
               loadFile(gpu, sourceTexture, decoded.width, decoded.height, stats, sizeMB, 'image', stored.fileName);
               const saved = loadViewState();
-              if (saved !== null) {
-                manager.selectStage(saved.stageIndex);
-                if (saved.compactMode !== undefined) setCompactMode(saved.compactMode);
-              }
+              if (saved !== null) manager.selectStage(saved.stageIndex);
               return;
             }
           } catch (err) {
@@ -440,9 +430,9 @@ export default function App() {
   useEffect(() => {
     const sel = manager.selectedPipeline;
     if (sel && sel.fileName) {
-      saveViewState({ stageIndex: manager.selectedStageIndex, compactMode });
+      saveViewState({ stageIndex: manager.selectedStageIndex });
     }
-  }, [manager.selectedStageIndex, manager.selectedPipeline, compactMode]);
+  }, [manager.selectedStageIndex, manager.selectedPipeline]);
 
   // Sync RRT/ODT toggle settings to stage enable/disable.
   useEffect(() => {
@@ -501,8 +491,11 @@ export default function App() {
         (pipelineStages[i] as { enabled: boolean }).enabled = enabled;
       }
 
-      // Compute effective input space (BC6H + sRGB → Linear Rec.709)
-      const bcEnabled = inst.stageStates[1]?.enabled !== false && inst.stageStates[2]?.enabled !== false;
+      // Compute effective input space (BC6H + sRGB → Linear Rec.709).
+      // Must check unavailableStages — for loaded DDS files stage 1 is unavailable
+      // (stageStates[1] stays true by default), so bcEnabled must be false for DDS.
+      const bcEnabled = !inst.unavailableStages.has(1) && !inst.unavailableStages.has(2)
+        && inst.stageStates[1]?.enabled !== false && inst.stageStates[2]?.enabled !== false;
       const effectiveInputSpace = getEffectiveInputSpace(inst.settings, bcEnabled);
 
       // Serialize UI settings → GPU uniform buffer layout
@@ -579,13 +572,13 @@ export default function App() {
           borderColor: [color.rgb[0], color.rgb[1], color.rgb[2]] as [number, number, number],
           isSelected: manager.pipelines.length > 1 && pipeline.id === manager.selectedPipelineId,
           applySRGB: pipeline.selectedStageIndex === 8
-            ? isLinearStageOutput(getStageColorSpace(7, pipeline.settings, (idx) => pipeline.stageStates[idx]?.enabled ?? true))
+            ? isLinearStageOutput(getStageColorSpace(7, pipeline.settings, (idx) => !pipeline.unavailableStages.has(idx) && (pipeline.stageStates[idx]?.enabled ?? true)))
             : (pipeline.selectedStageIndex === 2 && pipeline.settings.bcShowDelta)
               ? false  // Delta view: raw error values, no curves
               : (pipeline.selectedStageIndex <= 1 && pipeline.settings.inputColorSpace === 5)
                 ? false
                 : (pipeline.selectedStageIndex === 2 && pipeline.settings.inputColorSpace === 5)
-                  ? isLinearStageOutput(getStageColorSpace(2, pipeline.settings, (idx) => pipeline.stageStates[idx]?.enabled ?? true))
+                  ? isLinearStageOutput(getStageColorSpace(2, pipeline.settings, (idx) => !pipeline.unavailableStages.has(idx) && (pipeline.stageStates[idx]?.enabled ?? true)))
                   : (pipeline.settings.applySRGB ?? true),
         };
       })
@@ -652,6 +645,83 @@ export default function App() {
 
       {gpu && manager.selectedPipeline && (
         <>
+          {/* Top header bar — branding + linked toggle + global compact */}
+          <div style={{
+            display: 'flex', alignItems: 'center',
+            padding: '0 10px', gap: '8px', height: '28px', flexShrink: 0,
+            background: 'var(--surface-950)', borderBottom: '1px solid var(--surface-800)',
+          }}>
+            <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>
+              Pipeline Checker
+              <span style={{ opacity: 0.4, margin: '0 5px' }}>·</span>
+              <a
+                href="https://github.com/tebjan/VL.OCIO"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: 'inherit', opacity: 0.6, textDecoration: 'none' }}
+                onMouseEnter={(e) => { (e.target as HTMLElement).style.opacity = '1'; }}
+                onMouseLeave={(e) => { (e.target as HTMLElement).style.opacity = '0.6'; }}
+              >
+                VL.OCIO ↗
+              </a>
+            </span>
+
+            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {/* Linked toggle — slider style, only when >1 pipeline */}
+              {manager.pipelines.length > 1 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>Linked</span>
+                  <button
+                    onClick={() => manager.setLinkedSettings(!manager.linkedSettings)}
+                    title={manager.linkedSettings
+                      ? 'Unlink — each pipeline has its own settings'
+                      : 'Link — all pipelines share the same settings'}
+                    style={{
+                      width: '30px', height: '16px', borderRadius: '8px',
+                      border: 'none', cursor: 'pointer',
+                      background: 'var(--surface-700)',
+                      position: 'relative', padding: 0, flexShrink: 0,
+                    }}
+                  >
+                    <span style={{
+                      display: 'block', width: '10px', height: '10px', borderRadius: '50%',
+                      background: manager.linkedSettings ? 'var(--surface-300)' : 'var(--surface-500)',
+                      position: 'absolute', top: '3px',
+                      left: manager.linkedSettings ? '17px' : '3px',
+                      transition: 'left 0.15s, background 0.15s',
+                    }} />
+                  </button>
+                </div>
+              )}
+
+              {/* Global compact toggle — slider style, always visible */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>Compact</span>
+                <button
+                  onClick={() => {
+                    const compact = !(manager.pipelines[0]?.compactMode ?? true);
+                    manager.pipelines.forEach((p) => manager.setCompactMode(compact, p.id));
+                  }}
+                  title="Compact filmstrip — hide BC Compress and Output Encode stages"
+                  style={{
+                    width: '30px', height: '16px', borderRadius: '8px',
+                    border: 'none', cursor: 'pointer',
+                    background: 'var(--surface-700)',
+                    position: 'relative', padding: 0, flexShrink: 0,
+                  }}
+                >
+                  <span style={{
+                    display: 'block', width: '10px', height: '10px', borderRadius: '50%',
+                    background: (manager.pipelines[0]?.compactMode ?? true) ? 'var(--surface-300)' : 'var(--surface-500)',
+                    position: 'absolute', top: '3px',
+                    left: (manager.pipelines[0]?.compactMode ?? true) ? '17px' : '3px',
+                    transition: 'left 0.15s, background 0.15s',
+                  }} />
+                </button>
+              </div>
+            </div>
+          </div>
+
           <PipelineFilmstripArea
             pipelines={manager.pipelines}
             selectedPipelineId={manager.selectedPipelineId}
@@ -665,20 +735,8 @@ export default function App() {
             getStageTextures={getStageTexturesForPipeline}
             isDragging={isDragging}
             onFileDrop={handleFileDrop}
-            compactMode={compactMode}
-            onCompactModeChange={(compact) => {
-              setCompactMode(compact);
-              // Auto-select nearest visible stage if current one becomes hidden
-              if (compact && manager.selectedPipeline) {
-                const vis = getStageVisibility(compact);
-                const idx = manager.selectedPipeline.selectedStageIndex;
-                if (!vis[idx]) {
-                  for (let j = idx - 1; j >= 0; j--) {
-                    if (vis[j]) { manager.selectStage(j); break; }
-                  }
-                }
-              }
-            }}
+            linkedSettings={manager.linkedSettings}
+            onCompactModeChange={(id, compact) => manager.setCompactMode(compact, id)}
           />
 
           <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
@@ -699,9 +757,6 @@ export default function App() {
                 settings={manager.selectedSettings}
                 onSettingsChange={(patch) => manager.updateSettings(patch)}
                 onReset={() => manager.resetAll()}
-                linkedSettings={manager.linkedSettings}
-                onLinkedSettingsChange={manager.setLinkedSettings}
-                pipelineCount={manager.pipelines.length}
               />
               {manager.selectedMetadata && (
                 <MetadataPanel metadata={manager.selectedMetadata} />

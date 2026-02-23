@@ -64,7 +64,7 @@ function CompactToggle({ label, value, onChange, title }: {
         cursor: 'pointer',
         background: value ? 'var(--surface-700)' : 'var(--surface-900)',
         color: value ? 'var(--surface-200)' : 'var(--surface-500)',
-        fontWeight: value ? 600 : 400,
+        fontWeight: 600,
         whiteSpace: 'nowrap',
       }}
     >

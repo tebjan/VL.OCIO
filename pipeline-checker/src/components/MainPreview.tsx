@@ -7,7 +7,6 @@ import {
   createDefaultHeightmapSettings,
 } from '../types/pipeline';
 import type { HeightmapLayer } from './HeightmapView';
-
 /**
  * Error boundary that catches render/lifecycle errors from HeightmapView
  * and displays a fallback instead of crashing the entire app.
@@ -81,8 +80,17 @@ export interface MainPreviewProps {
 
 type ViewMode = '2d' | '3d';
 
+const overlayBtnBase: React.CSSProperties = {
+  padding: '3px 10px',
+  borderRadius: '4px',
+  border: 'none',
+  cursor: 'pointer',
+  fontSize: '12px',
+  transition: 'background 0.1s, color 0.1s',
+};
+
 /**
- * Container component with [2D] / [3D] tab toggle.
+ * Container component with floating [2D] / [3D] toggle overlaid on the canvas.
  * Renders Preview2D or HeightmapView based on the active tab.
  * HeightmapView is lazy-loaded on first 3D activation to avoid
  * loading Three.js unless needed.
@@ -113,62 +121,7 @@ export function MainPreview({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      {/* Tab bar */}
-      <div
-        style={{
-          display: 'flex',
-          gap: '4px',
-          padding: '4px',
-          background: 'var(--surface-800)',
-          borderBottom: '1px solid var(--color-border)',
-        }}
-      >
-        <button
-          onClick={() => setMode('2d')}
-          title="Flat 2D preview of the selected pipeline stage"
-          style={{
-            padding: '4px 12px',
-            borderRadius: '4px',
-            border: 'none',
-            cursor: 'pointer',
-            fontSize: '13px',
-            background: mode === '2d' ? 'var(--surface-600)' : 'transparent',
-            color: mode === '2d' ? 'var(--color-text)' : 'var(--color-text-muted)',
-          }}
-        >
-          2D
-        </button>
-        <button
-          onClick={() => setMode('3d')}
-          title="3D heightmap visualization using pixel values as elevation"
-          style={{
-            padding: '4px 12px',
-            borderRadius: '4px',
-            border: 'none',
-            cursor: 'pointer',
-            fontSize: '13px',
-            background: mode === '3d' ? 'var(--surface-600)' : 'transparent',
-            color: mode === '3d' ? 'var(--color-text)' : 'var(--color-text-muted)',
-          }}
-        >
-          3D
-        </button>
-        {stageName && (
-          <span style={{
-            marginLeft: 'auto',
-            color: 'var(--color-text-muted)',
-            fontSize: '13px',
-            paddingRight: '8px',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}>
-            {stageName}
-          </span>
-        )}
-      </div>
-
-      {/* View area */}
+      {/* View area — full height, controls float on top */}
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
         <div style={{ width: '100%', height: '100%', display: mode === '2d' ? 'block' : 'none' }}>
           <Preview2D
@@ -197,6 +150,58 @@ export function MainPreview({
               />
             </Suspense>
           </HeightmapErrorBoundary>
+        )}
+
+        {/* Floating 2D/3D selector pill — top-left */}
+        <div style={{
+          position: 'absolute', top: '8px', left: '8px', zIndex: 10,
+          display: 'flex', gap: '2px',
+          background: 'rgba(0,0,0,0.50)',
+          backdropFilter: 'blur(6px)',
+          WebkitBackdropFilter: 'blur(6px)',
+          borderRadius: '6px',
+          padding: '3px',
+          border: '1px solid rgba(255,255,255,0.07)',
+        }}>
+          <button
+            onClick={() => setMode('2d')}
+            title="Flat image view — drag to pan, scroll to zoom"
+            style={{
+              ...overlayBtnBase,
+              background: mode === '2d' ? 'rgba(255,255,255,0.15)' : 'transparent',
+              color: mode === '2d' ? 'var(--color-text)' : 'var(--color-text-muted)',
+            }}
+          >
+            2D
+          </button>
+          <button
+            onClick={() => setMode('3d')}
+            title="3D heightmap — pixel luminance as elevation, drag to orbit"
+            style={{
+              ...overlayBtnBase,
+              background: mode === '3d' ? 'rgba(255,255,255,0.15)' : 'transparent',
+              color: mode === '3d' ? 'var(--color-text)' : 'var(--color-text-muted)',
+            }}
+          >
+            3D
+          </button>
+        </div>
+
+        {/* Stage name badge — top-right */}
+        {stageName && (
+          <span style={{
+            position: 'absolute', top: '8px', right: '8px', zIndex: 10,
+            fontSize: '12px', color: 'var(--color-text-muted)',
+            background: 'rgba(0,0,0,0.40)',
+            backdropFilter: 'blur(4px)',
+            WebkitBackdropFilter: 'blur(4px)',
+            borderRadius: '4px',
+            padding: '3px 8px',
+            pointerEvents: 'none',
+            border: '1px solid rgba(255,255,255,0.06)',
+          }}>
+            {stageName}
+          </span>
         )}
       </div>
 

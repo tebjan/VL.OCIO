@@ -26,9 +26,6 @@ export interface ControlsPanelProps {
   settings: PipelineSettings;
   onSettingsChange: (patch: Partial<PipelineSettings>) => void;
   onReset?: () => void;
-  linkedSettings?: boolean;
-  onLinkedSettingsChange?: (linked: boolean) => void;
-  pipelineCount?: number;
 }
 
 const colorSpaceOptions = Object.entries(COLOR_SPACE_LABELS).map(
@@ -43,8 +40,7 @@ const gradingSpaceOptions = Object.entries(GRADING_SPACE_LABELS).map(
   ([value, label]) => ({ value: value as GradingSpaceString, label }),
 );
 
-export function ControlsPanel({ settings, onSettingsChange, onReset, linkedSettings, onLinkedSettingsChange, pipelineCount }: ControlsPanelProps) {
-  const showLinkToggle = (pipelineCount ?? 0) > 1;
+export function ControlsPanel({ settings, onSettingsChange, onReset }: ControlsPanelProps) {
   const set = (patch: Partial<PipelineSettings>) => onSettingsChange(patch);
 
   // Master controls for Lift/Gamma/Gain (affects all RGB channels uniformly)
@@ -91,36 +87,6 @@ export function ControlsPanel({ settings, onSettingsChange, onReset, linkedSetti
   return (
     <div className="w-80 min-w-64 h-full overflow-y-auto bg-surface-950 border-l border-surface-700 shrink-0">
       <div className="p-3 space-y-4">
-
-        {/* ========== LINK ALL TOGGLE ========== */}
-        {showLinkToggle && (
-          <button
-            onClick={() => onLinkedSettingsChange?.(!linkedSettings)}
-            title={linkedSettings ? 'Settings apply to ALL pipelines. Click to apply to selected only.' : 'Settings apply to selected pipeline only. Click to apply to all.'}
-            className={`w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded text-xs font-medium cursor-pointer border transition-colors ${
-              linkedSettings
-                ? 'bg-surface-700 border-surface-500 text-surface-200 hover:bg-surface-600'
-                : 'bg-surface-800 border-surface-600 text-surface-400 hover:bg-surface-700'
-            }`}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              {linkedSettings ? (
-                <>
-                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-                </>
-              ) : (
-                <>
-                  <path d="M16.5 9.4l-2-1.4" />
-                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-                  <line x1="2" y1="2" x2="22" y2="22" />
-                </>
-              )}
-            </svg>
-            {linkedSettings ? 'Linked — All Pipelines' : 'Selected Pipeline Only'}
-          </button>
-        )}
 
         {/* ========== PIPELINE ========== */}
         <div className="bg-surface-900 rounded-lg p-3">

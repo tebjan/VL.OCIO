@@ -45,6 +45,11 @@ function isSceneLinear(fileType: LoadedFileType, ddsFormatLabel?: string): boole
  * Create pipeline settings appropriate for the given file type.
  * Scene-linear content: ACEScg input, RRT+ODT enabled (full ACES pipeline).
  * Display-referred sRGB: sRGB input, RRT+ODT disabled (already tonemapped).
+ *
+ * NOTE: DDS sRGB variants (DXGI_FORMAT_BC*_UNORM_SRGB, labels like 'BC7 sRGB') still
+ * use inputColorSpace=5. The Color Grade shader uses textureLoad, which returns raw stored
+ * values WITHOUT sRGB auto-decode (only textureSample decodes). So the Color Grade must
+ * apply sRGBToLinear manually, just like any other sRGB source.
  */
 function createSettingsForFileType(fileType: LoadedFileType, ddsFormatLabel?: string): PipelineSettings {
   const defaults = createDefaultSettings();
@@ -131,6 +136,9 @@ export interface PipelineManagerReturn {
   // Link mode: apply settings to all pipelines simultaneously
   linkedSettings: boolean;
   setLinkedSettings(linked: boolean): void;
+
+  // Per-pipeline compact mode (when linked: applies to all)
+  setCompactMode(compact: boolean, id?: PipelineId): void;
 
   // Derived helpers for selected pipeline
   selectedStages: StageInfo[];
@@ -237,6 +245,7 @@ export function usePipelineManager(): PipelineManagerReturn {
         selectedStageIndex: STAGE_FOR_FILE_TYPE[fileType],
         unavailableStages,
         metadata,
+        compactMode: true,
       };
 
       const next = new Map(prev);
@@ -331,6 +340,7 @@ export function usePipelineManager(): PipelineManagerReturn {
         stageStates,
         selectedStageIndex: STAGE_FOR_FILE_TYPE[fileType],
         unavailableStages,
+        compactMode: inst.compactMode,
       };
     });
   }, [updateInstance]);
@@ -450,6 +460,24 @@ export function usePipelineManager(): PipelineManagerReturn {
     }
   }, [selectedId, updateInstance, linkedSettings]);
 
+  const setCompactMode = useCallback((compact: boolean, id?: PipelineId) => {
+    if (id) {
+      updateInstance(id, (inst) => ({ ...inst, compactMode: compact }));
+    } else if (linkedSettings) {
+      setInstanceMap((prev) => {
+        const next = new Map(prev);
+        for (const [pid, inst] of prev) {
+          next.set(pid, { ...inst, compactMode: compact });
+        }
+        return next;
+      });
+    } else {
+      const targetId = selectedId;
+      if (!targetId) return;
+      updateInstance(targetId, (inst) => ({ ...inst, compactMode: compact }));
+    }
+  }, [selectedId, updateInstance, linkedSettings]);
+
   const pipelines = useMemo(() => Array.from(instanceMap.values()), [instanceMap]);
   const selectedPipeline = selectedId ? instanceMap.get(selectedId) ?? null : null;
 
@@ -485,6 +513,7 @@ export function usePipelineManager(): PipelineManagerReturn {
     resetAll,
     linkedSettings,
     setLinkedSettings,
+    setCompactMode,
     selectedStages,
     selectedSettings,
     selectedStageIndex,

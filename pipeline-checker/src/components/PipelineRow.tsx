@@ -3,6 +3,7 @@ import { Filmstrip } from './Filmstrip';
 import { extractDroppedFile } from './DropZone';
 import type { StageInfo } from '../pipeline/types/StageInfo';
 import { type PipelineInstance, PIPELINE_COLORS } from '../types/PipelineInstance';
+import { getStageVisibility } from '../types/settings';
 
 export interface PipelineRowProps {
   pipeline: PipelineInstance;
@@ -20,8 +21,12 @@ export interface PipelineRowProps {
   onFileDrop?: (file: File, fileHandle?: FileSystemFileHandle) => void;
   /** True when a file is being dragged over the window. */
   isDraggingFile?: boolean;
-  /** Per-stage visibility for compact mode (indexed by stage index). */
-  stageVisibility?: boolean[];
+  /** Whether this pipeline is in compact mode (hides BC Compress + Output Encode). */
+  compactMode: boolean;
+  /** Whether settings are linked — when true, hides per-row compact toggle. */
+  linkedSettings: boolean;
+  /** Called when the user clicks the compact toggle for this row. */
+  onCompactModeChange: (compact: boolean) => void;
 }
 
 export function PipelineRow({
@@ -38,10 +43,13 @@ export function PipelineRow({
   onStageToggle,
   onFileDrop,
   isDraggingFile,
-  stageVisibility,
+  compactMode,
+  linkedSettings,
+  onCompactModeChange,
 }: PipelineRowProps) {
   const color = PIPELINE_COLORS[pipeline.colorIndex];
   const applySRGB = pipeline.settings.applySRGB;
+  const stageVisibility = getStageVisibility(compactMode);
 
   // Per-row drag-over tracking
   const [isHovering, setIsHovering] = useState(false);
@@ -125,7 +133,7 @@ export function PipelineRow({
         }}
       />
 
-      {/* Filmstrip (zero changes to component) */}
+      {/* Filmstrip */}
       <div style={{ flex: 1, overflow: 'hidden' }}>
         <Filmstrip
           stages={stages}
@@ -142,7 +150,7 @@ export function PipelineRow({
         />
       </div>
 
-      {/* Filename + remove button + drop hint */}
+      {/* Filename + compact toggle + remove button + drop hint */}
       <div
         style={{
           display: 'flex',
@@ -174,6 +182,28 @@ export function PipelineRow({
             >
               {pipeline.fileName ?? 'Sample'}
             </span>
+            {/* Compact toggle — hidden when linked (global toggle in header controls all) */}
+            {!linkedSettings && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onCompactModeChange(!compactMode); }}
+                title={compactMode ? 'Show all stages' : 'Hide BC Compress and Output Encode stages'}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: compactMode ? 'var(--surface-600)' : 'var(--color-text-muted)',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  lineHeight: 1,
+                  padding: '0 1px',
+                  flexShrink: 0,
+                  opacity: 0.7,
+                }}
+                onMouseEnter={(e) => { (e.target as HTMLElement).style.opacity = '1'; }}
+                onMouseLeave={(e) => { (e.target as HTMLElement).style.opacity = '0.7'; }}
+              >
+                {compactMode ? '⊟' : '⊞'}
+              </button>
+            )}
             {onRemove && (
               <button
                 onClick={(e) => { e.stopPropagation(); onRemove(); }}

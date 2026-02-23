@@ -254,6 +254,6 @@ export function createDefaultSettings(): PipelineSettings {
     outputPeakBrightness: 100,     // SDR peak brightness
     outputBlackLevel: 0,
     outputWhiteLevel: 1,
-    applySRGB: true,
+    applySRGB: false,
   };
 }

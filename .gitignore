@@ -45,3 +45,4 @@ pipeline-checker/pipeline-checker.zip
 # Color grading runtime files
 ocio_presets/
 .planning/
+/specs-*

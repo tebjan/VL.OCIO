@@ -245,19 +245,23 @@ const DDS_DECOMPRESS_WGSL = `
 `;
 
 /**
- * Upload DDS block data as a native compressed texture and decompress it
- * to an rgba16float texture via a one-shot GPU render pass.
- *
- * Uses textureLoad for decompression — compatible with all BC formats
- * including BC6H float types that may not support filtered sampling
- * on all WebGPU implementations.
- *
- * Returns the decompressed rgba16float texture ready for the color pipeline.
+ * Upload a DDS texture and return an rgba16float GPUTexture ready for
+ * the color pipeline. Dispatches on dds.kind:
+ * - 'compressed': GPU-decompresses BC block data via one-shot render pass.
+ * - 'uncompressed': Uploads pre-decoded float32 RGBA data (skipFlip — DDS
+ *   is already top-to-bottom).
  */
 export function uploadDDSTexture(
   device: GPUDevice,
   dds: DDSParseResult,
 ): GPUTexture {
+  if (dds.kind === 'uncompressed') {
+    // DDS pixel data is top-to-bottom; pass skipFlip=true to avoid the flip
+    // that uploadFloat32Texture applies for bottom-up EXR data.
+    return uploadFloat32Texture(device, dds.float32Data, dds.width, dds.height, true);
+  }
+
+  // BC-compressed path — decompress via GPU render pass.
   // WebGPU requires compressed texture dimensions to be multiples of the block size (4).
   // DDS files may store non-aligned dimensions; pad up to the next block boundary.
   const alignedW = Math.ceil(dds.width / 4) * 4;

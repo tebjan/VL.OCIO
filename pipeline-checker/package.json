@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "zip": "cd dist && tar -acf ../pipeline-checker.zip index.html favicon.svg",
     "generate-sample": "tsx scripts/generate-sample-hdr.ts",
+    "generate-og": "tsx scripts/generate-og-image.ts",
     "tauri": "cargo tauri",
     "tauri:dev": "cargo tauri dev",
     "tauri:build": "cargo tauri build"

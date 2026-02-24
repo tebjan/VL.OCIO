@@ -650,9 +650,17 @@ export default function App() {
             display: 'flex', alignItems: 'center',
             padding: '0 10px', gap: '8px', height: '28px', flexShrink: 0,
             background: 'var(--surface-950)', borderBottom: '1px solid var(--surface-800)',
+            position: 'relative',
           }}>
+            <span style={{
+              position: 'absolute', left: '50%', transform: 'translateX(-50%)',
+              fontSize: '11px', color: 'var(--color-text-muted)', opacity: 0.45,
+              pointerEvents: 'none', whiteSpace: 'nowrap', letterSpacing: '0.02em',
+            }}>
+              Drop an EXR, DDS, or image anywhere
+            </span>
             <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>
-              Pipeline Checker
+              PipeScope
               <span style={{ opacity: 0.4, margin: '0 5px' }}>·</span>
               <a
                 href="https://github.com/tebjan/VL.OCIO"

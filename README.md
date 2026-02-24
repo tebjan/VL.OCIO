@@ -15,7 +15,7 @@ An interactive WebGPU tool for visualizing HDR/SDR color pipelines stage by stag
 
 **[Try it in your browser](https://tebjan.github.io/VL.OCIO/)** (requires Chrome/Edge with WebGPU)
 
-![Pipeline Checker screenshot](pipeline-checker/dist/og-image.png)
+![Pipeline Checker screenshot](pipeline-checker/dist/og-image.jpg)
 
 ## Contributing
 - Report issues on [the vvvv forum](https://discourse.vvvv.org/c/vvvv-gamma/28)

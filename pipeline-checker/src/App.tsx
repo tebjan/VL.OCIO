@@ -660,8 +660,7 @@ export default function App() {
               Drop an EXR, DDS, or image anywhere
             </span>
             <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>
-              PipeScope
-              <span style={{ opacity: 0.4, margin: '0 5px' }}>·</span>
+              PipeScope for{' '}
               <a
                 href="https://github.com/tebjan/VL.OCIO"
                 target="_blank"
@@ -671,6 +670,17 @@ export default function App() {
                 onMouseLeave={(e) => { (e.target as HTMLElement).style.opacity = '0.6'; }}
               >
                 VL.OCIO ↗
+              </a>
+              {' '}by{' '}
+              <a
+                href="https://tebjan.de"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: 'inherit', opacity: 0.6, textDecoration: 'none' }}
+                onMouseEnter={(e) => { (e.target as HTMLElement).style.opacity = '1'; }}
+                onMouseLeave={(e) => { (e.target as HTMLElement).style.opacity = '0.6'; }}
+              >
+                tebjan ↗
               </a>
             </span>
 

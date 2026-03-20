@@ -48,15 +48,16 @@
     <Using Include="Stride.Core.Mathematics" />
   </ItemGroup>
 
-  <!-- Custom target to copy native DLL to runtimes folder -->
-  <Target Name="CopyNativeDll" AfterTargets="Build">
+  <!-- Copy native DLLs from C++ build output (skipped in CI where they're already in lib/ from git) -->
+  <Target Name="CopyNativeDll" AfterTargets="Build" Condition="Exists('OCIOSharp\OcioSharpCLI\x64\Release\OpenColorIO_2_5.dll')">
 	<PropertyGroup>
+		<NativeDllSourceDir>OCIOSharp\OcioSharpCLI\x64\Release</NativeDllSourceDir>
 		<NativeDllTargetPath>..\runtimes\win-x64\native</NativeDllTargetPath>
 	</PropertyGroup>
-	<Copy SourceFiles="..\lib\net8.0-windows7.0\OpenColorIO_2_5.dll" DestinationFolder="$(NativeDllTargetPath)" />
-	<Copy SourceFiles="..\lib\net8.0-windows7.0\OpenColorIO_2_5.dll" DestinationFolder="$(OutputPath)" />
-	<Copy SourceFiles="..\lib\net8.0-windows7.0\Ijwhost.dll" DestinationFolder="$(NativeDllTargetPath)" />
-	<Copy SourceFiles="..\lib\net8.0-windows7.0\Ijwhost.dll" DestinationFolder="$(OutputPath)" />
+	<Copy SourceFiles="$(NativeDllSourceDir)\OpenColorIO_2_5.dll" DestinationFolder="$(NativeDllTargetPath)" />
+	<Copy SourceFiles="$(NativeDllSourceDir)\OpenColorIO_2_5.dll" DestinationFolder="$(OutputPath)" />
+	<Copy SourceFiles="$(NativeDllSourceDir)\Ijwhost.dll" DestinationFolder="$(NativeDllTargetPath)" />
+	<Copy SourceFiles="$(NativeDllSourceDir)\Ijwhost.dll" DestinationFolder="$(OutputPath)" />
   </Target>	
 
 </Project>

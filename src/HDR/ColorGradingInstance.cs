@@ -48,9 +48,9 @@ public class ColorGradingInstance : IDisposable
     private readonly bool _isExported;
     private readonly IResourceHandle<ColorGradingService> _serviceHandle;
     private ColorGradingService _service => _serviceHandle.Resource;
+    private readonly ServiceUiHelper _uiHelper;
     private string _lastDisplayName = "";
     private bool _registered;
-    private bool _lastPublishToNetwork;
 
     // Parsed settings from the "Settings" Create pin (constructor parameter, persisted in document)
     private readonly ProjectSettings _parsedSettings;
@@ -98,6 +98,7 @@ public class ColorGradingInstance : IDisposable
             () => new ColorGradingService(nodeContext.AppHost),
             delayDisposalInMilliseconds: 2000);
         _serviceHandle = provider.GetHandle();
+        _uiHelper = new ServiceUiHelper(_service);
 
         // Parse the Create pin settings — try dictionary format first, then legacy single format
         _parsedSettings = ParseMySettings(settings);
@@ -168,16 +169,8 @@ public class ColorGradingInstance : IDisposable
 
         effectiveInstanceId = displayName;
 
-        // Publish to network: toggle server between localhost-only and LAN-accessible
-        if (publishToNetwork && !_lastPublishToNetwork)
-        {
-            _service.EnableNetworkAccess();
-        }
-        else if (!publishToNetwork && _lastPublishToNetwork)
-        {
-            _service.DisableNetworkAccess();
-        }
-        _lastPublishToNetwork = publishToNetwork;
+        // UI connectivity: network toggle + browser auto-open (shared with SettingsBank)
+        _uiHelper.Update(autoOpenBrowser && _registered, publishToNetwork);
 
         // Update defaults if registered and values changed
         if (_registered)
@@ -200,10 +193,6 @@ public class ColorGradingInstance : IDisposable
                 _outputDirty = true;
             }
         }
-
-        // Auto-open browser if requested (service checks for existing clients before opening)
-        if (autoOpenBrowser && _registered)
-            _service.RequestBrowserOpen();
 
         // Manual JSON input: apply settings when requested
         if (applySettings && _registered && !string.IsNullOrWhiteSpace(settingsJson))
@@ -248,9 +237,9 @@ public class ColorGradingInstance : IDisposable
         currentSettings = _cachedOutputJson;
         error = _lastError;
 
-        // Diagnostic outputs from the service
-        uiUrl = _service.UiUrl;
-        clientCount = _service.ClientCount;
+        // Diagnostic outputs (shared helper)
+        uiUrl = _uiHelper.UiUrl;
+        clientCount = _uiHelper.ClientCount;
     }
 
     /// <summary>

@@ -76,6 +76,9 @@ export interface MainPreviewProps {
   heightmapLayers: HeightmapLayer[];
   renderVersion?: number;
   stageName?: string;
+  interactionMode?: 'desktop' | 'mobile';
+  defaultMode?: ViewMode;
+  allow3D?: boolean;
 }
 
 type ViewMode = '2d' | '3d';
@@ -102,17 +105,25 @@ export function MainPreview({
   heightmapLayers,
   renderVersion,
   stageName,
+  interactionMode = 'desktop',
+  defaultMode = '3d',
+  allow3D = true,
 }: MainPreviewProps) {
-  const [mode, setMode] = useState<ViewMode>('3d');
+  const initialMode: ViewMode = allow3D ? defaultMode : '2d';
+  const [mode, setMode] = useState<ViewMode>(initialMode);
   const [heightmapSettings, setHeightmapSettings] = useState<HeightmapSettings>(
     createDefaultHeightmapSettings,
   );
   // Track whether 3D was ever activated — once true, keep HeightmapView mounted
-  const [ever3D, setEver3D] = useState(true);
+  const [ever3D, setEver3D] = useState<boolean>(allow3D && initialMode === '3d');
 
   useEffect(() => {
     if (mode === '3d') setEver3D(true);
   }, [mode]);
+
+  useEffect(() => {
+    if (!allow3D && mode === '3d') setMode('2d');
+  }, [allow3D, mode]);
 
   const handleSettingsChange = useCallback(
     (settings: HeightmapSettings) => setHeightmapSettings(settings),
@@ -129,9 +140,11 @@ export function MainPreview({
             format={format}
             layers={layers}
             renderVersion={renderVersion}
+            interactionMode={interactionMode}
+            showTouchControls={interactionMode === 'mobile'}
           />
         </div>
-        {ever3D && (
+        {allow3D && ever3D && (
           <HeightmapErrorBoundary onReset={() => setEver3D(false)}>
             <Suspense fallback={
               <div style={{
@@ -147,6 +160,7 @@ export function MainPreview({
                 active={mode === '3d'}
                 renderVersion={renderVersion}
                 settings={heightmapSettings}
+                interactionMode={interactionMode}
               />
             </Suspense>
           </HeightmapErrorBoundary>
@@ -174,17 +188,19 @@ export function MainPreview({
           >
             2D
           </button>
-          <button
-            onClick={() => setMode('3d')}
-            title="3D heightmap — pixel luminance as elevation, drag to orbit"
-            style={{
-              ...overlayBtnBase,
-              background: mode === '3d' ? 'rgba(255,255,255,0.15)' : 'transparent',
-              color: mode === '3d' ? 'var(--color-text)' : 'var(--color-text-muted)',
-            }}
-          >
-            3D
-          </button>
+          {allow3D && (
+            <button
+              onClick={() => setMode('3d')}
+              title="3D heightmap — pixel luminance as elevation, drag to orbit"
+              style={{
+                ...overlayBtnBase,
+                background: mode === '3d' ? 'rgba(255,255,255,0.15)' : 'transparent',
+                color: mode === '3d' ? 'var(--color-text)' : 'var(--color-text-muted)',
+              }}
+            >
+              3D
+            </button>
+          )}
         </div>
 
         {/* Stage name badge — top-right */}
@@ -206,7 +222,7 @@ export function MainPreview({
       </div>
 
       {/* 3D controls shown only in 3D mode */}
-      {mode === '3d' && (
+      {allow3D && mode === '3d' && (
         <HeightmapControls
           settings={heightmapSettings}
           onChange={handleSettingsChange}

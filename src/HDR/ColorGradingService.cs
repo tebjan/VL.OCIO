@@ -69,6 +69,9 @@ public class ColorGradingService : IDisposable
     // Cached URL for the UI (computed once at startup)
     private string _uiUrl = "";
 
+    // SettingsBank — optional, registered by SettingsBank ProcessNode
+    private SettingsBank? _settingsBank;
+
     // Error tracking for debugging
     private string _lastError = "";
 
@@ -1233,6 +1236,9 @@ h2{font-size:.625rem;font-weight:600;text-transform:uppercase;letter-spacing:.1e
                 // Also persist to the Create pin for document save / undo support
                 PersistInstanceToPin(instance);
             }
+
+            // Notify SettingsBank so it can persist the edit under the current key
+            _settingsBank?.OnSettingsUpdated(instance.ColorCorrection, instance.Tonemap);
         }
     }
 
@@ -1601,6 +1607,10 @@ h2{font-size:.625rem;font-weight:600;text-transform:uppercase;letter-spacing:.1e
                 await SendInstanceListToClient(ws);
             }
 
+            // Send bank state if a SettingsBank is registered
+            if (_settingsBank != null)
+                await SendBankStateToClientAsync(ws);
+
             var buffer = new byte[8192];
             var messageBuilder = new StringBuilder();
 
@@ -1780,6 +1790,16 @@ h2{font-size:.625rem;font-weight:600;text-transform:uppercase;letter-spacing:.1e
 
                 case "ping":
                     await SendPong(sender);
+                    break;
+
+                case "bankCopyFrom":
+                case "bankSaveSnapshot":
+                case "bankLoadSnapshot":
+                case "bankDeleteSnapshot":
+                case "bankReset":
+                case "bankSetFriendlyName":
+                case "bankSave":
+                    _settingsBank?.HandleBankMessage(type!, root);
                     break;
             }
         }
@@ -2041,6 +2061,55 @@ h2{font-size:.625rem;font-weight:600;text-transform:uppercase;letter-spacing:.1e
         if (tasks.Count > 0)
             Task.WaitAll(tasks.ToArray(), TimeSpan.FromSeconds(3));
     }
+
+    #region Settings Bank
+
+    /// <summary>Register a SettingsBank node to enable per-key settings management.</summary>
+    public void RegisterSettingsBank(SettingsBank bank)
+    {
+        _settingsBank = bank;
+        EnsureServerStarted();
+        // Notify any already-connected clients about the bank
+        _ = BroadcastBankStateAsync();
+    }
+
+    /// <summary>Unregister the SettingsBank (called on Dispose).</summary>
+    public void UnregisterSettingsBank() { _settingsBank = null; }
+
+    /// <summary>Broadcast current bank state to all connected clients (fire-and-forget).</summary>
+    public async Task BroadcastBankStateAsync()
+    {
+        if (_settingsBank == null) return;
+        var json = _settingsBank.GetBankStateJson();
+        var bytes = Encoding.UTF8.GetBytes(json);
+        foreach (var client in _clients.Values)
+        {
+            if (client.State == WebSocketState.Open)
+            {
+                try
+                {
+                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    await client.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, cts.Token);
+                }
+                catch { }
+            }
+        }
+    }
+
+    private async Task SendBankStateToClientAsync(WebSocket client)
+    {
+        if (_settingsBank == null || client.State != WebSocketState.Open) return;
+        try
+        {
+            var json = _settingsBank.GetBankStateJson();
+            var bytes = Encoding.UTF8.GetBytes(json);
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            await client.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, cts.Token);
+        }
+        catch { }
+    }
+
+    #endregion
 
     private static async Task SendPong(WebSocket client)
     {

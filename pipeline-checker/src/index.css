@@ -122,3 +122,16 @@ input[type="range"]::-moz-range-thumb {
   background: var(--surface-300);
   border: none;
 }
+
+/* Mobile helpers (additive; desktop behavior unchanged) */
+.mobile-shell {
+  height: 100dvh;
+}
+
+.mobile-safe-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.mobile-safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}

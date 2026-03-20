@@ -8,6 +8,7 @@ import { Select } from './components/Select'
 import { Section } from './components/Section'
 import { PresetManager } from './components/PresetManager'
 import { InstanceSelector } from './components/InstanceSelector'
+import { BankPanel } from './components/BankPanel'
 import { MobileLayout } from './layouts/MobileLayout'
 import { cn } from './lib/utils'
 import {
@@ -53,6 +54,14 @@ function App() {
     deletePreset,
     reset,
     selectInstance,
+    bankState,
+    bankCopyFrom,
+    bankSaveSnapshot,
+    bankLoadSnapshot,
+    bankDeleteSnapshot,
+    bankReset,
+    bankSetFriendlyName,
+    bankSave,
   } = useWebSocket()
 
   const cc = settings.colorCorrection
@@ -261,7 +270,7 @@ function App() {
             )}
           </div>
         )}
-        {/* Right sidebar — snapshots/presets */}
+        {/* Right sidebar 1 — snapshots/presets */}
         <div className="absolute left-full top-0 w-48 h-screen overflow-y-auto ml-2">
           <PresetManager
             activePresetName={settings.presetName}
@@ -273,6 +282,23 @@ function App() {
             onReset={reset}
           />
         </div>
+        {/* Right sidebar 2 — bank sequences (next to snapshots) */}
+        {bankState?.hasBank && (
+          <div className="absolute top-0 h-screen overflow-y-auto" style={{ left: 'calc(100% + 200px + 0.5rem)' }}>
+            <div className="w-48">
+              <BankPanel
+                bankState={bankState}
+                onCopyFrom={bankCopyFrom}
+                onSaveSnapshot={bankSaveSnapshot}
+                onLoadSnapshot={bankLoadSnapshot}
+                onDeleteSnapshot={bankDeleteSnapshot}
+                onReset={bankReset}
+                onSave={bankSave}
+                onSetFriendlyName={bankSetFriendlyName}
+              />
+            </div>
+          </div>
+        )}
         {/* Header Row - Title, Status */}
         <div className="flex items-center gap-3 mb-2">
           <h1 className="text-lg font-semibold text-surface-100">
@@ -395,6 +421,7 @@ function App() {
                 <Slider label="White Level" value={tm.whiteLevel} min={0.5} max={2} step={0.01} defaultValue={1} decimals={2} onChange={(v) => updateTonemap({ whiteLevel: v })} />
               </div>
             </Section>
+
           </div>
         </div>
       </div>

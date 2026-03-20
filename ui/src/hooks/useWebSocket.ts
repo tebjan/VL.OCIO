@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { ProjectSettings, ColorCorrectionSettings, TonemapSettings, InstanceInfo, InstanceState, ServerInfo, DiscoveredServer } from '../types/settings'
+import type { ProjectSettings, ColorCorrectionSettings, TonemapSettings, InstanceInfo, InstanceState, ServerInfo, DiscoveredServer, BankState } from '../types/settings'
 import { createDefaultProject } from '../types/settings'
 
 interface WebSocketState {
@@ -13,6 +13,7 @@ interface WebSocketState {
   serverInfo: ServerInfo | null
   knownServers: DiscoveredServer[]
   stateVersion: number
+  bankState: BankState | null
 }
 
 interface WebSocketActions {
@@ -25,6 +26,14 @@ interface WebSocketActions {
   reset: () => void
   // Multi-instance actions
   selectInstance: (instanceId: string) => void
+  // SettingsBank actions (bank-level, no instanceId)
+  bankCopyFrom: (sourceKey: string) => void
+  bankSaveSnapshot: (name: string) => void
+  bankLoadSnapshot: (name: string) => void
+  bankDeleteSnapshot: (name: string) => void
+  bankReset: () => void
+  bankSetFriendlyName: (key: string, name: string) => void
+  bankSave: () => void
 }
 
 // Base URL path — used for fallback and directory links
@@ -68,6 +77,7 @@ export function useWebSocket(): WebSocketState & WebSocketActions {
   const [serverInfo, setServerInfo] = useState<ServerInfo | null>(null)
   const [knownServers, setKnownServers] = useState<DiscoveredServer[]>([])
   const [stateVersion, setStateVersion] = useState(0)
+  const [bankState, setBankState] = useState<BankState | null>(null)
 
   // Derive settings for the selected instance — no separate settings state
   const settings: ProjectSettings = useMemo(() => {
@@ -277,6 +287,8 @@ export function useWebSocket(): WebSocketState & WebSocketActions {
             }
           } else if (msg.type === 'presets' && msg.list) {
             setPresets(msg.list)
+          } else if (msg.type === 'bankState') {
+            setBankState(msg as BankState)
           }
         } catch (e) {
           console.error('Failed to parse message:', e)
@@ -420,6 +432,41 @@ export function useWebSocket(): WebSocketState & WebSocketActions {
     }
   }, [])
 
+  // Bank actions — sent directly without instanceId (bank is a per-app singleton)
+  const sendBank = useCallback((data: object) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN && hasReceivedInitialStateRef.current) {
+      wsRef.current.send(JSON.stringify(data))
+    }
+  }, [])
+
+  const bankCopyFrom = useCallback((sourceKey: string) => {
+    sendBank({ type: 'bankCopyFrom', sourceKey })
+  }, [sendBank])
+
+  const bankSaveSnapshot = useCallback((name: string) => {
+    sendBank({ type: 'bankSaveSnapshot', name })
+  }, [sendBank])
+
+  const bankLoadSnapshot = useCallback((name: string) => {
+    sendBank({ type: 'bankLoadSnapshot', name })
+  }, [sendBank])
+
+  const bankDeleteSnapshot = useCallback((name: string) => {
+    sendBank({ type: 'bankDeleteSnapshot', name })
+  }, [sendBank])
+
+  const bankReset = useCallback(() => {
+    sendBank({ type: 'bankReset' })
+  }, [sendBank])
+
+  const bankSetFriendlyName = useCallback((key: string, name: string) => {
+    sendBank({ type: 'bankSetFriendlyName', key, name })
+  }, [sendBank])
+
+  const bankSave = useCallback(() => {
+    sendBank({ type: 'bankSave' })
+  }, [sendBank])
+
   return {
     isConnected,
     settings,
@@ -430,6 +477,7 @@ export function useWebSocket(): WebSocketState & WebSocketActions {
     serverInfo,
     knownServers,
     stateVersion,
+    bankState,
     updateColorCorrection,
     updateTonemap,
     loadPreset,
@@ -438,5 +486,12 @@ export function useWebSocket(): WebSocketState & WebSocketActions {
     listPresets,
     reset,
     selectInstance,
+    bankCopyFrom,
+    bankSaveSnapshot,
+    bankLoadSnapshot,
+    bankDeleteSnapshot,
+    bankReset,
+    bankSetFriendlyName,
+    bankSave,
   }
 }

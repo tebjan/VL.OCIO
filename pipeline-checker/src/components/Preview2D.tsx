@@ -14,6 +14,8 @@ export interface Preview2DProps {
   layers: PreviewLayer[];
   /** Incremented after each pipeline render to trigger preview refresh. */
   renderVersion?: number;
+  interactionMode?: 'desktop' | 'mobile';
+  showTouchControls?: boolean;
 }
 
 interface DragState {
@@ -21,6 +23,29 @@ interface DragState {
   y: number;
   panX: number;
   panY: number;
+}
+
+interface PointerPos {
+  x: number;
+  y: number;
+}
+
+interface PinchState {
+  baseDistance: number;
+  baseZoom: number;
+  basePanX: number;
+  basePanY: number;
+  baseCentroidX: number;
+  baseCentroidY: number;
+  baseU: number;
+  baseV: number;
+}
+
+interface TapCandidate {
+  pointerId: number;
+  x: number;
+  y: number;
+  moved: boolean;
 }
 
 /** Uniform buffer stride per layer — must satisfy minUniformBufferOffsetAlignment (256). */
@@ -31,8 +56,24 @@ const MAX_LAYERS = 4;
 const UNIFORM_SIZE = 52;
 /** Selected pipeline border width in local UV space. */
 const SELECTED_BORDER_WIDTH = 0.003;
+const MIN_ZOOM = 0.1;
+const MAX_ZOOM = 100;
+const DOUBLE_TAP_MS = 320;
+const DOUBLE_TAP_DIST_PX = 24;
+const TAP_MOVE_PX = 12;
 
-export function Preview2D({ device, format, layers, renderVersion }: Preview2DProps) {
+function clampZoom(zoom: number): number {
+  return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom));
+}
+
+export function Preview2D({
+  device,
+  format,
+  layers,
+  renderVersion,
+  interactionMode = 'desktop',
+  showTouchControls = false,
+}: Preview2DProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const gpuRef = useRef<{
@@ -44,12 +85,82 @@ export function Preview2D({ device, format, layers, renderVersion }: Preview2DPr
   } | null>(null);
   const dragRef = useRef<DragState | null>(null);
   const frameRef = useRef<number>(0);
+  const pointerPositionsRef = useRef<Map<number, PointerPos>>(new Map());
+  const pinchRef = useRef<PinchState | null>(null);
+  const tapCandidateRef = useRef<TapCandidate | null>(null);
+  const lastTapRef = useRef<{ t: number; x: number; y: number } | null>(null);
+  const viewRef = useRef({ zoom: 1.0, panX: 0.0, panY: 0.0 });
 
   const [zoom, setZoom] = useState(1.0);
   const [panX, setPanX] = useState(0.0);
   const [panY, setPanY] = useState(0.0);
   const [isDragging, setIsDragging] = useState(false);
   const [canvasSize, setCanvasSize] = useState(0); // triggers re-render on resize
+
+  useEffect(() => {
+    viewRef.current = { zoom, panX, panY };
+  }, [zoom, panX, panY]);
+
+  const setView = useCallback((nextZoom: number, nextPanX: number, nextPanY: number) => {
+    const z = clampZoom(nextZoom);
+    viewRef.current = { zoom: z, panX: nextPanX, panY: nextPanY };
+    setZoom(z);
+    setPanX(nextPanX);
+    setPanY(nextPanY);
+  }, []);
+
+  const resetView = useCallback(() => {
+    setView(1.0, 0.0, 0.0);
+  }, [setView]);
+
+  const applyZoomAt = useCallback((anchorU: number, anchorV: number, targetZoom: number) => {
+    const { zoom: prevZoom, panX: prevPanX, panY: prevPanY } = viewRef.current;
+    const newZoom = clampZoom(targetZoom);
+    const du = (anchorU - 0.5) * (1 / prevZoom - 1 / newZoom);
+    const dv = (anchorV - 0.5) * (1 / prevZoom - 1 / newZoom);
+    setView(newZoom, prevPanX + du, prevPanY + dv);
+  }, [setView]);
+
+  const applyZoomFactorAtPoint = useCallback((anchorU: number, anchorV: number, factor: number) => {
+    applyZoomAt(anchorU, anchorV, viewRef.current.zoom * factor);
+  }, [applyZoomAt]);
+
+  const initializePinch = useCallback((canvas: HTMLCanvasElement) => {
+    const pointers = [...pointerPositionsRef.current.values()];
+    if (pointers.length < 2) return;
+
+    const [a, b] = pointers;
+    const rect = canvas.getBoundingClientRect();
+    const centroidX = (a.x + b.x) / 2;
+    const centroidY = (a.y + b.y) / 2;
+    const baseDistance = Math.max(1, Math.hypot(b.x - a.x, b.y - a.y));
+    const { zoom: baseZoom, panX: basePanX, panY: basePanY } = viewRef.current;
+    const baseU = rect.width > 0 ? (centroidX - rect.left) / rect.width : 0.5;
+    const baseV = rect.height > 0 ? (centroidY - rect.top) / rect.height : 0.5;
+
+    pinchRef.current = {
+      baseDistance,
+      baseZoom,
+      basePanX,
+      basePanY,
+      baseCentroidX: centroidX,
+      baseCentroidY: centroidY,
+      baseU,
+      baseV,
+    };
+  }, []);
+
+  const rebaseDragFromRemainingPointer = useCallback(() => {
+    const remaining = [...pointerPositionsRef.current.values()][0];
+    if (!remaining) {
+      dragRef.current = null;
+      setIsDragging(false);
+      return;
+    }
+    const { panX: curPanX, panY: curPanY } = viewRef.current;
+    dragRef.current = { x: remaining.x, y: remaining.y, panX: curPanX, panY: curPanY };
+    setIsDragging(true);
+  }, []);
 
   // Initialize WebGPU pipeline on mount
   useEffect(() => {
@@ -80,7 +191,6 @@ export function Preview2D({ device, format, layers, renderVersion }: Preview2DPr
       primitive: { topology: 'triangle-list' },
     });
 
-    // Uniform buffer sized for MAX_LAYERS with 256-byte alignment per layer
     const uniformBuffer = device.createBuffer({
       size: UNIFORM_STRIDE * MAX_LAYERS,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
@@ -105,7 +215,6 @@ export function Preview2D({ device, format, layers, renderVersion }: Preview2DPr
     const canvas = canvasRef.current;
     if (!container || !canvas) return;
 
-    // Set initial size synchronously so the first render has valid dimensions
     const rect = container.getBoundingClientRect();
     if (rect.width > 0 && rect.height > 0) {
       canvas.width = Math.max(1, Math.floor(rect.width * devicePixelRatio));
@@ -119,7 +228,6 @@ export function Preview2D({ device, format, layers, renderVersion }: Preview2DPr
         const h = Math.max(1, Math.floor(height * devicePixelRatio));
         canvas.width = w;
         canvas.height = h;
-        // Trigger re-render after resize so the preview updates to new dimensions
         setCanvasSize(w + h);
       }
     });
@@ -134,18 +242,14 @@ export function Preview2D({ device, format, layers, renderVersion }: Preview2DPr
 
     cancelAnimationFrame(frameRef.current);
     frameRef.current = requestAnimationFrame(() => {
-      // Guard: skip render if canvas has zero dimensions (ResizeObserver hasn't fired yet)
       const canvas = canvasRef.current;
       if (!canvas || canvas.width === 0 || canvas.height === 0) return;
 
       try {
         const canvasAspect = canvas.width / canvas.height;
-
-        // Compute side-by-side layout: each image scaled to same height, placed left-to-right
         const aspects = layers.map((l) => l.texture.width / l.texture.height);
         const combinedAspect = aspects.reduce((s, a) => s + a, 0);
 
-        // Slot positions in combined-row UV [0,1]
         const slots: { left: number; right: number }[] = [];
         let cumX = 0;
         for (const a of aspects) {
@@ -154,29 +258,27 @@ export function Preview2D({ device, format, layers, renderVersion }: Preview2DPr
           slots.push({ left, right: cumX / combinedAspect });
         }
 
-        // Write uniform data for each layer at 256-byte aligned offsets
         for (let i = 0; i < layers.length; i++) {
           const layer = layers[i];
           const slot = slots[i];
           const data = new Float32Array([
-            0,                              // viewExposure
-            zoom,                           // zoom
-            panX,                           // panX
-            panY,                           // panY
-            layer.applySRGB ? 1.0 : 0.0,   // applySRGB
-            canvasAspect,                   // canvasAspect
-            combinedAspect,                 // combinedAspect
-            slot.left,                      // slotLeft
-            slot.right,                     // slotRight
-            layer.borderColor[0],           // borderR
-            layer.borderColor[1],           // borderG
-            layer.borderColor[2],           // borderB
-            layer.isSelected ? SELECTED_BORDER_WIDTH : 0.0,  // borderWidth
+            0,
+            zoom,
+            panX,
+            panY,
+            layer.applySRGB ? 1.0 : 0.0,
+            canvasAspect,
+            combinedAspect,
+            slot.left,
+            slot.right,
+            layer.borderColor[0],
+            layer.borderColor[1],
+            layer.borderColor[2],
+            layer.isSelected ? SELECTED_BORDER_WIDTH : 0.0,
           ]);
           device.queue.writeBuffer(gpu.uniformBuffer, i * UNIFORM_STRIDE, data);
         }
 
-        // Multi-pass rendering: one pass per layer
         const targetView = gpu.ctx.getCurrentTexture().createView();
         const encoder = device.createCommandEncoder();
 
@@ -213,32 +315,22 @@ export function Preview2D({ device, format, layers, renderVersion }: Preview2DPr
     return () => cancelAnimationFrame(frameRef.current);
   }, [device, layers, zoom, panX, panY, renderVersion, canvasSize]);
 
-  // Mouse wheel zoom (centered on cursor).
-  // Uses a native event listener with { passive: false } to ensure preventDefault()
-  // actually works. React's synthetic onWheel is passive in React 17+.
+  // Desktop mouse wheel zoom
   useEffect(() => {
+    if (interactionMode !== 'desktop') return;
+
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
-
       const rect = canvas.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
       const mouseU = (e.clientX - rect.left) / rect.width;
       const mouseV = (e.clientY - rect.top) / rect.height;
-
-      setZoom((prevZoom) => {
-        const newZoom = Math.max(0.1, Math.min(100, prevZoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1)));
-        const du = (mouseU - 0.5) * (1 / prevZoom - 1 / newZoom);
-        const dv = (mouseV - 0.5) * (1 / prevZoom - 1 / newZoom);
-        setPanX((prev) => prev + du);
-        setPanY((prev) => prev + dv);
-        return newZoom;
-      });
+      applyZoomFactorAtPoint(mouseU, mouseV, e.deltaY < 0 ? 1.1 : 1 / 1.1);
     };
 
-    // Prevent middle-click autoscroll (browser default for button 1).
-    // Must prevent on both mousedown and pointerdown to fully suppress autoscroll.
     const preventMiddle = (e: Event) => {
       if ((e as MouseEvent).button === 1) e.preventDefault();
     };
@@ -253,41 +345,193 @@ export function Preview2D({ device, format, layers, renderVersion }: Preview2DPr
       canvas.removeEventListener('pointerdown', preventMiddle);
       canvas.removeEventListener('auxclick', preventMiddle);
     };
-  }, []);
+  }, [interactionMode, applyZoomFactorAtPoint]);
 
-  // Click-drag pan (left, middle, or right button)
-  const handlePointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+  const handleDesktopPointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     canvas.setPointerCapture(e.pointerId);
-    dragRef.current = { x: e.clientX, y: e.clientY, panX, panY };
+    const { panX: curPanX, panY: curPanY } = viewRef.current;
+    dragRef.current = { x: e.clientX, y: e.clientY, panX: curPanX, panY: curPanY };
     setIsDragging(true);
-  }, [panX, panY]);
+  }, []);
 
-  const handlePointerMove = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+  const handleDesktopPointerMove = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     const drag = dragRef.current;
     const canvas = canvasRef.current;
     if (!drag || !canvas) return;
     const rect = canvas.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
     const dx = (e.clientX - drag.x) / rect.width;
     const dy = (e.clientY - drag.y) / rect.height;
-    setPanX(drag.panX - dx / zoom);
-    setPanY(drag.panY - dy / zoom);
-  }, [zoom]);
+    const z = viewRef.current.zoom;
+    setView(z, drag.panX - dx / z, drag.panY - dy / z);
+  }, [setView]);
 
-  const handlePointerUp = useCallback(() => {
+  const handleDesktopPointerUp = useCallback(() => {
     dragRef.current = null;
     setIsDragging(false);
   }, []);
 
-  // Double-click fit-to-view
+  const handleMobilePointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    canvas.setPointerCapture(e.pointerId);
+    pointerPositionsRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (e.pointerType !== 'mouse') {
+      tapCandidateRef.current = {
+        pointerId: e.pointerId,
+        x: e.clientX,
+        y: e.clientY,
+        moved: false,
+      };
+    }
+
+    if (pointerPositionsRef.current.size >= 2) {
+      dragRef.current = null;
+      setIsDragging(false);
+      tapCandidateRef.current = null;
+      initializePinch(canvas);
+      return;
+    }
+
+    const { panX: curPanX, panY: curPanY } = viewRef.current;
+    dragRef.current = { x: e.clientX, y: e.clientY, panX: curPanX, panY: curPanY };
+    pinchRef.current = null;
+    setIsDragging(true);
+  }, [initializePinch]);
+
+  const handleMobilePointerMove = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    if (pointerPositionsRef.current.has(e.pointerId)) {
+      pointerPositionsRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    }
+
+    const tapCandidate = tapCandidateRef.current;
+    if (tapCandidate && tapCandidate.pointerId === e.pointerId) {
+      if (Math.hypot(e.clientX - tapCandidate.x, e.clientY - tapCandidate.y) > TAP_MOVE_PX) {
+        tapCandidate.moved = true;
+      }
+    }
+
+    if (pointerPositionsRef.current.size >= 2) {
+      if (!pinchRef.current) initializePinch(canvas);
+      const pinch = pinchRef.current;
+      if (!pinch) return;
+
+      const points = [...pointerPositionsRef.current.values()];
+      if (points.length < 2) return;
+      const [a, b] = points;
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+
+      const centroidX = (a.x + b.x) / 2;
+      const centroidY = (a.y + b.y) / 2;
+      const dist = Math.max(1, Math.hypot(b.x - a.x, b.y - a.y));
+      const scale = dist / Math.max(1, pinch.baseDistance);
+      const targetZoom = clampZoom(pinch.baseZoom * scale);
+
+      const du = (pinch.baseU - 0.5) * (1 / pinch.baseZoom - 1 / targetZoom);
+      const dv = (pinch.baseV - 0.5) * (1 / pinch.baseZoom - 1 / targetZoom);
+      const deltaCx = (centroidX - pinch.baseCentroidX) / rect.width;
+      const deltaCy = (centroidY - pinch.baseCentroidY) / rect.height;
+
+      const nextPanX = pinch.basePanX + du - deltaCx / targetZoom;
+      const nextPanY = pinch.basePanY + dv - deltaCy / targetZoom;
+      setView(targetZoom, nextPanX, nextPanY);
+      setIsDragging(false);
+      return;
+    }
+
+    const drag = dragRef.current;
+    if (!drag) return;
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+    const dx = (e.clientX - drag.x) / rect.width;
+    const dy = (e.clientY - drag.y) / rect.height;
+    const z = viewRef.current.zoom;
+    setView(z, drag.panX - dx / z, drag.panY - dy / z);
+  }, [initializePinch, setView]);
+
+  const finishMobilePointer = useCallback((e: React.PointerEvent<HTMLCanvasElement>, allowTap: boolean) => {
+    const canvas = canvasRef.current;
+    if (canvas) {
+      try { canvas.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+    }
+
+    const tapCandidate = tapCandidateRef.current;
+    const validTap = allowTap
+      && e.pointerType !== 'mouse'
+      && tapCandidate
+      && tapCandidate.pointerId === e.pointerId
+      && !tapCandidate.moved;
+
+    pointerPositionsRef.current.delete(e.pointerId);
+    if (tapCandidate?.pointerId === e.pointerId) tapCandidateRef.current = null;
+
+    if (validTap) {
+      const now = performance.now();
+      const prev = lastTapRef.current;
+      if (prev && now - prev.t <= DOUBLE_TAP_MS && Math.hypot(prev.x - e.clientX, prev.y - e.clientY) <= DOUBLE_TAP_DIST_PX) {
+        lastTapRef.current = null;
+        resetView();
+      } else {
+        lastTapRef.current = { t: now, x: e.clientX, y: e.clientY };
+      }
+    }
+
+    pinchRef.current = null;
+
+    if (pointerPositionsRef.current.size === 1) {
+      rebaseDragFromRemainingPointer();
+    } else if (pointerPositionsRef.current.size === 0) {
+      dragRef.current = null;
+      setIsDragging(false);
+    }
+  }, [rebaseDragFromRemainingPointer, resetView]);
+
+  const handlePointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (interactionMode === 'mobile') {
+      handleMobilePointerDown(e);
+      return;
+    }
+    handleDesktopPointerDown(e);
+  }, [interactionMode, handleDesktopPointerDown, handleMobilePointerDown]);
+
+  const handlePointerMove = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (interactionMode === 'mobile') {
+      handleMobilePointerMove(e);
+      return;
+    }
+    handleDesktopPointerMove(e);
+  }, [interactionMode, handleDesktopPointerMove, handleMobilePointerMove]);
+
+  const handlePointerUp = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (interactionMode === 'mobile') {
+      finishMobilePointer(e, true);
+      return;
+    }
+    handleDesktopPointerUp();
+  }, [interactionMode, finishMobilePointer, handleDesktopPointerUp]);
+
+  const handlePointerCancel = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (interactionMode === 'mobile') {
+      finishMobilePointer(e, false);
+      return;
+    }
+    handleDesktopPointerUp();
+  }, [interactionMode, finishMobilePointer, handleDesktopPointerUp]);
+
   const handleDoubleClick = useCallback(() => {
-    setZoom(1.0);
-    setPanX(0.0);
-    setPanY(0.0);
-  }, []);
+    if (interactionMode === 'desktop') resetView();
+  }, [interactionMode, resetView]);
 
   const hasAnyTexture = layers.length > 0;
+  const isMobile = interactionMode === 'mobile';
 
   return (
     <div
@@ -306,14 +550,87 @@ export function Preview2D({ device, format, layers, renderVersion }: Preview2DPr
           width: '100%',
           height: '100%',
           display: 'block',
-          cursor: isDragging ? 'grabbing' : 'grab',
+          cursor: isMobile ? 'default' : (isDragging ? 'grabbing' : 'grab'),
+          touchAction: isMobile ? 'none' : 'auto',
         }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
-        onDoubleClick={handleDoubleClick}
+        onPointerCancel={handlePointerCancel}
+        onDoubleClick={isMobile ? undefined : handleDoubleClick}
         onContextMenu={(e) => e.preventDefault()}
       />
+
+      {isMobile && showTouchControls && (
+        <div style={{
+          position: 'absolute',
+          right: '8px',
+          bottom: '8px',
+          zIndex: 10,
+          display: 'flex',
+          gap: '6px',
+          background: 'rgba(0,0,0,0.45)',
+          border: '1px solid rgba(255,255,255,0.08)',
+          borderRadius: '8px',
+          padding: '6px',
+          backdropFilter: 'blur(6px)',
+          WebkitBackdropFilter: 'blur(6px)',
+        }}>
+          <button
+            type="button"
+            onClick={() => applyZoomFactorAtPoint(0.5, 0.5, 1.15)}
+            style={{
+              width: '30px',
+              height: '30px',
+              borderRadius: '6px',
+              border: '1px solid var(--surface-700)',
+              background: 'var(--surface-800)',
+              color: 'var(--color-text)',
+              fontSize: '16px',
+              cursor: 'pointer',
+            }}
+            title="Zoom in"
+          >
+            +
+          </button>
+          <button
+            type="button"
+            onClick={() => applyZoomFactorAtPoint(0.5, 0.5, 1 / 1.15)}
+            style={{
+              width: '30px',
+              height: '30px',
+              borderRadius: '6px',
+              border: '1px solid var(--surface-700)',
+              background: 'var(--surface-800)',
+              color: 'var(--color-text)',
+              fontSize: '16px',
+              cursor: 'pointer',
+            }}
+            title="Zoom out"
+          >
+            -
+          </button>
+          <button
+            type="button"
+            onClick={resetView}
+            style={{
+              height: '30px',
+              minWidth: '44px',
+              borderRadius: '6px',
+              border: '1px solid var(--surface-700)',
+              background: 'var(--surface-800)',
+              color: 'var(--color-text)',
+              fontSize: '12px',
+              padding: '0 8px',
+              cursor: 'pointer',
+            }}
+            title="Fit view"
+          >
+            Fit
+          </button>
+        </div>
+      )}
+
       {!hasAnyTexture && (
         <div
           style={{

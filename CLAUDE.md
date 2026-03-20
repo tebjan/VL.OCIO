@@ -1,5 +1,9 @@
 # VL.OCIO Architecture
 
+## C# Code Style Rules
+- **Use `using` directives** — never write fully qualified type names inline (e.g. `[DefaultValue(...)]` not `[System.ComponentModel.DefaultValue(...)]`).
+- Keep code clean and readable.
+
 OpenColorIO integration for vvvv/Stride with GPU and CPU color transforms, HDR color grading, and a WebSocket-driven web UI for real-time parameter control.
 
 ## Project Structure

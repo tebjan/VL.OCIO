@@ -14,6 +14,7 @@ import {
   InstancedBufferGeometry,
   InstancedBufferAttribute,
 } from 'three/webgpu';
+import { TOUCH } from 'three';
 import type { Material } from 'three/webgpu';
 import { attribute, positionLocal, modelViewMatrix, uv, float, fwidth, smoothstep, vec3 } from 'three/tsl';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -34,6 +35,7 @@ export interface HeightmapViewProps {
   renderVersion?: number;
   /** 3D heightmap display settings from HeightmapControls. */
   settings?: HeightmapSettings;
+  interactionMode?: 'desktop' | 'mobile';
 }
 
 // ---- Raw WebGPU compute shader (bypasses Three.js TSL which fails on shared devices) ----
@@ -283,7 +285,7 @@ class HeightmapScene {
     this.controls = null!;
   }
 
-  async init(canvas: HTMLCanvasElement, sharedDevice: GPUDevice): Promise<void> {
+  async init(canvas: HTMLCanvasElement, sharedDevice: GPUDevice, interactionMode: 'desktop' | 'mobile' = 'desktop'): Promise<void> {
     this.device = sharedDevice;
     this.renderer = new WebGPURenderer({ canvas, antialias: true, device: sharedDevice } as any);
     await this.renderer.init();
@@ -303,6 +305,9 @@ class HeightmapScene {
     this.controls.dampingFactor = 0.1;
     this.controls.minDistance = 0.05;
     this.controls.maxDistance = 10;
+    this.controls.enablePan = true;
+    this.controls.enableZoom = true;
+    this.setInteractionMode(interactionMode);
 
     this.boundDblClick = () => this.resetCamera();
     canvas.addEventListener('dblclick', this.boundDblClick);
@@ -318,6 +323,17 @@ class HeightmapScene {
 
     this.resetCamera();
     this.ready = true;
+  }
+
+  setInteractionMode(mode: 'desktop' | 'mobile'): void {
+    if (this.canvasEl) {
+      this.canvasEl.style.touchAction = mode === 'mobile' ? 'none' : 'auto';
+    }
+    if (!this.controls) return;
+
+    if (mode === 'mobile') {
+      this.controls.touches = { ONE: TOUCH.ROTATE, TWO: TOUCH.DOLLY_PAN };
+    }
   }
 
   /** Create the billboard node material (shared across all layer meshes). */
@@ -743,13 +759,23 @@ class HeightmapScene {
  * React component wrapping the Three.js WebGPU heightmap scene.
  * Supports multiple layers displayed side by side in the same 3D view.
  */
-export function HeightmapView({ layers, device, active, renderVersion, settings }: HeightmapViewProps) {
+export function HeightmapView({
+  layers,
+  device,
+  active,
+  renderVersion,
+  settings,
+  interactionMode = 'desktop',
+}: HeightmapViewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<HeightmapScene | null>(null);
   const initRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [sceneReady, setSceneReady] = useState(false);
+  const touchPointersRef = useRef<Set<number>>(new Set());
+  const tapCandidateRef = useRef<{ pointerId: number; x: number; y: number; moved: boolean } | null>(null);
+  const lastTapRef = useRef<{ t: number; x: number; y: number } | null>(null);
 
   // Keep latest layers accessible in effects via ref (avoids stale closures)
   const layersRef = useRef(layers);
@@ -772,7 +798,7 @@ export function HeightmapView({ layers, device, active, renderVersion, settings 
     scene.onError = setError;
     sceneRef.current = scene;
 
-    scene.init(canvasRef.current, device)
+    scene.init(canvasRef.current, device, interactionMode)
       .then(() => {
         if (scene.disposed) return;
         const container = containerRef.current;
@@ -791,7 +817,7 @@ export function HeightmapView({ layers, device, active, renderVersion, settings 
 
     // No cleanup — scene persists across active toggles.
     // Unmount cleanup is handled by the separate effect below.
-  }, [active, device]);
+  }, [active, device, interactionMode]);
 
   // Cleanup only on component unmount
   useEffect(() => {
@@ -877,6 +903,54 @@ export function HeightmapView({ layers, device, active, renderVersion, settings 
     scene.updateSettings(settings);
   }, [settings]);
 
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+    scene.setInteractionMode(interactionMode);
+  }, [interactionMode]);
+
+  const isMobile = interactionMode === 'mobile';
+
+  const handleCanvasPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!isMobile || e.pointerType === 'mouse') return;
+    touchPointersRef.current.add(e.pointerId);
+    if (touchPointersRef.current.size === 1) {
+      tapCandidateRef.current = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, moved: false };
+    } else {
+      tapCandidateRef.current = null;
+    }
+  };
+
+  const handleCanvasPointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!isMobile || e.pointerType === 'mouse') return;
+    const tap = tapCandidateRef.current;
+    if (!tap || tap.pointerId !== e.pointerId) return;
+    if (Math.hypot(e.clientX - tap.x, e.clientY - tap.y) > 12) {
+      tap.moved = true;
+    }
+  };
+
+  const handleCanvasPointerEnd = (e: React.PointerEvent<HTMLCanvasElement>, allowTap: boolean) => {
+    if (!isMobile || e.pointerType === 'mouse') return;
+    const hadSingleTouch = touchPointersRef.current.size === 1;
+    touchPointersRef.current.delete(e.pointerId);
+
+    const tap = tapCandidateRef.current;
+    const validTap = allowTap && hadSingleTouch && tap && tap.pointerId === e.pointerId && !tap.moved;
+    if (tap?.pointerId === e.pointerId) tapCandidateRef.current = null;
+
+    if (!validTap) return;
+
+    const now = performance.now();
+    const prev = lastTapRef.current;
+    if (prev && now - prev.t <= 320 && Math.hypot(prev.x - e.clientX, prev.y - e.clientY) <= 24) {
+      lastTapRef.current = null;
+      sceneRef.current?.resetCamera();
+    } else {
+      lastTapRef.current = { t: now, x: e.clientX, y: e.clientY };
+    }
+  };
+
   return (
     <div
       ref={containerRef}
@@ -890,7 +964,16 @@ export function HeightmapView({ layers, device, active, renderVersion, settings 
     >
       <canvas
         ref={canvasRef}
-        style={{ width: '100%', height: '100%', display: 'block' }}
+        style={{
+          width: '100%',
+          height: '100%',
+          display: 'block',
+          touchAction: isMobile ? 'none' : 'auto',
+        }}
+        onPointerDown={handleCanvasPointerDown}
+        onPointerMove={handleCanvasPointerMove}
+        onPointerUp={(e) => handleCanvasPointerEnd(e, true)}
+        onPointerCancel={(e) => handleCanvasPointerEnd(e, false)}
       />
       {error && (
         <div

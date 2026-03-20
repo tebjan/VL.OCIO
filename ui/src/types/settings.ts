@@ -86,6 +86,21 @@ export interface DiscoveredServer {
   appName?: string
 }
 
+// SettingsBank — per-key settings management state from the server
+export interface BankState {
+  hasBank: boolean
+  currentKey: string
+  allKeys: string[]
+  friendlyNames: Record<string, string | null>
+  thumbnails: Record<string, string | null>
+  currentSnapshots: string[]
+}
+
+/** Returns the friendly display name for a key, falling back to the raw key. */
+export function displayName(key: string, friendlyNames: Record<string, string | null>): string {
+  return friendlyNames[key] || key
+}
+
 // Input/working color spaces (for textures and grading)
 // NOTE: These match exact C# enum names (JsonStringEnumConverter without naming policy)
 export type ColorSpace =

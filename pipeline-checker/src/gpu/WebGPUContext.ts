@@ -30,12 +30,27 @@ export async function initWebGPU(canvas: HTMLCanvasElement): Promise<GPUContext>
     requiredFeatures.push('texture-compression-bc');
   }
 
+  // Request only limits the adapter can actually satisfy. Desktop GPUs typically
+  // meet the original 256MB targets; mobile adapters may not.
+  const targetStorageLimit = 256 * 1024 * 1024;
+  const targetBufferLimit = 256 * 1024 * 1024;
+  const requiredLimits: Record<string, number> = {};
+  if (adapter.limits.maxStorageBufferBindingSize > 0) {
+    requiredLimits.maxStorageBufferBindingSize = Math.min(
+      targetStorageLimit,
+      adapter.limits.maxStorageBufferBindingSize,
+    );
+  }
+  if (adapter.limits.maxBufferSize > 0) {
+    requiredLimits.maxBufferSize = Math.min(
+      targetBufferLimit,
+      adapter.limits.maxBufferSize,
+    );
+  }
+
   const device = await adapter.requestDevice({
     requiredFeatures,
-    requiredLimits: {
-      maxStorageBufferBindingSize: 256 * 1024 * 1024,
-      maxBufferSize: 256 * 1024 * 1024,
-    },
+    requiredLimits,
   });
 
   device.lost.then((info) => {

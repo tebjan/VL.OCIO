@@ -5,6 +5,7 @@ import { WebGPUCanvas } from './components/WebGPUCanvas';
 import { PipelineFilmstripArea } from './components/PipelineFilmstripArea';
 import { ControlsPanel } from './components/ControlsPanel';
 import { MainPreview } from './components/MainPreview';
+import { MobileAppShell } from './components/MobileAppShell';
 import { MetadataPanel, computeChannelStats, type ImageMetadata, type ChannelStats } from './components/MetadataPanel';
 import { usePipelineManager } from './hooks/usePipelineManager';
 import { uploadFloat32Texture, uploadFloat16Texture, uploadDDSTexture } from './pipeline/TextureUtils';
@@ -19,6 +20,7 @@ import {
 import { type PipelineSettings, getStageColorSpace, isLinearStageOutput } from './types/settings';
 import type { BCFormat, BCQuality } from '@vl-ocio/webgpu-bc-encoder';
 import { saveFileHandle, loadFileHandle, saveViewState, loadViewState } from './lib/sessionStore';
+import { useUIVariant } from './lib/uiVariant';
 
 /** Map bcFormat setting index (0-6) to BCFormat string key. */
 const BC_FORMAT_KEYS: BCFormat[] = ['bc1', 'bc2', 'bc3', 'bc4', 'bc5', 'bc6h', 'bc7'];
@@ -195,7 +197,9 @@ async function decodeImageToFloat32(
 ): Promise<{ data: Float32Array; width: number; height: number }> {
   const bitmap = await createImageBitmap(file);
   const { width, height } = bitmap;
-  const canvas = new OffscreenCanvas(width, height);
+  const canvas = typeof OffscreenCanvas !== 'undefined'
+    ? new OffscreenCanvas(width, height)
+    : Object.assign(document.createElement('canvas'), { width, height });
   const ctx = canvas.getContext('2d')!;
   ctx.drawImage(bitmap, 0, 0);
   bitmap.close();
@@ -229,6 +233,8 @@ export default function App() {
   const [state, setState] = useState<AppState>({ kind: 'initializing' });
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gpuRef = useRef<GPUContext | null>(null);
+  const uiVariant = useUIVariant();
+  const isMobileUI = uiVariant === 'mobile';
 
   const [isDragging, setIsDragging] = useState(false);
   const manager = usePipelineManager();
@@ -319,6 +325,9 @@ export default function App() {
                 return;
               }
             } else if (stored.fileType === 'dds') {
+              if (uiVariant === 'mobile') {
+                console.log('[App] Skipping DDS session restore on mobile UI');
+              } else {
               const dds = parseDDS(buffer);
               const sourceTexture = uploadDDSTexture(gpu.device, dds);
               const sizeMB = (buffer.byteLength / (1024 * 1024)).toFixed(2);
@@ -326,6 +335,7 @@ export default function App() {
               const saved = loadViewState();
               if (saved !== null) setTimeout(() => manager.selectStage(saved.stageIndex), 0);
               return;
+              }
             } else if (stored.fileType === 'image') {
               const restoredFile = await stored.handle.getFile();
               const decoded = await decodeImageToFloat32(restoredFile);
@@ -384,6 +394,9 @@ export default function App() {
           loadFile(gpu, parsed.sourceTexture, parsed.width, parsed.height, parsed.stats, sizeMB, 'exr', fileName, fileHandle, targetPipelineId);
           if (fileHandle) saveFileHandle(fileHandle, 'exr', fileName);
         } else if (ext === 'dds') {
+          if (uiVariant === 'mobile') {
+            throw new Error('DDS input is not supported on mobile. Use EXR or standard images.');
+          }
           const dds = parseDDS(buffer);
           console.log(`[App] Parsed DDS: ${fileName} (${dds.width}x${dds.height}, ${dds.formatLabel})`);
           const sourceTexture = uploadDDSTexture(gpu.device, dds);
@@ -406,8 +419,12 @@ export default function App() {
         setDropLoading(false);
       }
     },
-    [loadFile],
+    [loadFile, uiVariant],
   );
+
+  const handleFileOpen = useCallback(async (file: File) => {
+    await handleFileDrop(file, undefined, null);
+  }, [handleFileDrop]);
 
   // Tab key cycles selected pipeline
   useEffect(() => {
@@ -604,12 +621,15 @@ export default function App() {
   }, [manager.pipelines, manager.selectedPipelineId, getStageTexture]);
 
   const gpu = state.kind === 'ready' ? state.gpu : null;
+  const toastBottom = isMobileUI
+    ? 'calc(env(safe-area-inset-bottom, 0px) + 88px)'
+    : '16px';
 
   return (
     <div className="w-full h-full flex flex-col" style={{ background: 'var(--color-bg)' }}>
       <WebGPUCanvas ref={canvasRef} />
 
-      {gpuRef.current && (
+      {gpuRef.current && !isMobileUI && (
         <DropZone
           onFileDrop={(file, fileHandle) => handleFileDrop(file, fileHandle, null)}
           onDragStateChange={setIsDragging}
@@ -644,6 +664,17 @@ export default function App() {
       )}
 
       {gpu && manager.selectedPipeline && (
+        isMobileUI ? (
+          <MobileAppShell
+            gpu={gpu}
+            manager={manager}
+            previewLayers={buildPreviewLayers()}
+            heightmapLayers={buildHeightmapLayers()}
+            getStageTexturesForPipeline={getStageTexturesForPipeline}
+            onOpenFile={handleFileOpen}
+            onPipelineFileDrop={handleFileDrop}
+          />
+        ) : (
         <>
           {/* Top header bar — branding + linked toggle + global compact */}
           <div style={{
@@ -782,12 +813,13 @@ export default function App() {
             </div>
           </div>
         </>
+        )
       )}
 
       {/* Shader compilation indicator */}
       {isShaderCompiling && (
         <div style={{
-          position: 'fixed', bottom: '16px', left: '50%', transform: 'translateX(-50%)',
+          position: 'fixed', bottom: toastBottom, left: '50%', transform: 'translateX(-50%)',
           background: 'var(--surface-700, #333)', color: 'var(--color-text, #ccc)',
           padding: '8px 20px', borderRadius: '6px', fontSize: '13px',
           boxShadow: '0 2px 12px rgba(0,0,0,0.4)', zIndex: 100,
@@ -799,7 +831,7 @@ export default function App() {
       {/* Loading / error toasts */}
       {dropLoading && (
         <div style={{
-          position: 'fixed', bottom: '16px', left: '50%', transform: 'translateX(-50%)',
+          position: 'fixed', bottom: toastBottom, left: '50%', transform: 'translateX(-50%)',
           background: 'var(--surface-700, #333)', color: 'var(--color-text, #ccc)',
           padding: '8px 20px', borderRadius: '6px', fontSize: '13px',
           boxShadow: '0 2px 12px rgba(0,0,0,0.4)', zIndex: 100,
@@ -811,7 +843,7 @@ export default function App() {
         <div
           onClick={() => setDropError(null)}
           style={{
-            position: 'fixed', bottom: '16px', left: '50%', transform: 'translateX(-50%)',
+            position: 'fixed', bottom: toastBottom, left: '50%', transform: 'translateX(-50%)',
             background: '#4a1c1c', color: '#f08080', border: '1px solid #6a2c2c',
             padding: '8px 20px', borderRadius: '6px', fontSize: '13px',
             boxShadow: '0 2px 12px rgba(0,0,0,0.4)', zIndex: 100, cursor: 'pointer',

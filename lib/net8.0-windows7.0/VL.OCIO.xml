@@ -1,0 +1,873 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>VL.OCIO</name>
+    </assembly>
+    <members>
+        <member name="T:VL.OCIO.ColorCorrectionSettings">
+            <summary>
+            Settings for HDR color correction shader.
+            All values map directly to shader parameters.
+            Use Split() to extract individual values for vvvv shader pins.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ColorCorrectionSettings.Split(VL.OCIO.HDRColorSpace@,VL.OCIO.GradingSpace@,System.Single@,System.Single@,System.Single@,System.Single@,System.Single@,System.Single@,System.Single@,System.Single@,Stride.Core.Mathematics.Vector3@,Stride.Core.Mathematics.Vector3@,Stride.Core.Mathematics.Vector3@,Stride.Core.Mathematics.Vector3@,Stride.Core.Mathematics.Vector3@,Stride.Core.Mathematics.Vector3@,Stride.Core.Mathematics.Vector3@,System.Single@,System.Single@,System.Single@,System.Single@,System.Single@,System.Single@,System.Single@)">
+            <summary>
+            Split settings into individual out parameters matching shader input order.
+            Use directly with vvvv nodes for HDRGrade_TextureFX or HDRGrade_Tonemap_TextureFX.
+            </summary>
+        </member>
+        <member name="T:VL.OCIO.Vector3Json">
+            <summary>
+            JSON-serializable Vector3 (Stride Vector3 doesn't serialize well).
+            Internal properties — not exposed to vvvv node graph.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.Vector3Json.ToVector3">
+            <summary>
+            Convert to Stride Vector3
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.Vector3Json.FromVector3(Stride.Core.Mathematics.Vector3)">
+            <summary>
+            Create from Stride Vector3
+            </summary>
+        </member>
+        <member name="T:VL.OCIO.ColorGradingInstance">
+             <summary>
+             Represents a single color grading instance that can be controlled via the web UI.
+             The service starts automatically — just place this node and the web UI becomes available.
+            
+             Settings are persisted as a JSON dictionary in the "Settings" Create pin (constructor parameter),
+             keyed by stable instance ID (deterministic hash of path stack + auto-assigned slice index).
+             This supports multiple runtime instances from the same physical node (e.g. inside a loop).
+             Slice indices are auto-managed: vvvv creates instances in deterministic order, so
+             slice 0 always gets index 0, slice 1 gets index 1, etc. On restart the same mapping holds.
+            
+             In editor mode, the service calls SetPinValue (DontCompile) to persist changes + SetRuntimeState for immediate output.
+             In exported mode, the service uses JSON files + SetRuntimeState for immediate output.
+             </summary>
+        </member>
+        <member name="M:VL.OCIO.ColorGradingInstance.#ctor(VL.Core.NodeContext,System.String)">
+            <summary>
+            Create a color grading instance.
+            Slice index is auto-assigned based on creation order within the same node path.
+            Works correctly inside ForEach loops — each slice gets a unique, stable identity.
+            </summary>
+            <param name="nodeContext">Injected by vvvv</param>
+            <param name="settings">Persisted settings JSON (managed automatically)</param>
+        </member>
+        <member name="M:VL.OCIO.ColorGradingInstance.Update(VL.OCIO.ColorCorrectionSettings@,VL.OCIO.TonemapSettings@,System.String@,System.String@,System.Int32@,System.String@,System.String@,System.String,System.Boolean,System.Boolean,System.String,System.Boolean)">
+            <summary>
+            Main update method called every frame by VVVV.
+            The "Settings" Create pin (constructor) holds a JSON dictionary keyed by stable instance ID.
+            The service updates this pin via SetPinValue (DontCompile) when settings change in the web UI.
+            Runtime state (from SetRuntimeState) provides immediate output updates without node recreation.
+            </summary>
+            <param name="outColorCorrection">Output: effective color correction settings</param>
+            <param name="outTonemap">Output: effective tonemap settings</param>
+            <param name="effectiveInstanceId">Output: the actual instance ID being used</param>
+            <param name="uiUrl">Output: URL to reach the color grading web UI</param>
+            <param name="clientCount">Output: number of connected web UI clients</param>
+            <param name="currentSettings">Output: current effective settings as a JSON string</param>
+            <param name="error">Output: error message if something fails (empty when ok)</param>
+            <param name="customInstanceId">Custom instance ID (empty = auto-generated from patch path)</param>
+            <param name="publishToNetwork">Make the grading UI accessible on the local network (requires one-time admin permission)</param>
+            <param name="autoOpenBrowser">Automatically open the web UI in the default browser</param>
+            <param name="settingsJson">JSON string to load as new settings (use with Apply Settings)</param>
+            <param name="applySettings">When true, parses the Settings JSON and applies it to this instance</param>
+        </member>
+        <member name="M:VL.OCIO.ColorGradingInstance.SetRuntimeState(VL.OCIO.ColorCorrectionSettings,VL.OCIO.TonemapSettings,System.String)">
+            <summary>
+            Called by the service to set runtime state that overrides Create pin defaults.
+            Internal: only used by ColorGradingService, must not appear as a vvvv pin.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ColorGradingInstance.ClearRuntimeState">
+            <summary>
+            Clear runtime state, reverting to Create pin defaults.
+            Internal: only used by ColorGradingService.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ColorGradingInstance.GetNodeStack">
+            <summary>
+            Get the node stack for SetPinValue operations (editor mode).
+            </summary>
+        </member>
+        <member name="P:VL.OCIO.ColorGradingInstance.StableId">
+            <summary>
+            The stable ID for this instance (deterministic hash of path stack + slice index).
+            </summary>
+        </member>
+        <member name="P:VL.OCIO.ColorGradingInstance.IsExported">
+            <summary>
+            Whether this instance is running in exported (standalone) mode.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ColorGradingInstance.ParseMySettings(System.String)">
+            <summary>
+            Parse settings from the Create pin JSON string.
+            Tries dictionary format first (keyed by stable ID), then legacy single-object format.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ColorGradingInstance.ComputeStableId(System.Collections.Immutable.ImmutableStack{VL.Core.UniqueId},System.Int32)">
+            <summary>
+            Compute a stable, deterministic instance ID from the node's path stack and slice index.
+            Path stack identifies the node in the document (same for all loop iterations).
+            Slice index differentiates loop slices (auto-assigned by creation order).
+            UniqueIds are document-stored GUIDs, so the hash is stable across sessions.
+            Uses FNV-1a hash for determinism (no runtime randomization like string.GetHashCode).
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ColorGradingInstance.StackToString(System.Collections.Immutable.ImmutableStack{VL.Core.UniqueId})">
+            <summary>
+            Convert an ImmutableStack to a string key for path-based grouping.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ColorGradingInstance.GenerateFriendlyId(VL.Core.NodeContext,System.Int32)">
+            <summary>
+            Generate a friendly display name from the patch path.
+            Uses GetCallingPatches() to get the parent patch names.
+            Skips "ColorGrading" suffix. Falls back to app name.
+            For looped nodes (sliceIndex > 0), appends the index for clarity.
+            </summary>
+        </member>
+        <member name="T:VL.OCIO.ColorGradingService">
+            <summary>
+            Per-app singleton service for the color grading web UI.
+            Manages the WebSocket server, HTTP file serving, instance registry, and presets.
+            Acquired via GetOrCreate(AppHost) — users never see this; they only place ColorGradingInstance nodes.
+            </summary>
+        </member>
+        <member name="P:VL.OCIO.ColorGradingService.ActualPort">
+            <summary>
+            Public read-only properties for diagnostic outputs on ColorGradingInstance.
+            </summary>
+        </member>
+        <member name="T:VL.OCIO.ColorGradingService.RegisteredInstance">
+            <summary>
+            Represents a registered color grading instance with its state and node reference.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ColorGradingService.ForceCleanup">
+            <summary>
+            Forcefully cleanup all resources synchronously (for process exit).
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ColorGradingService.EnsureServerStarted">
+            <summary>
+            Start the server lazily on first instance registration.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ColorGradingService.EnableNetworkAccess">
+            <summary>
+            Upgrade the server from localhost-only to all-interfaces (LAN accessible).
+            Requests URL ACL via UAC if needed (one-time admin prompt).
+            Starts mDNS discovery, claims the directory page, starts HTTPS redirect.
+            Safe to call multiple times — only the first call triggers the upgrade.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ColorGradingService.DisableNetworkAccess">
+            <summary>
+            Downgrade the server from all-interfaces back to localhost-only.
+            Stops mDNS, HTTPS redirect, directory listener, and rebinds to localhost.
+            The browser tab on http://localhost/... keeps working across the switch.
+            Safe to call when already in localhost mode (no-op).
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ColorGradingService.RebindLocalhost">
+            <summary>
+            Rebind the localhost listener (after network upgrade failure or disable).
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ColorGradingService.Slugify(System.String)">
+            <summary>
+            Sanitize a string for use in a URL path segment.
+            Lowercase, spaces/underscores → hyphens, strip non-alphanumeric.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ColorGradingService.BindLocalhostPrefix">
+            <summary>
+            Bind a localhost-only HTTP prefix.
+            Uses "localhost" hostname which has a built-in HTTP.sys reservation on modern Windows
+            (no URL ACL / UAC required, even on port 80).
+            Path: /grade/{machine}/{app}/ — auto-suffixes with -2, -3... if prefix is already taken.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ColorGradingService.TrySetUrlAcl">
+            <summary>
+            Try to set a URL ACL and firewall rule via a single UAC-elevated command.
+            Sets ACL for /grade/ which covers all sub-paths (/grade/{machine}/{app}/).
+            Adds a Windows Firewall inbound rule for port 80 (required for remote access).
+            Shows the standard Windows admin consent popup. One-time, persists across reboots.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ColorGradingService.EnsureFirewallRule">
+            <summary>
+            Ensure Windows Firewall allows inbound TCP on our port.
+            Queries the rule without elevation; only prompts UAC if it's missing.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ColorGradingService.TryClaimDirectory">
+            <summary>
+            Try to claim the directory page at /grade/ (first app on this machine wins).
+            Uses a separate HttpListener — HTTP.sys routes by longest-prefix-match,
+            so app-specific prefixes always take priority over the catch-all directory.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ColorGradingService.StartHttpsRedirect">
+            <summary>
+            Start a TLS listener on port 443 that redirects browsers to our HTTP port.
+            Handles Chrome/Android HTTPS-First mode: browser tries https:// first,
+            gets a valid TLS handshake + HTTP 301 redirect to http://, and loads the page.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ColorGradingService.RequestBrowserOpen">
+            <summary>
+            Request a browser open with a short delay.
+            Called by ColorGradingInstance when autoOpenBrowser is true.
+            Safe to call multiple times — only the first call triggers.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ColorGradingService.RegisterInstance(System.String,System.String,System.Collections.Immutable.ImmutableStack{VL.Core.UniqueId},System.Boolean,VL.OCIO.ColorGradingInstance,VL.OCIO.ColorCorrectionSettings,VL.OCIO.TonemapSettings,System.String,System.String)">
+            <summary>
+            Register a ColorGradingInstance with this service.
+            Starts the server lazily on first call.
+            Uses a stable ID (deterministic hash) as key; displayName is for UI only.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ColorGradingService.UnregisterInstance(System.String)">
+            <summary>
+            Unregister a ColorGradingInstance from this service.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ColorGradingService.UpdateInstanceDisplayName(System.String,System.String)">
+            <summary>
+            Update the display name of an instance (when custom ID changes).
+            Deduplicates display names by appending #N if needed.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ColorGradingService.DisplayNameTaken(System.String,System.String)">
+            <summary>
+            Check if a display name is already used by another instance (caller must hold _instancesLock).
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ColorGradingService.StackToKey(System.Collections.Immutable.ImmutableStack{VL.Core.UniqueId})">
+            <summary>
+            Convert an ImmutableStack of UniqueIds to a stable string key for grouping.
+            Instances sharing the same parent stack key share the same physical pin.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ColorGradingService.NaturalCompare(System.String,System.String)">
+            <summary>
+            Natural sort comparison: "Test #2" before "Test #16", not after "Test #19".
+            Compares strings character by character, treating consecutive digit sequences as numbers.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ColorGradingService.UpdateInstanceDefaults(System.String,VL.OCIO.ColorCorrectionSettings,VL.OCIO.TonemapSettings,System.String)">
+            <summary>
+            Update the default values for an instance (when Create pins change).
+            CRITICAL: Create DEEP COPIES to prevent instances from sharing object references!
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ColorGradingService.GetInstance(System.String)">
+            <summary>
+            Get the state of a specific instance.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ColorGradingService.SaveInstanceToJson(System.String,VL.OCIO.ColorCorrectionSettings,VL.OCIO.TonemapSettings,System.String)">
+            <summary>
+            Save instance state to JSON file (for exported mode persistence).
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ColorGradingService.LoadInstanceFromJson(System.String)">
+            <summary>
+            Load instance state from JSON file (for exported mode startup).
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ColorGradingService.ApplyInstanceState(System.String,System.String,VL.OCIO.ColorCorrectionSettings,VL.OCIO.TonemapSettings,System.String)">
+            <summary>
+            Apply state changes to an instance using the appropriate persistence mechanism.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ColorGradingService.ApplySettingsFromJson(System.String,VL.OCIO.ProjectSettings)">
+            <summary>
+            Apply a complete ProjectSettings to an instance from external JSON input.
+            Used by ColorGradingInstance for manual JSON I/O pins.
+            Atomic: deep copies all fields, sets runtime state, and persists in a single operation.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ColorGradingService.PersistInstanceToPin(VL.OCIO.ColorGradingService.RegisteredInstance)">
+            <summary>
+            Persist instance state to the "Settings" Create pin on the parent node via SetPinValue.
+            Writes a dictionary of ALL instances sharing the same physical pin (same PinKey),
+            keyed by stable instance ID. This supports multiple runtime instances from a looped node.
+            </summary>
+        </member>
+        <member name="F:VL.OCIO.ColorGradingService.PinJsonOptions">
+            <summary>
+            JSON options for pin persistence (indented for readability in the document).
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ColorGradingService.BroadcastInstanceList">
+            <summary>
+            Broadcast instance list to all connected clients (no LINQ).
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ColorGradingService.SendInstanceListToClient(System.Net.WebSockets.WebSocket)">
+            <summary>
+            Send instance list to a specific client (no LINQ).
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ColorGradingService.BroadcastRedirect(System.String)">
+            <summary>
+            Send a redirect message to all connected clients, telling them to navigate to a new URL.
+            Blocks until all messages are sent (synchronous wait) so the caller can safely
+            stop the current listener immediately after.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ColorGradingService.RegisterSettingsBank(VL.OCIO.SettingsBank)">
+            <summary>Register a SettingsBank node to enable per-key settings management.</summary>
+        </member>
+        <member name="M:VL.OCIO.ColorGradingService.UnregisterSettingsBank">
+            <summary>Unregister the SettingsBank (called on Dispose).</summary>
+        </member>
+        <member name="M:VL.OCIO.ColorGradingService.BroadcastBankStateAsync">
+            <summary>Broadcast current bank state to all connected clients (fire-and-forget).</summary>
+        </member>
+        <member name="M:VL.OCIO.ColorGradingService.GetPresetList">
+            <summary>
+            Get sorted preset list (no LINQ).
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ColorGradingService.OpenFileDialogSync">
+            <summary>
+            Opens a native Windows file dialog to select a DDS file.
+            Must run on STA thread for Windows Forms dialogs.
+            </summary>
+        </member>
+        <member name="T:VL.OCIO.HDRColorSpace">
+            <summary>
+            Unified color space enum for HDR pipeline
+            Covers all input/output/working spaces
+            </summary>
+        </member>
+        <member name="F:VL.OCIO.HDRColorSpace.Linear_Rec709">
+            <summary>Linear Rec.709/sRGB primaries - VVVV default</summary>
+        </member>
+        <member name="F:VL.OCIO.HDRColorSpace.Linear_Rec2020">
+            <summary>Linear Rec.2020 primaries - HDR wide gamut</summary>
+        </member>
+        <member name="F:VL.OCIO.HDRColorSpace.ACEScg">
+            <summary>ACEScg - Linear AP1 primaries (ACES working space)</summary>
+        </member>
+        <member name="F:VL.OCIO.HDRColorSpace.ACEScc">
+            <summary>ACEScc - Log AP1 (color grading)</summary>
+        </member>
+        <member name="F:VL.OCIO.HDRColorSpace.ACEScct">
+            <summary>ACEScct - Log AP1 with toe (color grading)</summary>
+        </member>
+        <member name="F:VL.OCIO.HDRColorSpace.sRGB">
+            <summary>sRGB - Gamma encoded Rec.709</summary>
+        </member>
+        <member name="F:VL.OCIO.HDRColorSpace.PQ_Rec2020">
+            <summary>PQ (ST.2084) Rec.2020 - HDR10 output</summary>
+        </member>
+        <member name="F:VL.OCIO.HDRColorSpace.HLG_Rec2020">
+            <summary>HLG (BT.2100) Rec.2020 - Broadcast HDR</summary>
+        </member>
+        <member name="F:VL.OCIO.HDRColorSpace.scRGB">
+            <summary>scRGB - Linear extended (Windows HDR)</summary>
+        </member>
+        <member name="T:VL.OCIO.TonemapOperator">
+            <summary>
+            Tonemapping operator selection.
+            ACES 1.3/2.0 use full RRT+ODT (output-space-dependent).
+            All other operators work in Linear Rec.709 (pipeline converts automatically).
+            </summary>
+        </member>
+        <member name="F:VL.OCIO.TonemapOperator.None">
+            <summary>No tonemapping (passthrough)</summary>
+        </member>
+        <member name="F:VL.OCIO.TonemapOperator.ACES">
+            <summary>ACES (Fit) - Stephen Hill RRT+ODT approximation</summary>
+        </member>
+        <member name="F:VL.OCIO.TonemapOperator.ACES13">
+            <summary>ACES 1.3 - Full RRT + ODT (segmented spline tone curves)</summary>
+        </member>
+        <member name="F:VL.OCIO.TonemapOperator.ACES20">
+            <summary>ACES 2.0 - Daniele Evo tonescale (simplified, no Hellwig CAM)</summary>
+        </member>
+        <member name="F:VL.OCIO.TonemapOperator.AgX">
+            <summary>AgX - Troy Sobotka, exact analytical curve (Blender default)</summary>
+        </member>
+        <member name="F:VL.OCIO.TonemapOperator.GranTurismo">
+            <summary>Gran Turismo V1 / Uchimura (HDR-aware parametric curve)</summary>
+        </member>
+        <member name="F:VL.OCIO.TonemapOperator.Uncharted2">
+            <summary>Uncharted 2 / Hable filmic curve (game industry)</summary>
+        </member>
+        <member name="F:VL.OCIO.TonemapOperator.KhronosPBRNeutral">
+            <summary>Khronos PBR Neutral (e-commerce, product visualization)</summary>
+        </member>
+        <member name="F:VL.OCIO.TonemapOperator.Lottes">
+            <summary>Lottes - luma-based (Epic Games, The Witness)</summary>
+        </member>
+        <member name="F:VL.OCIO.TonemapOperator.Reinhard">
+            <summary>Reinhard simple</summary>
+        </member>
+        <member name="F:VL.OCIO.TonemapOperator.ReinhardExtended">
+            <summary>Reinhard Extended with white point</summary>
+        </member>
+        <member name="F:VL.OCIO.TonemapOperator.HejlBurgess">
+            <summary>Hejl-Burgess fast approximation</summary>
+        </member>
+        <member name="T:VL.OCIO.GradingSpace">
+            <summary>
+            Internal grading space (where color math happens)
+            </summary>
+        </member>
+        <member name="F:VL.OCIO.GradingSpace.Log">
+            <summary>Log (ACEScct) - colorist workflow, perceptually uniform (DaVinci style)</summary>
+        </member>
+        <member name="F:VL.OCIO.GradingSpace.Linear">
+            <summary>Linear (ACEScg) - VFX workflow, physically accurate (Nuke style)</summary>
+        </member>
+        <member name="T:VL.OCIO.GradeLogLevel">
+            <summary>
+            Simple log levels for the color grading subsystem.
+            Default is Warn — only errors and warnings are printed.
+            Set to Info or Debug for startup diagnostics and troubleshooting.
+            </summary>
+        </member>
+        <member name="F:VL.OCIO.GradeLogLevel.Off">
+            <summary>Show nothing.</summary>
+        </member>
+        <member name="F:VL.OCIO.GradeLogLevel.Error">
+            <summary>Errors and failures that need attention.</summary>
+        </member>
+        <member name="F:VL.OCIO.GradeLogLevel.Warn">
+            <summary>Warnings and non-critical issues (e.g. fallback paths).</summary>
+        </member>
+        <member name="F:VL.OCIO.GradeLogLevel.Info">
+            <summary>Key lifecycle events (startup, shutdown, URL, network).</summary>
+        </member>
+        <member name="F:VL.OCIO.GradeLogLevel.Debug">
+            <summary>Verbose diagnostics (instance register/unregister, presets, clients).</summary>
+        </member>
+        <member name="T:VL.OCIO.GradeLog">
+            <summary>
+            Lightweight logger for the color grading subsystem.
+            All output goes to Console with a [tag] prefix.
+            </summary>
+        </member>
+        <member name="P:VL.OCIO.GradeLog.Level">
+            <summary>
+            Current log level. Default is Warn (errors + warnings only).
+            Change at runtime to increase verbosity for debugging.
+            </summary>
+        </member>
+        <member name="T:VL.OCIO.DiscoveredServer">
+            <summary>
+            Discovered color grading server on the network.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.DiscoveredServer.#ctor(System.String,System.String,System.Int32,System.Boolean,System.Int32,System.DateTime,System.String,System.String)">
+            <summary>
+            Discovered color grading server on the network.
+            </summary>
+        </member>
+        <member name="T:VL.OCIO.MdnsDiscovery">
+            <summary>
+            mDNS-based zero-config discovery for ColorGradingService.
+            Registers the server on the local network, elects a leader that owns
+            the "hdr.local" hostname, and discovers peer servers.
+            </summary>
+        </member>
+        <member name="P:VL.OCIO.MdnsDiscovery.IsLeader">
+            <summary>True if this server owns the "hdr.local" hostname.</summary>
+        </member>
+        <member name="P:VL.OCIO.MdnsDiscovery.KnownServers">
+            <summary>All discovered servers on the network (including self).</summary>
+        </member>
+        <member name="P:VL.OCIO.MdnsDiscovery.HubUrl">
+            <summary>The hub URL for the leader, e.g. "http://hdr.local/" or with port.</summary>
+        </member>
+        <member name="M:VL.OCIO.MdnsDiscovery.Start(System.UInt16,System.String,System.String,System.String)">
+            <summary>
+            Start mDNS registration and leader election.
+            Call after the HTTP server is bound and the port is known.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.MdnsDiscovery.UpdateInstanceCount(System.Int32)">
+            <summary>
+            Update the instance count for this server (called when instances change).
+            </summary>
+        </member>
+        <member name="T:VL.OCIO.ProjectSettings">
+            <summary>
+            Complete project settings including color correction and tonemap
+            </summary>
+        </member>
+        <member name="P:VL.OCIO.ProjectSettings.InputFilePath">
+            <summary>
+            Input file path (DDS texture, etc.)
+            </summary>
+        </member>
+        <member name="P:VL.OCIO.ProjectSettings.ColorCorrection">
+            <summary>
+            Color correction settings (ACEScc shader)
+            </summary>
+        </member>
+        <member name="P:VL.OCIO.ProjectSettings.Tonemap">
+            <summary>
+            Tonemap settings
+            </summary>
+        </member>
+        <member name="P:VL.OCIO.ProjectSettings.PresetName">
+            <summary>
+            Current preset name
+            </summary>
+        </member>
+        <member name="P:VL.OCIO.ProjectSettings.Version">
+            <summary>
+            Settings format version for forward-compatible JSON evolution.
+            Bump this when the schema changes; add migration logic in FromJson().
+            </summary>
+        </member>
+        <member name="F:VL.OCIO.ProjectSettings.JsonOptions">
+            <summary>
+            JSON serialization options for consistent formatting
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ProjectSettings.ToJson">
+            <summary>
+            Serialize to JSON string
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ProjectSettings.FromJson(System.String)">
+            <summary>
+            Deserialize from JSON string
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ProjectSettings.SaveToFile(System.String)">
+            <summary>
+            Save to file
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ProjectSettings.LoadFromFile(System.String)">
+            <summary>
+            Load from file
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ProjectSettings.Reset">
+            <summary>
+            Reset all settings to defaults
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ProjectSettings.Clone">
+            <summary>
+            Create a deep copy
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ProjectSettings.CloneColorCorrection(VL.OCIO.ColorCorrectionSettings)">
+            <summary>
+            Deep clone ColorCorrectionSettings to prevent shared references between instances.
+            CRITICAL for multi-instance isolation!
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ProjectSettings.CloneTonemap(VL.OCIO.TonemapSettings)">
+            <summary>
+            Deep clone TonemapSettings to prevent shared references between instances.
+            CRITICAL for multi-instance isolation!
+            </summary>
+        </member>
+        <member name="T:VL.OCIO.ServiceUiHelper">
+            <summary>
+            Shared UI connectivity logic for nodes that expose the web UI.
+            Handles browser auto-open, network publish toggle, URL and client count outputs.
+            Used by both ColorGradingInstance and SettingsBank to guarantee identical behavior.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ServiceUiHelper.Update(System.Boolean,System.Boolean)">
+            <summary>
+            Call once per frame from Update(). Handles network toggle edge detection
+            and browser auto-open request (service guards against repeat opens internally).
+            </summary>
+            <param name="autoOpenBrowser">Request browser open (safe to call every frame)</param>
+            <param name="publishToNetwork">Toggle LAN accessibility with edge detection</param>
+        </member>
+        <member name="T:VL.OCIO.SettingsBank">
+             <summary>
+             File-backed key/value store for color grading settings.
+             One JSON file holds settings for every sequence/clip key.
+            
+             Key switching is a PURE IN-MEMORY operation — zero disk I/O, zero allocations
+             for existing keys. Designed for hard real-time environments (render cluster).
+            
+             Disk writes happen ONLY when web UI edits settings (autoSave=true) or on
+             explicit bank management operations.
+            
+             All management (copy between keys, snapshots, friendly names, reset) is done
+             via the web UI's Bank panel — not via vvvv pins.
+             </summary>
+        </member>
+        <member name="M:VL.OCIO.SettingsBank.Update(System.String@,System.Boolean@,System.Collections.Generic.IReadOnlyList{System.String}@,System.String@,System.Int32@,System.String@,VL.Lib.IO.Path,System.String,System.Boolean,System.String,System.Boolean,System.Boolean)">
+            <summary>
+            File-backed per-key settings management for multi-sequence workflows.
+            Key switching is a pure in-memory operation — safe at render-cluster frame rates.
+            Can be used standalone or alongside ColorGradingInstance nodes.
+            </summary>
+            <param name="currentSettingsJson">Active settings for the current key as JSON (for network distribution)</param>
+            <param name="applySettings">True for one frame when the current key's settings change (wire to ColorGradingInstance.ApplySettings)</param>
+            <param name="allKeys">All known keys in the bank</param>
+            <param name="uiUrl">URL to reach the color grading web UI</param>
+            <param name="clientCount">Number of connected web UI clients</param>
+            <param name="error">Last error, empty when ok</param>
+            <param name="filePath">Path to the settings bank JSON file (loaded once, never touched at runtime)</param>
+            <param name="currentKey">Active sequence/clip key — switching is pure in-memory, zero disk I/O</param>
+            <param name="autoSave">When true, saves the file after every web UI edit or bank management operation</param>
+            <param name="thumbnailDataUrl">Base64 JPEG data URL for the current key's thumbnail (e.g. "data:image/jpeg;base64,..."). Recommended 192x108. Runtime-only, not saved to file.</param>
+            <param name="setThumbnail">When true, assigns thumbnailDataUrl to the current key. Use a bang so stale data from the previous key doesn't overwrite the new key on switch.</param>
+            <param name="autoOpenBrowser">Automatically open the web UI in the default browser</param>
+        </member>
+        <member name="M:VL.OCIO.SettingsBank.OnSettingsUpdated(VL.OCIO.ColorCorrectionSettings,VL.OCIO.TonemapSettings)">
+            <summary>
+            Called by the service after any web UI settings update.
+            Persists the new settings under the current key.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.SettingsBank.HandleBankMessage(System.String,System.Text.Json.JsonElement)">
+            <summary>
+            Routes bank management WebSocket messages from the service.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.SettingsBank.GetBankStateJson">
+            <summary>
+            Returns the current bank state as JSON for the web UI.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.SettingsBank.SaveToDisk">
+            <summary>Explicit save to disk (for bankSave message or when autoSave=false).</summary>
+        </member>
+        <member name="T:VL.OCIO.SettingsBankEntry">
+            <summary>
+            One entry in the SettingsBank: active settings + named snapshots for a single key.
+            </summary>
+        </member>
+        <member name="P:VL.OCIO.SettingsBankEntry.FriendlyName">
+            <summary>
+            Optional human-readable label shown in the web UI instead of the raw key.
+            Purely cosmetic — the key string is always the functional identifier.
+            Null or empty means show the raw key.
+            </summary>
+        </member>
+        <member name="P:VL.OCIO.SettingsBankEntry.Settings">
+            <summary>Active settings for this key.</summary>
+        </member>
+        <member name="P:VL.OCIO.SettingsBankEntry.Snapshots">
+            <summary>Named snapshots (save points) for this key.</summary>
+        </member>
+        <member name="T:VL.OCIO.SettingsBankFile">
+            <summary>
+            The full SettingsBank file: version + dictionary of entries keyed by sequence key.
+            Serialized as a single JSON file on disk.
+            </summary>
+        </member>
+        <member name="P:VL.OCIO.SettingsBankFile.Version">
+            <summary>File format version for future migration.</summary>
+        </member>
+        <member name="P:VL.OCIO.SettingsBankFile.Entries">
+            <summary>All entries keyed by sequence/clip key.</summary>
+        </member>
+        <member name="M:VL.OCIO.SettingsBankFile.ToJson">
+            <summary>Serialize to JSON string.</summary>
+        </member>
+        <member name="M:VL.OCIO.SettingsBankFile.FromJson(System.String)">
+            <summary>Deserialize from JSON string. Returns null on failure.</summary>
+        </member>
+        <member name="M:VL.OCIO.SettingsBankFile.LoadFromPath(System.String)">
+            <summary>Load from file path. Returns null if missing or corrupt.</summary>
+        </member>
+        <member name="M:VL.OCIO.SettingsBankFile.SaveToPath(System.String)">
+            <summary>
+            Atomic save: write to a temp file then rename over the target.
+            This prevents partial writes from corrupting the file.
+            </summary>
+        </member>
+        <member name="T:VL.OCIO.SettingsJsonUtils">
+            <summary>
+            Utility functions for converting between JSON strings and settings structs.
+            These are pure functions (no state) — they appear as simple nodes in vvvv.
+            Use to manually manage settings outside the web UI workflow.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.SettingsJsonUtils.JsonToSettings(System.String)">
+            <summary>
+            Parse a ProjectSettings JSON string into ColorCorrection and Tonemap settings.
+            Returns defaults and valid=false if the JSON is empty or invalid.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.SettingsJsonUtils.SettingsToJson(VL.OCIO.ColorCorrectionSettings,VL.OCIO.TonemapSettings)">
+            <summary>
+            Serialize ColorCorrection and Tonemap settings to a ProjectSettings JSON string.
+            The resulting string can be passed over the network to a render cluster
+            or fed back into a ColorGradingInstance via its settingsJson pin.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.SettingsJsonUtils.ThumbnailFit(Stride.Core.Mathematics.Int2@,Stride.Core.Mathematics.Int2@,Stride.Core.Mathematics.Int2@,Stride.Core.Mathematics.Int2,Stride.Core.Mathematics.Int2)">
+            <summary>
+            Compute resize + crop parameters to fit any texture into a 256x144 thumbnail (16:9, cover mode).
+            First resize uniformly so the shorter axis fits, then center-crop the excess.
+            </summary>
+            <param name="resizeSize">Size to resize to before cropping</param>
+            <param name="cropOffset">Top-left offset for the center crop</param>
+            <param name="cropSize">Final crop size (equals targetSize)</param>
+            <param name="sourceSize">Source texture size in pixels</param>
+            <param name="targetSize">Desired thumbnail size (default 256x144)</param>
+        </member>
+        <member name="T:VL.OCIO.TonemapSettings">
+            <summary>
+            Settings for HDR tonemapping shader.
+            Use Split() to extract individual values for vvvv shader pins.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.TonemapSettings.Split(VL.OCIO.HDRColorSpace@,VL.OCIO.TonemapOperator@,System.Single@,System.Single@,System.Single@,System.Single@,System.Single@,System.Single@,Stride.Graphics.PixelFormat@,Stride.Graphics.PixelFormat@,Stride.Graphics.PixelFormat)">
+            <summary>
+            Split settings into individual out parameters matching shader input order.
+            Outputs render format (RTV — how GPU writes) and view format (SRV — how downstream shaders sample).
+            For sRGB output: render = UNorm (raw write), view = UNorm_SRgb (sampler decodes to linear).
+            Wire a non-None PixelFormat into formatOverride to force both formats manually.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.TonemapSettings.SplitCombined(VL.OCIO.HDRColorSpace@,VL.OCIO.TonemapOperator@,System.Single@,System.Single@,System.Single@,System.Single@,System.Single@,System.Single@,Stride.Graphics.PixelFormat@,Stride.Graphics.PixelFormat@,Stride.Graphics.PixelFormat)">
+            <summary>
+            Split for the combined HDRGrade_Tonemap shader.
+            Outputs outputExposure (not exposure) to match the renamed shader pin
+            that avoids conflict with HDRGrade's Exposure pin.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.TonemapSettings.DeduceFormats(VL.OCIO.HDRColorSpace)">
+            <summary>
+            Deduce optimal render (RTV) and view (SRV) formats from the output color space.
+            sRGB: shader writes gamma values → UNorm RTV (raw write), UNorm_SRgb SRV (sampler decodes to linear).
+            All others: render = None (inherit input texture format), view = float16.
+            </summary>
+        </member>
+        <member name="T:VL.OCIO.OCIOEnumVersion">
+            <summary>
+            Increments whenever any OCIO dynamic enum entries change. Use for change detection.
+            </summary>
+        </member>
+        <member name="T:VL.OCIO.OCIOConfigLoader">
+            <summary>
+            Load an OCIO config from file. Each instance loads one config.
+            Use multiple instances to load multiple configs into the dropdown.
+            </summary>
+        </member>
+        <member name="T:VL.OCIO.OCIOConfigManager">
+            <summary>
+            Central OCIO config switcher. Select active config from the dropdown.
+            Outputs list of all available configs with their sources.
+            </summary>
+        </member>
+        <member name="T:VL.OCIO.OCIOConfigService">
+            <summary>
+            Per-app singleton managing OCIO config lifecycle.
+            Holds active config, handles switching, file loading with dedup, config list.
+            </summary>
+        </member>
+        <member name="P:VL.OCIO.OCIOConfigService.ConfigVersion">
+            <summary>
+            Increments whenever configs are added or switched. Loaders compare against
+            their last-seen version to know when to re-verify their enum entry.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.OCIOConfigService.EnsureDefaultLoaded">
+            <summary>
+            Loads the default config if nothing has been loaded yet.
+            Called lazily by nodes — NOT during assembly scan (where AppHost.Current isn't set).
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.OCIOConfigService.SwitchConfig(System.String)">
+            <summary>
+            Switch to a config by its enum name. Returns error message or null on success.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.OCIOConfigService.LoadConfigFromFile(System.String,System.String@)">
+            <summary>
+            Load a config from file and add it to the config enum.
+            Returns assigned display name (may have #N suffix) or null on error.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.OCIOConfigService.EnsureFileConfigInEnum(System.String,System.String)">
+            <summary>
+            Re-adds a file config's enum entry if it went missing (e.g. after restart).
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.OCIOConfigService.GetConfigList">
+            <summary>
+            Formatted list of all configs with sources. Active config marked with *.
+            </summary>
+        </member>
+        <member name="T:VL.OCIO.OCIOInputTag">
+            <summary>
+            Tag for input color space enum entries.
+            </summary>
+        </member>
+        <member name="T:VL.OCIO.OCIOTargetTag">
+            <summary>
+            Tag for output/display color space enum entries.
+            </summary>
+        </member>
+        <member name="F:VL.OCIO.OCIOConfigUtils.CGConfig">
+            <summary>
+            CG config - lean, VFX/games focused (27 colorspaces).
+            </summary>
+        </member>
+        <member name="F:VL.OCIO.OCIOConfigUtils.StudioConfig">
+            <summary>
+            Studio config - comprehensive with camera formats (57 colorspaces).
+            </summary>
+        </member>
+        <member name="P:VL.OCIO.OCIOConfigUtils.ActiveConfig">
+            <summary>
+            The currently active config. Updated by RefreshEnumsFrom().
+            All GPU resource methods use this — never stored in tags (avoids stale references).
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.OCIOConfigUtils.EnsureInitialized">
+            <summary>
+            Ensures a default config is loaded and enums are populated.
+            Uses direct static init — no AppHost required.
+            The OCIOConfigService (via ProcessNodes) can switch configs later.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.OCIOConfigUtils.RefreshEnumsFrom(OCIOSharpCLI.OCIOConfig)">
+            <summary>
+            Refresh all dynamic enums from a config. Called by OCIOConfigService on switch.
+            Builds all entries locally, then swaps each enum dict in one shot (3 triggers total).
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.OCIOConfigUtils.GetBuiltinConfigNames">
+            <summary>
+            Get list of available built-in config names.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.OCIOConfigUtils.GetGPUResources(VL.OCIO.OCIOColorSpaceEnum,VL.OCIO.OCIOColorSpaceEnum,System.Boolean)">
+            <summary>
+            Get GPU resources for ColorSpace to ColorSpace transform.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.OCIOConfigUtils.GetGPUResources(VL.OCIO.OCIOColorSpaceEnum,VL.OCIO.OCIODisplayViewEnum,System.Boolean)">
+            <summary>
+            Get GPU resources for ColorSpace to Display/View transform.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.OCIOConfigUtils.GetDisplayViewTransformResources(VL.OCIO.OCIOColorSpaceEnum,VL.OCIO.OCIODisplayViewEnum,VL.OCIO.OCIOLookEnum,System.Boolean)">
+            <summary>
+            DisplayViewTransform with optional Look: input → look → view → display (single shader).
+            </summary>
+        </member>
+    </members>
+</doc>

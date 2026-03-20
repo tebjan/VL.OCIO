@@ -79,6 +79,7 @@ public class SettingsBank : IDisposable
     /// <param name="thumbnailDataUrl">Base64 JPEG data URL for the current key's thumbnail (e.g. "data:image/jpeg;base64,..."). Recommended 192x108. Runtime-only, not saved to file.</param>
     /// <param name="setThumbnail">When true, assigns thumbnailDataUrl to the current key. Use a bang so stale data from the previous key doesn't overwrite the new key on switch.</param>
     /// <param name="autoOpenBrowser">Automatically open the web UI in the default browser</param>
+    /// <param name="publishToNetwork">Make the grading UI accessible on the local network (requires one-time admin permission)</param>
     public void Update(
         out string currentSettingsJson,
         out bool applySettings,
@@ -91,7 +92,8 @@ public class SettingsBank : IDisposable
         bool autoSave = true,
         string thumbnailDataUrl = "",
         bool setThumbnail = false,
-        bool autoOpenBrowser = true)
+        bool autoOpenBrowser = true,
+        bool publishToNetwork = false)
     {
         bool keyJustChanged = false;
 
@@ -176,7 +178,7 @@ public class SettingsBank : IDisposable
         _settingsChangedFlag = false;
 
         // --- UI connectivity (shared with ColorGradingInstance) ---
-        _uiHelper.Update(autoOpenBrowser);
+        _uiHelper.Update(autoOpenBrowser, publishToNetwork);
 
         // --- Output ---
         currentSettingsJson = _cachedOutputJson;

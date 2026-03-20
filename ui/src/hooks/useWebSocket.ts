@@ -103,6 +103,11 @@ export function useWebSocket(): WebSocketState & WebSocketActions {
   const mountedRef = useRef(true)
   // Track if we've received initial state from server - don't send updates until then
   const hasReceivedInitialStateRef = useRef(false)
+  // Echo suppression: after a local edit, ignore server echoes briefly
+  // to prevent stale server state from overwriting optimistic local updates.
+  // A single timestamp covers all sections — simpler and catches cross-section echoes.
+  const suppressEchoUntilRef = useRef(0)
+  const ECHO_SUPPRESS_MS = 250
   // Track selected instance for including in messages (ref to avoid stale closures)
   const selectedInstanceIdRef = useRef<string | null>(null)
 
@@ -258,9 +263,22 @@ export function useWebSocket(): WebSocketState & WebSocketActions {
               setServerInfo(msg.serverInfo)
             }
 
-            // Update all instance states from server (authoritative)
+            // Update all instance states from server (authoritative),
+            // but skip during active local editing to prevent echo jitter
             if (msg.instances) {
-              setInstanceStates(msg.instances)
+              if (suppressEchoUntilRef.current > Date.now()) {
+                // Active local edit — keep optimistic local state for selected instance,
+                // still accept updates for OTHER instances (e.g. from another client)
+                setInstanceStates((prev) => {
+                  const id = selectedInstanceIdRef.current
+                  if (id && prev[id]) {
+                    return { ...msg.instances, [id]: prev[id] }
+                  }
+                  return msg.instances
+                })
+              } else {
+                setInstanceStates(msg.instances)
+              }
             }
 
             // Update selected instance ID
@@ -357,6 +375,7 @@ export function useWebSocket(): WebSocketState & WebSocketActions {
   const updateColorCorrection = useCallback(
     (params: Partial<ColorCorrectionSettings>) => {
       send({ type: 'update', section: 'colorCorrection', params })
+      suppressEchoUntilRef.current = Date.now() + ECHO_SUPPRESS_MS
       setInstanceStates((prev) => {
         const id = selectedInstanceIdRef.current
         if (!id || !prev[id]) return prev
@@ -377,6 +396,7 @@ export function useWebSocket(): WebSocketState & WebSocketActions {
   const updateTonemap = useCallback(
     (params: Partial<TonemapSettings>) => {
       send({ type: 'update', section: 'tonemap', params })
+      suppressEchoUntilRef.current = Date.now() + ECHO_SUPPRESS_MS
       setInstanceStates((prev) => {
         const id = selectedInstanceIdRef.current
         if (!id || !prev[id]) return prev

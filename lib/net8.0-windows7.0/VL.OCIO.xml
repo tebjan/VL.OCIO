@@ -612,7 +612,7 @@
              via the web UI's Bank panel — not via vvvv pins.
              </summary>
         </member>
-        <member name="M:VL.OCIO.SettingsBank.Update(System.String@,System.Boolean@,System.Collections.Generic.IReadOnlyList{System.String}@,System.String@,System.Int32@,System.String@,VL.Lib.IO.Path,System.String,System.Boolean,System.String,System.Boolean,System.Boolean)">
+        <member name="M:VL.OCIO.SettingsBank.Update(System.String@,System.Boolean@,System.Collections.Generic.IReadOnlyList{System.String}@,System.String@,System.Int32@,System.String@,VL.Lib.IO.Path,System.String,System.Boolean,System.String,System.Boolean,System.Boolean,System.Boolean)">
             <summary>
             File-backed per-key settings management for multi-sequence workflows.
             Key switching is a pure in-memory operation — safe at render-cluster frame rates.
@@ -630,6 +630,7 @@
             <param name="thumbnailDataUrl">Base64 JPEG data URL for the current key's thumbnail (e.g. "data:image/jpeg;base64,..."). Recommended 192x108. Runtime-only, not saved to file.</param>
             <param name="setThumbnail">When true, assigns thumbnailDataUrl to the current key. Use a bang so stale data from the previous key doesn't overwrite the new key on switch.</param>
             <param name="autoOpenBrowser">Automatically open the web UI in the default browser</param>
+            <param name="publishToNetwork">Make the grading UI accessible on the local network (requires one-time admin permission)</param>
         </member>
         <member name="M:VL.OCIO.SettingsBank.OnSettingsUpdated(VL.OCIO.ColorCorrectionSettings,VL.OCIO.TonemapSettings)">
             <summary>

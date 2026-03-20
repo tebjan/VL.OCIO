@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useWebSocket, URL_PATH } from './hooks/useWebSocket'
 import { useIsMobile } from './hooks/useIsMobile'
 import { LiftGammaGain } from './components/LiftGammaGain'
@@ -84,52 +84,64 @@ function App() {
   )
 
   // Master controls for Lift/Gamma/Gain (affects all RGB channels uniformly)
+  // State drives UI display; refs track latest values synchronously between renders
+  // to prevent stale closures during rapid slider drags.
   const [liftMaster, setLiftMaster] = useState(0)
   const [gammaMaster, setGammaMaster] = useState(1)
   const [gainMaster, setGainMaster] = useState(1)
 
+  const liftMasterRef = useRef(0)
+  const gammaMasterRef = useRef(1)
+  const gainMasterRef = useRef(1)
+  const latestLiftRef = useRef(cc.lift)
+  const latestGammaRef = useRef(cc.gamma)
+  const latestGainRef = useRef(cc.gain)
+
+  // Sync refs from React state on each render
+  useEffect(() => {
+    latestLiftRef.current = cc.lift
+    latestGammaRef.current = cc.gamma
+    latestGainRef.current = cc.gain
+  }, [cc.lift, cc.gamma, cc.gain])
+
   // Reset master sliders when switching instances (they're relative controls)
   useEffect(() => {
-    setLiftMaster(0)
-    setGammaMaster(1)
-    setGainMaster(1)
+    setLiftMaster(0); liftMasterRef.current = 0
+    setGammaMaster(1); gammaMasterRef.current = 1
+    setGainMaster(1); gainMasterRef.current = 1
   }, [selectedInstanceId, stateVersion])
 
   const handleLiftMasterChange = useCallback((newMaster: number) => {
-    const delta = newMaster - liftMaster
+    const delta = newMaster - liftMasterRef.current
+    liftMasterRef.current = newMaster
     setLiftMaster(newMaster)
-    updateColorCorrection({
-      lift: {
-        x: cc.lift.x + delta,
-        y: cc.lift.y + delta,
-        z: cc.lift.z + delta,
-      }
-    })
-  }, [cc.lift, liftMaster, updateColorCorrection])
+    const l = latestLiftRef.current
+    const newLift = { x: l.x + delta, y: l.y + delta, z: l.z + delta }
+    latestLiftRef.current = newLift
+    updateColorCorrection({ lift: newLift })
+  }, [updateColorCorrection])
 
   const handleGammaMasterChange = useCallback((newMaster: number) => {
-    const ratio = gammaMaster !== 0 ? newMaster / gammaMaster : newMaster
+    const old = gammaMasterRef.current
+    const ratio = old !== 0 ? newMaster / old : newMaster
+    gammaMasterRef.current = newMaster
     setGammaMaster(newMaster)
-    updateColorCorrection({
-      gamma: {
-        x: cc.gamma.x * ratio,
-        y: cc.gamma.y * ratio,
-        z: cc.gamma.z * ratio,
-      }
-    })
-  }, [cc.gamma, gammaMaster, updateColorCorrection])
+    const g = latestGammaRef.current
+    const newGamma = { x: g.x * ratio, y: g.y * ratio, z: g.z * ratio }
+    latestGammaRef.current = newGamma
+    updateColorCorrection({ gamma: newGamma })
+  }, [updateColorCorrection])
 
   const handleGainMasterChange = useCallback((newMaster: number) => {
-    const ratio = gainMaster !== 0 ? newMaster / gainMaster : newMaster
+    const old = gainMasterRef.current
+    const ratio = old !== 0 ? newMaster / old : newMaster
+    gainMasterRef.current = newMaster
     setGainMaster(newMaster)
-    updateColorCorrection({
-      gain: {
-        x: cc.gain.x * ratio,
-        y: cc.gain.y * ratio,
-        z: cc.gain.z * ratio,
-      }
-    })
-  }, [cc.gain, gainMaster, updateColorCorrection])
+    const g = latestGainRef.current
+    const newGain = { x: g.x * ratio, y: g.y * ratio, z: g.z * ratio }
+    latestGainRef.current = newGain
+    updateColorCorrection({ gain: newGain })
+  }, [updateColorCorrection])
 
   // Disconnection overlay (shared between mobile and desktop)
   const disconnectOverlay = !isConnected && (

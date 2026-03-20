@@ -1,4 +1,8 @@
 # VL.OCIO
+
+[![NuGet](https://img.shields.io/nuget/v/VL.OCIO.svg?style=flat-square)](https://www.nuget.org/packages/VL.OCIO)
+[![NuGet Downloads](https://img.shields.io/nuget/dt/VL.OCIO.svg?style=flat-square)](https://www.nuget.org/packages/VL.OCIO)
+
 Reads OpenColorIO (OCIO) config files and can apply a selected color transformation to a texture. Especially helpful for working with CG artists or displaying vvvv rendering on HDR displays with 10-bit colors or more.
 
 For use with vvvv, the visual live-programming environment for .NET: http://vvvv.org

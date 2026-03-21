@@ -46,7 +46,6 @@ function App() {
     selectedInstanceId,
     serverInfo,
     knownServers,
-    stateVersion,
     updateColorCorrection,
     updateTonemap,
     loadPreset,
@@ -104,12 +103,15 @@ function App() {
     latestGainRef.current = cc.gain
   }, [cc.lift, cc.gamma, cc.gain])
 
-  // Reset master sliders when switching instances (they're relative controls)
+  // Reset master sliders on instance switch or preset load — but NOT on server echoes.
+  // stateVersion was previously a dependency here, causing masters to reset
+  // on every server state message → exponential value blowup.
+  const presetName = settings.presetName || ''
   useEffect(() => {
     setLiftMaster(0); liftMasterRef.current = 0
     setGammaMaster(1); gammaMasterRef.current = 1
     setGainMaster(1); gainMasterRef.current = 1
-  }, [selectedInstanceId, stateVersion])
+  }, [selectedInstanceId, presetName])
 
   const handleLiftMasterChange = useCallback((newMaster: number) => {
     const delta = newMaster - liftMasterRef.current

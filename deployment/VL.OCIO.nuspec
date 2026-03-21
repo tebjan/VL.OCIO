@@ -8,7 +8,7 @@
   <metadata>
     <id>VL.OCIO</id>
     <!-- For more about versions see: https://thegraybook.vvvv.org/reference/extending/publishing.html#version -->
-    <version>1.5.4</version>
+    <version>1.5.5</version>
     <title>VL.OCIO</title>
     <!-- Provide authors and projectUrl --> 
     <authors>Tebjan Halm</authors>
@@ -23,6 +23,7 @@
     <repository type="git" url="https://github.com/tebjan/VL.OCIO" />
     <dependencies>
       <group targetFramework="net8.0-windows7.0">
+        <dependency id="Makaretu.Dns.Multicast.New" version="0.38.0" />
       </group>
     </dependencies>
   </metadata>

@@ -28,8 +28,12 @@ export function ColorWheel({
   const [isDragging, setIsDragging] = useState(false)
 
   // Wheel position (normalized -1 to 1, clamped to unit circle)
-  // SOURCE OF TRUTH for dot position during drag
-  const [wheelPos, setWheelPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
+  // SOURCE OF TRUTH for dot position during drag.
+  // Initialize from props so remounts (key= changes) show the correct position immediately.
+  const [wheelPos, setWheelPos] = useState<{ x: number; y: number }>(() => {
+    const { chroma } = decomposeRgb(value, defaultValue)
+    return chromaToWheelPos(chroma.r, chroma.g, chroma.b, Math.max(sensitivity, 0.01))
+  })
   const prevSensitivityRef = useRef(sensitivity)
 
   const wheelSensitivity = Math.max(sensitivity, 0.01)
@@ -59,13 +63,20 @@ export function ColorWheel({
 
   // Sync wheel position from external RGB changes (instance switch, preset load, master slider).
   // Skip during drag — the drag handler sets wheelPos directly.
+  // isDragging is NOT in deps — pointer release must not trigger a resync with potentially
+  // stale server values. Key switches work via key={settingsIdentity} remount on LiftGammaGain,
+  // which resets all internal state and runs this effect fresh on mount.
+  const isDraggingRef = useRef(false)
+  isDraggingRef.current = isDragging
+
   useEffect(() => {
-    if (isDragging) return
+    if (isDraggingRef.current) return
 
     const { chroma } = decomposeRgb(value, defaultValue)
     const pos = chromaToWheelPos(chroma.r, chroma.g, chroma.b, wheelSensitivity)
     setWheelPos(pos)
-  }, [value.x, value.y, value.z, defaultValue.x, defaultValue.y, defaultValue.z, wheelSensitivity, isDragging])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value.x, value.y, value.z, defaultValue.x, defaultValue.y, defaultValue.z, wheelSensitivity])
 
   const drawWheel = useCallback(() => {
     const canvas = canvasRef.current
@@ -160,6 +171,7 @@ export function ColorWheel({
       // Preserve any achromatic offset from master slider
       const { achromatic } = decomposeRgb(value, defaultValue)
       const newValue = composeValue({ x, y }, wheelSensitivity, achromatic)
+      console.log('[WHEEL]', label, 'pos:', x.toFixed(3), y.toFixed(3), 'ach:', achromatic.toFixed(4), 'out:', newValue.x.toFixed(4), newValue.y.toFixed(4), newValue.z.toFixed(4), 'eq:', newValue.x === newValue.y && newValue.y === newValue.z)
       onChange(newValue)
     },
     [size, wheelSensitivity, value, defaultValue, composeValue, onChange]

@@ -1798,6 +1798,9 @@ h2{font-size:.625rem;font-weight:600;text-transform:uppercase;letter-spacing:.1e
                 case "bankDeleteSnapshot":
                 case "bankReset":
                 case "bankSetFriendlyName":
+                case "bankSelectEditingKey":
+                case "bankUndo":
+                case "bankRedo":
                 case "bankSave":
                     _settingsBank?.HandleBankMessage(type!, root);
                     break;
@@ -1814,23 +1817,28 @@ h2{font-size:.625rem;font-weight:600;text-transform:uppercase;letter-spacing:.1e
         var section = root.GetProperty("section").GetString();
         var paramsElement = root.GetProperty("params");
 
-        if (string.IsNullOrEmpty(instanceId) || !_instances.TryGetValue(instanceId, out var instance))
-            return;
-
-        if (section == "colorCorrection")
+        // Try instance path first (normal flow with ColorGradingInstance nodes)
+        if (!string.IsNullOrEmpty(instanceId) && _instances.TryGetValue(instanceId, out var instance))
         {
-            var cc = MergeColorCorrection(instance.ColorCorrection, paramsElement);
-            ApplyInstanceState(instanceId, "colorCorrection", cc, null, null);
-        }
-        else if (section == "tonemap")
-        {
-            var tm = MergeTonemap(instance.Tonemap, paramsElement);
-            ApplyInstanceState(instanceId, "tonemap", null, tm, null);
-        }
+            if (section == "colorCorrection")
+            {
+                var cc = MergeColorCorrection(instance.ColorCorrection, paramsElement);
+                ApplyInstanceState(instanceId, "colorCorrection", cc, null, null);
+            }
+            else if (section == "tonemap")
+            {
+                var tm = MergeTonemap(instance.Tonemap, paramsElement);
+                ApplyInstanceState(instanceId, "tonemap", null, tm, null);
+            }
 
-        // Mark dirty if a preset is active (values now differ from preset)
-        if (!string.IsNullOrEmpty(instance.ActivePresetName))
-            instance.IsPresetDirty = true;
+            if (!string.IsNullOrEmpty(instance.ActivePresetName))
+                instance.IsPresetDirty = true;
+        }
+        else if (_settingsBank != null)
+        {
+            // No instance — route directly to SettingsBank (standalone bank without ColorGradingInstance)
+            _settingsBank.HandleDirectUpdate(section, paramsElement);
+        }
     }
 
     private void HandleReset(string? instanceId)
@@ -1849,7 +1857,7 @@ h2{font-size:.625rem;font-weight:600;text-transform:uppercase;letter-spacing:.1e
 
     #region Merge Helpers
 
-    private static ColorCorrectionSettings MergeColorCorrection(ColorCorrectionSettings current, JsonElement p)
+    internal static ColorCorrectionSettings MergeColorCorrection(ColorCorrectionSettings current, JsonElement p)
     {
         var cc = new ColorCorrectionSettings
         {
@@ -1913,7 +1921,7 @@ h2{font-size:.625rem;font-weight:600;text-transform:uppercase;letter-spacing:.1e
         return cc;
     }
 
-    private static TonemapSettings MergeTonemap(TonemapSettings current, JsonElement p)
+    internal static TonemapSettings MergeTonemap(TonemapSettings current, JsonElement p)
     {
         var tm = new TonemapSettings
         {
@@ -2073,8 +2081,20 @@ h2{font-size:.625rem;font-weight:600;text-transform:uppercase;letter-spacing:.1e
         _ = BroadcastBankStateAsync();
     }
 
+    /// <summary>
+    /// Push bank key's settings to the selected instance and broadcast state.
+    /// Goes through the exact same path as instance selection — proven to update all UI components.
+    /// </summary>
+    internal void ApplyBankKeyToInstance(ProjectSettings settings)
+    {
+        if (string.IsNullOrEmpty(_selectedInstanceId)) return;
+        ApplySettingsFromJson(_selectedInstanceId, settings.Clone());
+        _ = BroadcastState();
+    }
+
     /// <summary>Unregister the SettingsBank (called on Dispose).</summary>
     public void UnregisterSettingsBank() { _settingsBank = null; }
+
 
     /// <summary>Broadcast current bank state to all connected clients (fire-and-forget).</summary>
     public async Task BroadcastBankStateAsync()

@@ -89,11 +89,15 @@ export interface DiscoveredServer {
 // SettingsBank — per-key settings management state from the server
 export interface BankState {
   hasBank: boolean
-  currentKey: string
+  editingKey: string
+  activeKeys: string[]
   allKeys: string[]
   friendlyNames: Record<string, string | null>
   thumbnails: Record<string, string | null>
+  keySettings: Record<string, ProjectSettings>
   currentSnapshots: string[]
+  undoCount: number
+  redoCount: number
 }
 
 /** Returns the friendly display name for a key, falling back to the raw key. */

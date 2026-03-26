@@ -34,6 +34,9 @@ interface WebSocketActions {
   bankReset: () => void
   bankSetFriendlyName: (key: string, name: string) => void
   bankSave: () => void
+  bankSelectEditingKey: (key: string) => void
+  bankUndo: () => void
+  bankRedo: () => void
 }
 
 // Base URL path — used for fallback and directory links
@@ -78,8 +81,10 @@ export function useWebSocket(): WebSocketState & WebSocketActions {
   const [knownServers, setKnownServers] = useState<DiscoveredServer[]>([])
   const [stateVersion, setStateVersion] = useState(0)
   const [bankState, setBankState] = useState<BankState | null>(null)
-
   // Derive settings for the selected instance — no separate settings state
+  // Settings ALWAYS from instanceStates — one path, proven to work.
+  // Bank key switches push settings into the instance via ApplyBankKeyToInstance → BroadcastState.
+  // bankState is only used for the BankPanel (keys, thumbnails, undo counts), never for settings values.
   const settings: ProjectSettings = useMemo(() => {
     if (selectedInstanceId && instanceStates[selectedInstanceId]) {
       const state = instanceStates[selectedInstanceId]
@@ -306,6 +311,8 @@ export function useWebSocket(): WebSocketState & WebSocketActions {
           } else if (msg.type === 'presets' && msg.list) {
             setPresets(msg.list)
           } else if (msg.type === 'bankState') {
+            // Always accept server bankState — it's used for BankPanel only, not settings values.
+            // Settings flow through instanceStates via the proven state message path.
             setBankState(msg as BankState)
           }
         } catch (e) {
@@ -371,11 +378,12 @@ export function useWebSocket(): WebSocketState & WebSocketActions {
     }
   }, [])
 
-  // Update color correction — modifies the selected instance's state directly
+  // Update color correction — optimistic local update + send to server
   const updateColorCorrection = useCallback(
     (params: Partial<ColorCorrectionSettings>) => {
       send({ type: 'update', section: 'colorCorrection', params })
       suppressEchoUntilRef.current = Date.now() + ECHO_SUPPRESS_MS
+      // Optimistic update for instance state (non-bank path)
       setInstanceStates((prev) => {
         const id = selectedInstanceIdRef.current
         if (!id || !prev[id]) return prev
@@ -392,7 +400,7 @@ export function useWebSocket(): WebSocketState & WebSocketActions {
     [send]
   )
 
-  // Update tonemap — modifies the selected instance's state directly
+  // Update tonemap — optimistic local update + send to server
   const updateTonemap = useCallback(
     (params: Partial<TonemapSettings>) => {
       send({ type: 'update', section: 'tonemap', params })
@@ -487,6 +495,21 @@ export function useWebSocket(): WebSocketState & WebSocketActions {
     sendBank({ type: 'bankSave' })
   }, [sendBank])
 
+  const bankSelectEditingKey = useCallback((key: string) => {
+    sendBank({ type: 'bankSelectEditingKey', key })
+    // Optimistically update editingKey — each key has its own GradingPanel (show/hide),
+    // so switching is just CSS visibility. No data injection needed.
+    setBankState((p) => p ? { ...p, editingKey: key } : p)
+  }, [sendBank])
+
+  const bankUndo = useCallback(() => {
+    sendBank({ type: 'bankUndo' })
+  }, [sendBank])
+
+  const bankRedo = useCallback(() => {
+    sendBank({ type: 'bankRedo' })
+  }, [sendBank])
+
   return {
     isConnected,
     settings,
@@ -513,5 +536,8 @@ export function useWebSocket(): WebSocketState & WebSocketActions {
     bankReset,
     bankSetFriendlyName,
     bankSave,
+    bankSelectEditingKey,
+    bankUndo,
+    bankRedo,
   }
 }

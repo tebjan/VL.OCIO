@@ -86,4 +86,43 @@ public static class SettingsJsonUtils
 
         cropSize = targetSize;
     }
+
+    /// <summary>
+    /// Set the thumbnail image for a key in the bank.
+    /// Null-safe — does nothing if bank is null.
+    /// </summary>
+    public static void SetThumbnail(
+        SettingsBank? bank = null,
+        string key = "",
+        string thumbnail = "",
+        bool set = false)
+    {
+        if (!set) return;
+        bank?.SetThumbnail(string.IsNullOrEmpty(key) ? "Default" : key, thumbnail);
+    }
+
+    /// <summary>
+    /// Null-safe settings retrieval from a SettingsBank.
+    /// Returns empty JSON and found=false if the bank is null or the key is empty.
+    /// Safe to call every frame even before the bank is initialized.
+    /// </summary>
+    /// <param name="settingsJson">Settings JSON for the key, or empty string</param>
+    /// <param name="found">True if the key existed (false if just created or bank is null)</param>
+    /// <param name="bank">The SettingsBank instance (nullable — returns defaults when null)</param>
+    /// <param name="key">The key to look up</param>
+    public static void GetSettings(
+        out string settingsJson,
+        out bool found,
+        SettingsBank? bank = null,
+        string key = "")
+    {
+        if (bank == null)
+        {
+            settingsJson = "";
+            found = false;
+            return;
+        }
+
+        bank.GetSettings(out settingsJson, out found, key);
+    }
 }

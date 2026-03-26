@@ -12,6 +12,9 @@ interface BankPanelProps {
   onReset: () => void
   onSave: () => void
   onSetFriendlyName: (key: string, name: string) => void
+  onSelectEditingKey: (key: string) => void
+  onUndo: () => void
+  onRedo: () => void
 }
 
 export function BankPanel({
@@ -23,6 +26,9 @@ export function BankPanel({
   onReset,
   onSave,
   onSetFriendlyName,
+  onSelectEditingKey,
+  onUndo,
+  onRedo,
 }: BankPanelProps) {
   const [editingLabel, setEditingLabel] = useState<string | null>(null)
   const [labelValue, setLabelValue] = useState('')
@@ -30,14 +36,15 @@ export function BankPanel({
   const [copyConfirming, setCopyConfirming] = useState<string | null>(null)
   const [deleteConfirming, setDeleteConfirming] = useState<string | null>(null)
 
-  const { currentKey, allKeys, friendlyNames, thumbnails, currentSnapshots } = bankState
-  const currentLabel = displayName(currentKey, friendlyNames)
+  const { editingKey, activeKeys, allKeys, friendlyNames, thumbnails, currentSnapshots, undoCount, redoCount } = bankState
+  const editingLabel2 = displayName(editingKey, friendlyNames)
+  const activeSet = new Set(activeKeys)
 
   // --- Label editing ---
   const handleStartEditLabel = useCallback(() => {
-    setEditingLabel(currentKey)
-    setLabelValue(friendlyNames[currentKey] || '')
-  }, [currentKey, friendlyNames])
+    setEditingLabel(editingKey)
+    setLabelValue(friendlyNames[editingKey] || '')
+  }, [editingKey, friendlyNames])
 
   const handleSaveLabel = useCallback(() => {
     if (editingLabel) {
@@ -59,7 +66,7 @@ export function BankPanel({
     setSnapshotName('')
   }, [snapshotName, onSaveSnapshot])
 
-  if (!currentKey) {
+  if (!editingKey) {
     return (
       <div className="px-4 pt-4 pb-2">
         <h2 className="text-[10px] font-semibold tracking-wider uppercase text-surface-500 mb-1">
@@ -81,9 +88,9 @@ export function BankPanel({
         </h2>
       </div>
 
-      {/* Current key label — editable */}
-      <div className="px-4 pb-2">
-        {editingLabel === currentKey ? (
+      {/* Editing key label — editable */}
+      <div className="px-4 pb-2 relative">
+        {editingLabel === editingKey ? (
           <input
             className={cn(
               'w-full px-2 py-1 text-xs',
@@ -105,11 +112,11 @@ export function BankPanel({
             title="Click to rename"
           >
             <span className="text-xs text-surface-200 group-hover:text-white">
-              {currentLabel}
+              {editingLabel2}
             </span>
-            {currentLabel !== currentKey && (
+            {editingLabel2 !== editingKey && (
               <div className="text-[10px] text-surface-500 font-mono truncate">
-                {currentKey}
+                {editingKey}
               </div>
             )}
           </button>
@@ -121,44 +128,53 @@ export function BankPanel({
         {allKeys.map(key => {
           const label = displayName(key, friendlyNames)
           const thumb = thumbnails?.[key]
-          const isActive = key === currentKey
+          const isEditing = key === editingKey
+          const isActive = activeSet.has(key)
           const isCopySource = copyConfirming === key
           return (
             <div
               key={key}
               className={cn(
-                'rounded-md border overflow-hidden transition-colors',
-                isActive
+                'rounded-md border overflow-hidden transition-colors cursor-pointer',
+                isEditing
                   ? 'bg-surface-700/80 border-surface-500/60'
                   : isCopySource
                     ? 'bg-blue-900/30 border-blue-600/40'
                     : 'bg-surface-800/40 border-surface-700/40 hover:border-surface-600/60'
               )}
+              onClick={() => !isEditing && !isCopySource && onSelectEditingKey(key)}
             >
               {thumb && (
-                <img
-                  src={thumb}
-                  alt={label}
-                  className="w-full h-auto object-cover"
-                  draggable={false}
-                />
+                <div className="w-full aspect-video overflow-hidden">
+                  <img
+                    src={thumb}
+                    alt={label}
+                    className="w-full h-full object-cover"
+                    draggable={false}
+                  />
+                </div>
               )}
               <div className="px-2 py-1 flex items-center gap-1">
+                {/* Active indicator */}
+                <span className={cn(
+                  'w-1.5 h-1.5 rounded-full flex-shrink-0',
+                  isActive ? 'bg-green-400' : 'bg-transparent'
+                )} />
                 <div className="flex-1 min-w-0">
                   <div className={cn(
                     'text-[11px] truncate',
-                    isActive ? 'text-surface-100 font-medium' : 'text-surface-400'
+                    isEditing ? 'text-surface-100 font-medium' : 'text-surface-400'
                   )}>
                     {label}
                   </div>
                 </div>
-                {isActive && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-surface-300 flex-shrink-0" />
+                {isEditing && (
+                  <span className="text-[9px] text-surface-500 flex-shrink-0">editing</span>
                 )}
-                {!isActive && !isCopySource && (
+                {!isEditing && !isCopySource && (
                   <button
                     className="text-[9px] text-surface-600 hover:text-surface-300 cursor-pointer bg-transparent border-none p-0 flex-shrink-0 transition-colors"
-                    onClick={() => setCopyConfirming(key)}
+                    onClick={(e) => { e.stopPropagation(); setCopyConfirming(key) }}
                     title={`Copy settings from "${label}"`}
                   >
                     copy
@@ -168,15 +184,15 @@ export function BankPanel({
                   <div className="flex gap-1 flex-shrink-0">
                     <button
                       className="text-[9px] text-amber-300 hover:text-amber-200 cursor-pointer bg-transparent border-none p-0 transition-colors"
-                      onClick={() => { onCopyFrom(key); setCopyConfirming(null) }}
+                      onClick={(e) => { e.stopPropagation(); onCopyFrom(key); setCopyConfirming(null) }}
                     >
                       confirm
                     </button>
                     <button
                       className="text-[9px] text-surface-500 hover:text-surface-300 cursor-pointer bg-transparent border-none p-0 transition-colors"
-                      onClick={() => setCopyConfirming(null)}
+                      onClick={(e) => { e.stopPropagation(); setCopyConfirming(null) }}
                     >
-                      ✕
+                      {'\u2715'}
                     </button>
                   </div>
                 )}
@@ -186,7 +202,7 @@ export function BankPanel({
         })}
       </div>
 
-      {/* Bank snapshots */}
+      {/* Key snapshots */}
       {currentSnapshots.length > 0 && (
         <div className="px-3 pb-2">
           <div className="text-[10px] text-surface-500 uppercase tracking-wider mb-1 px-1">
@@ -219,7 +235,7 @@ export function BankPanel({
                       className="text-[9px] text-surface-500 cursor-pointer bg-transparent border-none p-0"
                       onClick={() => setDeleteConfirming(null)}
                     >
-                      ✕
+                      {'\u2715'}
                     </button>
                   </div>
                 ) : (
@@ -227,7 +243,7 @@ export function BankPanel({
                     className="text-[9px] text-surface-600 hover:text-red-400 cursor-pointer bg-transparent border-none p-0 opacity-0 group-hover:opacity-100 transition-opacity"
                     onClick={() => setDeleteConfirming(name)}
                   >
-                    ✕
+                    {'\u2715'}
                   </button>
                 )}
               </div>
@@ -262,6 +278,36 @@ export function BankPanel({
             +
           </button>
         </div>
+      </div>
+
+      {/* Undo / Redo */}
+      <div className="px-3 pb-2 flex gap-1">
+        <button
+          className={cn(
+            'flex-1 px-2 py-1.5 text-[10px] rounded-md transition-colors text-center',
+            undoCount > 0
+              ? 'bg-surface-800 hover:bg-surface-700 text-surface-300 hover:text-surface-100 cursor-pointer'
+              : 'bg-surface-800/50 text-surface-600 cursor-not-allowed'
+          )}
+          onClick={onUndo}
+          disabled={undoCount === 0}
+          title="Ctrl+Z"
+        >
+          Undo {undoCount > 0 && `(${undoCount})`}
+        </button>
+        <button
+          className={cn(
+            'flex-1 px-2 py-1.5 text-[10px] rounded-md transition-colors text-center',
+            redoCount > 0
+              ? 'bg-surface-800 hover:bg-surface-700 text-surface-300 hover:text-surface-100 cursor-pointer'
+              : 'bg-surface-800/50 text-surface-600 cursor-not-allowed'
+          )}
+          onClick={onRedo}
+          disabled={redoCount === 0}
+          title="Ctrl+Shift+Z"
+        >
+          Redo {redoCount > 0 && `(${redoCount})`}
+        </button>
       </div>
 
       {/* Actions */}

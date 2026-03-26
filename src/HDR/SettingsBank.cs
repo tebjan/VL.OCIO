@@ -1,46 +1,62 @@
 using System.Text.Json;
 using VL.Lib.Basics.Resources;
+using Timer = System.Threading.Timer;
 using Path = VL.Lib.IO.Path;
 
 namespace VL.OCIO;
 
 /// <summary>
 /// File-backed key/value store for color grading settings.
-/// One JSON file holds settings for every sequence/clip key.
+/// One JSON file holds settings for every key (sequence, channel, etc.).
 ///
-/// Key switching is a PURE IN-MEMORY operation — zero disk I/O, zero allocations
-/// for existing keys. Designed for hard real-time environments (render cluster).
+/// All key access goes through the GetSettings() instance method — each channel/shader
+/// calls GetSettings with its own key. Missing keys are auto-created with defaults.
 ///
-/// Disk writes happen ONLY when web UI edits settings (autoSave=true) or on
-/// explicit bank management operations.
+/// The "editing key" (which key the web UI controls) is set by clicking a key
+/// in the Bank panel. It defaults to the first key retrieved via GetSettings().
 ///
-/// All management (copy between keys, snapshots, friendly names, reset) is done
-/// via the web UI's Bank panel — not via vvvv pins.
+/// Per-key undo/redo is session-scoped (in-memory only, not saved to disk).
+/// Rapid edits are debounced into single undo entries (800ms grouping).
+///
+/// Thread safety: _lock guards all _data.Entries access. Both the vvvv frame thread
+/// (Update/GetSettings) and the WebSocket thread (OnSettingsUpdated/HandleBankMessage)
+/// share access to the entries dictionary.
 /// </summary>
-[ProcessNode]
+[ProcessNode(HasStateOutput = true)]
 public class SettingsBank : IDisposable
 {
     private const string Tag = "SettingsBank";
+    private const string DefaultKey = "Default";
+    private const int UndoDebounceMs = 800;
+
+    // Thread safety: protects _data.Entries, _cachedAllKeys, _undoStacks, _redoStacks, _thumbnails
+    private readonly object _lock = new();
 
     private SettingsBankFile _data = new();
     private Path _cachedPath;
     private string _cachedPathStr = "";
-    private string _currentKey = "";
-
-    // Cached output JSON for current key (rebuilt only when dirty)
-    private string _cachedOutputJson = "";
-    private bool _outputJsonDirty = true;
 
     // Cached key list (rebuilt only on structural changes)
     private string[]? _cachedAllKeys;
 
-    // Runtime-only thumbnails per key (not persisted in bank file)
-    // Format: base64-encoded JPEG data URL, e.g. "data:image/jpeg;base64,..."
-    // Recommended: 128x72 JPEG for fast transfer
+    // Editing key — set by web UI click, defaults to first GetSettings() call
+    private volatile string? _editingKey;
+
+    // Multi-channel active key tracking (frame-based)
+    // Written only on vvvv thread (Update), read snapshot taken under lock in GetBankStateJson
+    private HashSet<string> _activeKeys = new();
+    private string[] _activeKeysSnapshot = Array.Empty<string>();
+
+    // Per-key undo/redo (session-scoped, not persisted to disk)
+    private readonly Dictionary<string, List<ProjectSettings>> _undoStacks = new();
+    private readonly Dictionary<string, List<ProjectSettings>> _redoStacks = new();
+    private volatile bool _inUndoEditSession;
+    private Timer? _undoDebounceTimer;
+
+    // Runtime-only thumbnails per key (fallback to persisted Thumbnail on entry)
     private readonly Dictionary<string, string> _thumbnails = new();
 
     // Flags set from service/WebSocket thread, consumed in Update()
-    // volatile ensures visibility across threads without locks on single bool
     private volatile bool _settingsChangedFlag;
 
     // Cached for access from service thread (set in Update)
@@ -60,42 +76,34 @@ public class SettingsBank : IDisposable
         _service = _serviceHandle.Resource;
         _uiHelper = new ServiceUiHelper(_service);
         _service.RegisterSettingsBank(this);
+
+        _undoDebounceTimer = new Timer(_ =>
+        {
+            _inUndoEditSession = false;
+        }, null, Timeout.Infinite, Timeout.Infinite);
     }
 
+    // ─── Update (called every frame by vvvv) ───────────────────────────────
+
     /// <summary>
-    /// File-backed per-key settings management for multi-sequence workflows.
-    /// Key switching is a pure in-memory operation — safe at render-cluster frame rates.
-    /// Can be used standalone or alongside ColorGradingInstance nodes.
+    /// Main frame update. Manages file loading, active key tracking, and UI connectivity.
+    /// Use GetSettings() to retrieve settings for each channel/key.
     /// </summary>
-    /// <param name="currentSettingsJson">Active settings for the current key as JSON (for network distribution)</param>
-    /// <param name="applySettings">True for one frame when the current key's settings change (wire to ColorGradingInstance.ApplySettings)</param>
-    /// <param name="allKeys">All known keys in the bank</param>
-    /// <param name="uiUrl">URL to reach the color grading web UI</param>
-    /// <param name="clientCount">Number of connected web UI clients</param>
-    /// <param name="error">Last error, empty when ok</param>
-    /// <param name="filePath">Path to the settings bank JSON file (loaded once, never touched at runtime)</param>
-    /// <param name="currentKey">Active sequence/clip key — switching is pure in-memory, zero disk I/O</param>
-    /// <param name="autoSave">When true, saves the file after every web UI edit or bank management operation</param>
-    /// <param name="thumbnailDataUrl">Base64 JPEG data URL for the current key's thumbnail (e.g. "data:image/jpeg;base64,..."). Recommended 192x108. Runtime-only, not saved to file.</param>
-    /// <param name="setThumbnail">When true, assigns thumbnailDataUrl to the current key. Use a bang so stale data from the previous key doesn't overwrite the new key on switch.</param>
-    /// <param name="autoOpenBrowser">Automatically open the web UI in the default browser</param>
-    /// <param name="publishToNetwork">Make the grading UI accessible on the local network (requires one-time admin permission)</param>
     public void Update(
-        out string currentSettingsJson,
-        out bool applySettings,
         out IReadOnlyList<string> allKeys,
         out string uiUrl,
         out int clientCount,
         out string error,
         Path filePath = default,
-        string currentKey = "",
         bool autoSave = true,
-        string thumbnailDataUrl = "",
-        bool setThumbnail = false,
         bool autoOpenBrowser = true,
         bool publishToNetwork = false)
     {
-        bool keyJustChanged = false;
+        // --- Swap active keys and snapshot for WebSocket thread ---
+        var prevSnapshot = _activeKeysSnapshot;
+        _activeKeysSnapshot = _activeKeys.Count > 0 ? _activeKeys.ToArray() : Array.Empty<string>();
+        _activeKeys = new HashSet<string>();
+        bool activeKeysChanged = !_activeKeysSnapshot.SequenceEqual(prevSnapshot);
 
         // Cache autoSave for the service thread
         _autoSave = autoSave;
@@ -107,100 +115,125 @@ public class SettingsBank : IDisposable
             _cachedPathStr = filePath != default ? filePath.ToString() : "";
             _lastError = "";
 
-            if (!string.IsNullOrEmpty(_cachedPathStr))
+            lock (_lock)
             {
-                var loaded = SettingsBankFile.LoadFromPath(_cachedPathStr);
-                if (loaded != null)
+                if (!string.IsNullOrEmpty(_cachedPathStr))
                 {
-                    _data = loaded;
-                }
-                else if (File.Exists(_cachedPathStr))
-                {
-                    // File exists but couldn't be parsed
-                    _lastError = $"Failed to parse bank file: {_cachedPathStr}";
-                    _data = new SettingsBankFile();
+                    var loaded = SettingsBankFile.LoadFromPath(_cachedPathStr);
+                    if (loaded != null)
+                    {
+                        _data = loaded;
+                    }
+                    else if (File.Exists(_cachedPathStr))
+                    {
+                        _lastError = $"Failed to parse bank file: {_cachedPathStr}";
+                        _data = new SettingsBankFile();
+                    }
+                    else
+                    {
+                        _data = new SettingsBankFile();
+                        _data.SaveToPath(_cachedPathStr);
+                    }
                 }
                 else
                 {
-                    // File doesn't exist yet — create it with default empty bank
                     _data = new SettingsBankFile();
-                    _data.SaveToPath(_cachedPathStr);
                 }
-            }
-            else
-            {
-                _data = new SettingsBankFile();
-            }
 
-            _cachedAllKeys = null;
-            _outputJsonDirty = true;
-        }
+                // Ensure "Default" entry always exists
+                if (!_data.Entries.ContainsKey(DefaultKey))
+                    _data.Entries[DefaultKey] = new SettingsBankEntry();
 
-        // --- Current key changed: pure in-memory lookup/create ---
-        if (currentKey != _currentKey)
-        {
-            _currentKey = currentKey;
-            keyJustChanged = true;
-            _outputJsonDirty = true;
-
-            if (!string.IsNullOrEmpty(currentKey) && !_data.Entries.ContainsKey(currentKey))
-            {
-                _data.Entries[currentKey] = new SettingsBankEntry();
                 _cachedAllKeys = null;
-                if (_autoSave) SaveToDisk();
+                _editingKey = DefaultKey;
+                _undoStacks.Clear();
+                _redoStacks.Clear();
             }
-
-            // Notify UI of key switch
-            _ = _service?.BroadcastBankStateAsync();
-        }
-
-        // --- Update thumbnail for current key (only on explicit trigger) ---
-        if (setThumbnail && !string.IsNullOrEmpty(currentKey) && !string.IsNullOrEmpty(thumbnailDataUrl))
-        {
-            // Auto-prepend data URL prefix if user provides raw base64
-            var thumb = thumbnailDataUrl.StartsWith("data:") ? thumbnailDataUrl : "data:image/jpeg;base64," + thumbnailDataUrl;
-            if (!_thumbnails.TryGetValue(currentKey, out var existing) || existing != thumb)
-            {
-                _thumbnails[currentKey] = thumb;
-                _ = _service?.BroadcastBankStateAsync();
-            }
-        }
-
-        // --- Rebuild output JSON if dirty ---
-        if (_outputJsonDirty)
-        {
-            _cachedOutputJson = BuildOutputJson();
-            _outputJsonDirty = false;
         }
 
         // --- Consume one-frame flags ---
-        bool settingsChanged = _settingsChangedFlag;
         _settingsChangedFlag = false;
 
         // --- UI connectivity (shared with ColorGradingInstance) ---
         _uiHelper.Update(autoOpenBrowser, publishToNetwork);
 
+        // --- Broadcast if active keys changed ---
+        if (activeKeysChanged)
+            _ = _service?.BroadcastBankStateAsync();
+
         // --- Output ---
-        currentSettingsJson = _cachedOutputJson;
-        applySettings = settingsChanged || keyJustChanged;
-        allKeys = GetAllKeys();
+        lock (_lock)
+        {
+            allKeys = GetAllKeysLocked();
+        }
         uiUrl = _uiHelper.UiUrl;
         clientCount = _uiHelper.ClientCount;
         error = _lastError;
     }
 
-    private string BuildOutputJson()
+    // ─── GetSettings (called via static util SettingsJsonUtils.GetSettings) ─
+
+    /// <summary>
+    /// Retrieve settings JSON for any key. Registers the key as "active" this frame.
+    /// Missing keys are auto-created with default settings.
+    /// </summary>
+    internal void GetSettings(
+        out string settingsJson,
+        out bool found,
+        string key = "")
     {
-        if (string.IsNullOrEmpty(_currentKey))
-            return "";
+        if (string.IsNullOrEmpty(key))
+            key = DefaultKey;
 
-        if (_data.Entries.TryGetValue(_currentKey, out var entry))
-            return entry.Settings.ToJson();
+        _activeKeys.Add(key);
 
-        return new ProjectSettings().ToJson();
+        lock (_lock)
+        {
+            if (!_data.Entries.TryGetValue(key, out var entry))
+            {
+                entry = new SettingsBankEntry();
+                _data.Entries[key] = entry;
+                _cachedAllKeys = null;
+                if (_autoSave) SaveToDiskLocked();
+                _ = _service?.BroadcastBankStateAsync();
+                found = false;
+            }
+            else
+            {
+                found = true;
+            }
+
+            settingsJson = entry.Settings.ToJson();
+        }
+
+        // First GetSettings call sets the default editing key
+        if (_editingKey == null)
+            _editingKey = key;
     }
 
-    private IReadOnlyList<string> GetAllKeys()
+    /// <summary>Set the thumbnail for a specific key. Called via static util.</summary>
+    internal void SetThumbnail(string key, string thumbnail)
+    {
+        if (string.IsNullOrEmpty(key) || string.IsNullOrEmpty(thumbnail)) return;
+        var thumb = thumbnail.StartsWith("data:") ? thumbnail : "data:image/jpeg;base64," + thumbnail;
+
+        lock (_lock)
+        {
+            if (_thumbnails.TryGetValue(key, out var existing) && existing == thumb) return;
+            _thumbnails[key] = thumb;
+            if (_data.Entries.TryGetValue(key, out var entry))
+            {
+                entry.Thumbnail = thumb;
+                if (_autoSave) SaveToDiskLocked();
+            }
+        }
+        _ = _service?.BroadcastBankStateAsync();
+    }
+
+    // ─── Helpers ────────────────────────────────────────────────────────────
+
+    // Must be called under _lock
+    private IReadOnlyList<string> GetAllKeysLocked()
     {
         if (_cachedAllKeys == null)
         {
@@ -212,113 +245,198 @@ public class SettingsBank : IDisposable
         return _cachedAllKeys;
     }
 
-    // ─── Methods called by ColorGradingService (from WebSocket/service thread) ───
+    private string EffectiveEditingKey => _editingKey ?? "";
+
+    // ─── Methods called by ColorGradingService (WebSocket/service thread) ──
 
     /// <summary>
     /// Called by the service after any web UI settings update.
-    /// Persists the new settings under the current key.
+    /// Persists the new settings under the editing key.
     /// </summary>
     internal void OnSettingsUpdated(ColorCorrectionSettings cc, TonemapSettings tm)
     {
-        if (string.IsNullOrEmpty(_currentKey)) return;
+        var key = EffectiveEditingKey;
+        GradeLog.Debug(Tag, $"OnSettingsUpdated: key='{key}' autoSave={_autoSave} path='{_cachedPathStr}' lift=({cc.Lift.X:F3},{cc.Lift.Y:F3},{cc.Lift.Z:F3})");
+        if (string.IsNullOrEmpty(key)) return;
 
-        EnsureEntry(_currentKey);
-        _data.Entries[_currentKey].Settings.ColorCorrection = ProjectSettings.CloneColorCorrection(cc);
-        _data.Entries[_currentKey].Settings.Tonemap = ProjectSettings.CloneTonemap(tm);
-        _outputJsonDirty = true;
-        _settingsChangedFlag = true;
+        lock (_lock)
+        {
+            if (!_data.Entries.TryGetValue(key, out var entry)) return;
 
-        if (_autoSave)
-            SaveToDisk();
+            // Undo: snapshot before first edit in a session
+            if (!_inUndoEditSession)
+            {
+                PushUndoLocked(key, entry.Settings.Clone());
+                ClearRedoLocked(key);
+                _inUndoEditSession = true;
+            }
 
+            entry.Settings.ColorCorrection = ProjectSettings.CloneColorCorrection(cc);
+            entry.Settings.Tonemap = ProjectSettings.CloneTonemap(tm);
+            _settingsChangedFlag = true;
+
+            // Reset debounce timer
+            _undoDebounceTimer?.Change(UndoDebounceMs, Timeout.Infinite);
+
+            if (_autoSave) SaveToDiskLocked();
+        }
         _ = _service?.BroadcastBankStateAsync();
     }
 
     /// <summary>
-    /// Routes bank management WebSocket messages from the service.
+    /// Handle a UI update directly when no ColorGradingInstance exists.
+    /// Merges partial CC/TM params into the editing key's settings.
+    /// Uses the same merge helpers as the service (exposed as internal static).
     /// </summary>
+    internal void HandleDirectUpdate(string? section, JsonElement paramsElement)
+    {
+        var key = EffectiveEditingKey;
+        if (string.IsNullOrEmpty(key)) return;
+
+        lock (_lock)
+        {
+            if (!_data.Entries.TryGetValue(key, out var entry)) return;
+
+            if (section == "colorCorrection")
+            {
+                // Undo: snapshot before first edit in a session
+                if (!_inUndoEditSession)
+                {
+                    PushUndoLocked(key, entry.Settings.Clone());
+                    ClearRedoLocked(key);
+                    _inUndoEditSession = true;
+                }
+
+                entry.Settings.ColorCorrection = ColorGradingService.MergeColorCorrection(
+                    entry.Settings.ColorCorrection, paramsElement);
+                _settingsChangedFlag = true;
+                _undoDebounceTimer?.Change(UndoDebounceMs, Timeout.Infinite);
+            }
+            else if (section == "tonemap")
+            {
+                if (!_inUndoEditSession)
+                {
+                    PushUndoLocked(key, entry.Settings.Clone());
+                    ClearRedoLocked(key);
+                    _inUndoEditSession = true;
+                }
+
+                entry.Settings.Tonemap = ColorGradingService.MergeTonemap(
+                    entry.Settings.Tonemap, paramsElement);
+                _settingsChangedFlag = true;
+                _undoDebounceTimer?.Change(UndoDebounceMs, Timeout.Infinite);
+            }
+
+            if (_autoSave) SaveToDiskLocked();
+        }
+        _ = _service?.BroadcastBankStateAsync();
+    }
+
+    /// <summary>Routes bank management WebSocket messages from the service.</summary>
     internal void HandleBankMessage(string messageType, JsonElement data)
     {
         try
         {
-            switch (messageType)
+            var editKey = EffectiveEditingKey;
+
+            lock (_lock)
             {
-                case "bankCopyFrom":
+                switch (messageType)
                 {
-                    var sourceKey = data.GetProperty("sourceKey").GetString() ?? "";
-                    if (string.IsNullOrEmpty(sourceKey) || sourceKey == _currentKey) return;
-                    if (!_data.Entries.TryGetValue(sourceKey, out var source)) return;
-                    EnsureEntry(_currentKey);
-                    _data.Entries[_currentKey].Settings = source.Settings.Clone();
-                    _outputJsonDirty = true;
-                    _settingsChangedFlag = true;
-                    if (_autoSave) SaveToDisk();
-                    _ = _service?.BroadcastBankStateAsync();
-                    break;
-                }
-                case "bankSaveSnapshot":
-                {
-                    var name = data.GetProperty("name").GetString() ?? "";
-                    if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(_currentKey)) return;
-                    EnsureEntry(_currentKey);
-                    _data.Entries[_currentKey].Snapshots[name] = _data.Entries[_currentKey].Settings.Clone();
-                    if (_autoSave) SaveToDisk();
-                    _ = _service?.BroadcastBankStateAsync();
-                    break;
-                }
-                case "bankLoadSnapshot":
-                {
-                    var name = data.GetProperty("name").GetString() ?? "";
-                    if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(_currentKey)) return;
-                    if (!_data.Entries.TryGetValue(_currentKey, out var entry)) return;
-                    if (!entry.Snapshots.TryGetValue(name, out var snap)) return;
-                    entry.Settings = snap.Clone();
-                    _outputJsonDirty = true;
-                    _settingsChangedFlag = true;
-                    if (_autoSave) SaveToDisk();
-                    _ = _service?.BroadcastBankStateAsync();
-                    break;
-                }
-                case "bankDeleteSnapshot":
-                {
-                    var name = data.GetProperty("name").GetString() ?? "";
-                    if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(_currentKey)) return;
-                    if (!_data.Entries.TryGetValue(_currentKey, out var entry)) return;
-                    entry.Snapshots.Remove(name);
-                    if (_autoSave) SaveToDisk();
-                    _ = _service?.BroadcastBankStateAsync();
-                    break;
-                }
-                case "bankReset":
-                {
-                    if (string.IsNullOrEmpty(_currentKey)) return;
-                    EnsureEntry(_currentKey);
-                    var entry = _data.Entries[_currentKey];
-                    // Save current state as backup before resetting
-                    entry.Snapshots["_preresetbackup"] = entry.Settings.Clone();
-                    entry.Settings = new ProjectSettings();
-                    _outputJsonDirty = true;
-                    _settingsChangedFlag = true;
-                    if (_autoSave) SaveToDisk();
-                    _ = _service?.BroadcastBankStateAsync();
-                    break;
-                }
-                case "bankSetFriendlyName":
-                {
-                    var key = data.GetProperty("key").GetString() ?? "";
-                    var name = data.GetProperty("name").GetString() ?? "";
-                    if (string.IsNullOrEmpty(key) || !_data.Entries.ContainsKey(key)) return;
-                    _data.Entries[key].FriendlyName = string.IsNullOrEmpty(name) ? null : name;
-                    if (_autoSave) SaveToDisk();
-                    _ = _service?.BroadcastBankStateAsync();
-                    break;
-                }
-                case "bankSave":
-                {
-                    SaveToDisk();
-                    break;
+                    case "bankCopyFrom":
+                    {
+                        var sourceKey = data.GetProperty("sourceKey").GetString() ?? "";
+                        if (string.IsNullOrEmpty(sourceKey) || sourceKey == editKey) return;
+                        if (!_data.Entries.TryGetValue(sourceKey, out var source)) return;
+                        EnsureEntryLocked(editKey);
+                        var target = _data.Entries[editKey];
+                        // Push undo before overwriting
+                        PushUndoLocked(editKey, target.Settings.Clone());
+                        ClearRedoLocked(editKey);
+                        target.Settings = source.Settings.Clone();
+                        _settingsChangedFlag = true;
+                        if (_autoSave) SaveToDiskLocked();
+                        break;
+                    }
+                    case "bankSaveSnapshot":
+                    {
+                        var name = data.GetProperty("name").GetString() ?? "";
+                        if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(editKey)) return;
+                        EnsureEntryLocked(editKey);
+                        _data.Entries[editKey].Snapshots[name] = _data.Entries[editKey].Settings.Clone();
+                        if (_autoSave) SaveToDiskLocked();
+                        break;
+                    }
+                    case "bankLoadSnapshot":
+                    {
+                        var name = data.GetProperty("name").GetString() ?? "";
+                        if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(editKey)) return;
+                        if (!_data.Entries.TryGetValue(editKey, out var entry)) return;
+                        if (!entry.Snapshots.TryGetValue(name, out var snap)) return;
+                        PushUndoLocked(editKey, entry.Settings.Clone());
+                        ClearRedoLocked(editKey);
+                        entry.Settings = snap.Clone();
+                        _settingsChangedFlag = true;
+                        if (_autoSave) SaveToDiskLocked();
+                        break;
+                    }
+                    case "bankDeleteSnapshot":
+                    {
+                        var name = data.GetProperty("name").GetString() ?? "";
+                        if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(editKey)) return;
+                        if (!_data.Entries.TryGetValue(editKey, out var entry)) return;
+                        entry.Snapshots.Remove(name);
+                        if (_autoSave) SaveToDiskLocked();
+                        break;
+                    }
+                    case "bankReset":
+                    {
+                        if (string.IsNullOrEmpty(editKey)) return;
+                        EnsureEntryLocked(editKey);
+                        var entry = _data.Entries[editKey];
+                        PushUndoLocked(editKey, entry.Settings.Clone());
+                        ClearRedoLocked(editKey);
+                        entry.Snapshots["_preresetbackup"] = entry.Settings.Clone();
+                        entry.Settings = new ProjectSettings();
+                        _settingsChangedFlag = true;
+                        if (_autoSave) SaveToDiskLocked();
+                        break;
+                    }
+                    case "bankSetFriendlyName":
+                    {
+                        var key = data.GetProperty("key").GetString() ?? "";
+                        var name = data.GetProperty("name").GetString() ?? "";
+                        if (string.IsNullOrEmpty(key) || !_data.Entries.ContainsKey(key)) return;
+                        _data.Entries[key].FriendlyName = string.IsNullOrEmpty(name) ? null : name;
+                        if (_autoSave) SaveToDiskLocked();
+                        break;
+                    }
+                    case "bankSelectEditingKey":
+                    {
+                        var key = data.GetProperty("key").GetString() ?? "";
+                        if (!string.IsNullOrEmpty(key) && _data.Entries.TryGetValue(key, out var selEntry))
+                        {
+                            _editingKey = key;
+                            // Push key's settings through the instance path (same as instance switch)
+                            // so all UI components update via the proven state→instanceStates flow
+                            _service?.ApplyBankKeyToInstance(selEntry.Settings);
+                        }
+                        break;
+                    }
+                    case "bankUndo":
+                        HandleUndoLocked();
+                        break;
+                    case "bankRedo":
+                        HandleRedoLocked();
+                        break;
+                    case "bankSave":
+                        SaveToDiskLocked();
+                        break;
                 }
             }
+
+            // Broadcast outside lock
+            _ = _service?.BroadcastBankStateAsync();
         }
         catch (Exception ex)
         {
@@ -326,48 +444,132 @@ public class SettingsBank : IDisposable
         }
     }
 
-    /// <summary>
-    /// Returns the current bank state as JSON for the web UI.
-    /// </summary>
-    internal string GetBankStateJson()
+    // ─── Undo / Redo (must be called under _lock) ───────────────────────────
+
+    private void PushUndoLocked(string key, ProjectSettings state)
     {
-        var snapshots = new List<string>();
-        if (!string.IsNullOrEmpty(_currentKey) && _data.Entries.TryGetValue(_currentKey, out var entry))
+        if (!_undoStacks.TryGetValue(key, out var stack))
         {
-            foreach (var k in entry.Snapshots.Keys)
-                snapshots.Add(k);
+            stack = new List<ProjectSettings>();
+            _undoStacks[key] = stack;
         }
-
-        var friendlyNames = new Dictionary<string, string?>();
-        var thumbnails = new Dictionary<string, string?>();
-        foreach (var kvp in _data.Entries)
-        {
-            friendlyNames[kvp.Key] = kvp.Value.FriendlyName;
-            thumbnails[kvp.Key] = _thumbnails.TryGetValue(kvp.Key, out var thumb) ? thumb : null;
-        }
-
-        var msg = new
-        {
-            type = "bankState",
-            hasBank = true,
-            currentKey = _currentKey,
-            allKeys = GetAllKeys(),
-            friendlyNames,
-            thumbnails,
-            currentSnapshots = snapshots
-        };
-
-        return System.Text.Json.JsonSerializer.Serialize(msg, SettingsBankFile.JsonOptions);
+        stack.Add(state);
     }
 
-    /// <summary>Explicit save to disk (for bankSave message or when autoSave=false).</summary>
-    internal void SaveToDisk()
+    private void ClearRedoLocked(string key)
+    {
+        if (_redoStacks.TryGetValue(key, out var stack))
+            stack.Clear();
+    }
+
+    private void HandleUndoLocked()
+    {
+        var key = EffectiveEditingKey;
+        if (string.IsNullOrEmpty(key)) return;
+        if (!_undoStacks.TryGetValue(key, out var undoStack) || undoStack.Count == 0) return;
+        if (!_data.Entries.TryGetValue(key, out var entry)) return;
+
+        if (!_redoStacks.TryGetValue(key, out var redoStack))
+        {
+            redoStack = new List<ProjectSettings>();
+            _redoStacks[key] = redoStack;
+        }
+        redoStack.Add(entry.Settings.Clone());
+
+        var undoState = undoStack[^1];
+        undoStack.RemoveAt(undoStack.Count - 1);
+        entry.Settings = undoState;
+
+        _settingsChangedFlag = true;
+        if (_autoSave) SaveToDiskLocked();
+    }
+
+    private void HandleRedoLocked()
+    {
+        var key = EffectiveEditingKey;
+        if (string.IsNullOrEmpty(key)) return;
+        if (!_redoStacks.TryGetValue(key, out var redoStack) || redoStack.Count == 0) return;
+        if (!_data.Entries.TryGetValue(key, out var entry)) return;
+
+        PushUndoLocked(key, entry.Settings.Clone());
+
+        var redoState = redoStack[^1];
+        redoStack.RemoveAt(redoStack.Count - 1);
+        entry.Settings = redoState;
+
+        _settingsChangedFlag = true;
+        if (_autoSave) SaveToDiskLocked();
+    }
+
+    // ─── Bank State JSON (for web UI) ───────────────────────────────────────
+
+    /// <summary>Returns the current bank state as JSON for the web UI.</summary>
+    internal string GetBankStateJson()
+    {
+        var editKey = EffectiveEditingKey;
+        // Snapshot active keys (written on vvvv thread, read here on WebSocket thread)
+        var activeSnapshot = _activeKeysSnapshot;
+
+        lock (_lock)
+        {
+            var snapshots = new List<string>();
+            if (!string.IsNullOrEmpty(editKey) && _data.Entries.TryGetValue(editKey, out var editEntry))
+            {
+                foreach (var k in editEntry.Snapshots.Keys)
+                    snapshots.Add(k);
+            }
+
+            var friendlyNames = new Dictionary<string, string?>();
+            var thumbnails = new Dictionary<string, string?>();
+            var keySettings = new Dictionary<string, ProjectSettings>();
+            foreach (var kvp in _data.Entries)
+            {
+                friendlyNames[kvp.Key] = kvp.Value.FriendlyName;
+                thumbnails[kvp.Key] = _thumbnails.TryGetValue(kvp.Key, out var thumb) ? thumb : kvp.Value.Thumbnail;
+                keySettings[kvp.Key] = kvp.Value.Settings;
+            }
+
+            var undoCount = 0;
+            var redoCount = 0;
+            if (!string.IsNullOrEmpty(editKey))
+            {
+                if (_undoStacks.TryGetValue(editKey, out var us)) undoCount = us.Count;
+                if (_redoStacks.TryGetValue(editKey, out var rs)) redoCount = rs.Count;
+            }
+
+            var msg = new
+            {
+                type = "bankState",
+                hasBank = true,
+                editingKey = editKey,
+                activeKeys = activeSnapshot,
+                allKeys = GetAllKeysLocked(),
+                friendlyNames,
+                thumbnails,
+                keySettings,
+                currentSnapshots = snapshots,
+                undoCount,
+                redoCount
+            };
+
+            return JsonSerializer.Serialize(msg, SettingsBankFile.JsonOptions);
+        }
+    }
+
+    // ─── Disk I/O (must be called under _lock) ──────────────────────────────
+
+    private void SaveToDiskLocked()
     {
         if (string.IsNullOrEmpty(_cachedPathStr)) return;
         _data.SaveToPath(_cachedPathStr);
     }
 
-    private void EnsureEntry(string key)
+    internal void SaveToDisk()
+    {
+        lock (_lock) { SaveToDiskLocked(); }
+    }
+
+    private void EnsureEntryLocked(string key)
     {
         if (!_data.Entries.ContainsKey(key))
         {
@@ -376,8 +578,10 @@ public class SettingsBank : IDisposable
         }
     }
 
+    /// <inheritdoc/>
     public void Dispose()
     {
+        _undoDebounceTimer?.Dispose();
         _service?.UnregisterSettingsBank();
         _serviceHandle.Dispose();
     }

@@ -20,6 +20,9 @@ public class SettingsBankEntry
 
     /// <summary>Named snapshots (save points) for this key.</summary>
     public Dictionary<string, ProjectSettings> Snapshots { get; set; } = new();
+
+    /// <summary>Base64 JPEG data URL thumbnail for this key. Persisted in the bank file.</summary>
+    public string? Thumbnail { get; set; }
 }
 
 /// <summary>

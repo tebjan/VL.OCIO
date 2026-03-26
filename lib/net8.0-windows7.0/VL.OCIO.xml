@@ -329,6 +329,12 @@
         <member name="M:VL.OCIO.ColorGradingService.RegisterSettingsBank(VL.OCIO.SettingsBank)">
             <summary>Register a SettingsBank node to enable per-key settings management.</summary>
         </member>
+        <member name="M:VL.OCIO.ColorGradingService.ApplyBankKeyToInstance(VL.OCIO.ProjectSettings)">
+            <summary>
+            Push bank key's settings to the selected instance and broadcast state.
+            Goes through the exact same path as instance selection — proven to update all UI components.
+            </summary>
+        </member>
         <member name="M:VL.OCIO.ColorGradingService.UnregisterSettingsBank">
             <summary>Unregister the SettingsBank (called on Dispose).</summary>
         </member>
@@ -600,56 +606,58 @@
         <member name="T:VL.OCIO.SettingsBank">
              <summary>
              File-backed key/value store for color grading settings.
-             One JSON file holds settings for every sequence/clip key.
+             One JSON file holds settings for every key (sequence, channel, etc.).
             
-             Key switching is a PURE IN-MEMORY operation — zero disk I/O, zero allocations
-             for existing keys. Designed for hard real-time environments (render cluster).
+             All key access goes through the GetSettings() instance method — each channel/shader
+             calls GetSettings with its own key. Missing keys are auto-created with defaults.
             
-             Disk writes happen ONLY when web UI edits settings (autoSave=true) or on
-             explicit bank management operations.
+             The "editing key" (which key the web UI controls) is set by clicking a key
+             in the Bank panel. It defaults to the first key retrieved via GetSettings().
             
-             All management (copy between keys, snapshots, friendly names, reset) is done
-             via the web UI's Bank panel — not via vvvv pins.
+             Per-key undo/redo is session-scoped (in-memory only, not saved to disk).
+             Rapid edits are debounced into single undo entries (800ms grouping).
+            
+             Thread safety: _lock guards all _data.Entries access. Both the vvvv frame thread
+             (Update/GetSettings) and the WebSocket thread (OnSettingsUpdated/HandleBankMessage)
+             share access to the entries dictionary.
              </summary>
         </member>
-        <member name="M:VL.OCIO.SettingsBank.Update(System.String@,System.Boolean@,System.Collections.Generic.IReadOnlyList{System.String}@,System.String@,System.Int32@,System.String@,VL.Lib.IO.Path,System.String,System.Boolean,System.String,System.Boolean,System.Boolean,System.Boolean)">
+        <member name="M:VL.OCIO.SettingsBank.Update(System.Collections.Generic.IReadOnlyList{System.String}@,System.String@,System.Int32@,System.String@,VL.Lib.IO.Path,System.Boolean,System.Boolean,System.Boolean)">
             <summary>
-            File-backed per-key settings management for multi-sequence workflows.
-            Key switching is a pure in-memory operation — safe at render-cluster frame rates.
-            Can be used standalone or alongside ColorGradingInstance nodes.
+            Main frame update. Manages file loading, active key tracking, and UI connectivity.
+            Use GetSettings() to retrieve settings for each channel/key.
             </summary>
-            <param name="currentSettingsJson">Active settings for the current key as JSON (for network distribution)</param>
-            <param name="applySettings">True for one frame when the current key's settings change (wire to ColorGradingInstance.ApplySettings)</param>
-            <param name="allKeys">All known keys in the bank</param>
-            <param name="uiUrl">URL to reach the color grading web UI</param>
-            <param name="clientCount">Number of connected web UI clients</param>
-            <param name="error">Last error, empty when ok</param>
-            <param name="filePath">Path to the settings bank JSON file (loaded once, never touched at runtime)</param>
-            <param name="currentKey">Active sequence/clip key — switching is pure in-memory, zero disk I/O</param>
-            <param name="autoSave">When true, saves the file after every web UI edit or bank management operation</param>
-            <param name="thumbnailDataUrl">Base64 JPEG data URL for the current key's thumbnail (e.g. "data:image/jpeg;base64,..."). Recommended 192x108. Runtime-only, not saved to file.</param>
-            <param name="setThumbnail">When true, assigns thumbnailDataUrl to the current key. Use a bang so stale data from the previous key doesn't overwrite the new key on switch.</param>
-            <param name="autoOpenBrowser">Automatically open the web UI in the default browser</param>
-            <param name="publishToNetwork">Make the grading UI accessible on the local network (requires one-time admin permission)</param>
+        </member>
+        <member name="M:VL.OCIO.SettingsBank.GetSettings(System.String@,System.Boolean@,System.String)">
+            <summary>
+            Retrieve settings JSON for any key. Registers the key as "active" this frame.
+            Missing keys are auto-created with default settings.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.SettingsBank.SetThumbnail(System.String,System.String)">
+            <summary>Set the thumbnail for a specific key. Called via static util.</summary>
         </member>
         <member name="M:VL.OCIO.SettingsBank.OnSettingsUpdated(VL.OCIO.ColorCorrectionSettings,VL.OCIO.TonemapSettings)">
             <summary>
             Called by the service after any web UI settings update.
-            Persists the new settings under the current key.
+            Persists the new settings under the editing key.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.SettingsBank.HandleDirectUpdate(System.String,System.Text.Json.JsonElement)">
+            <summary>
+            Handle a UI update directly when no ColorGradingInstance exists.
+            Merges partial CC/TM params into the editing key's settings.
+            Uses the same merge helpers as the service (exposed as internal static).
             </summary>
         </member>
         <member name="M:VL.OCIO.SettingsBank.HandleBankMessage(System.String,System.Text.Json.JsonElement)">
-            <summary>
-            Routes bank management WebSocket messages from the service.
-            </summary>
+            <summary>Routes bank management WebSocket messages from the service.</summary>
         </member>
         <member name="M:VL.OCIO.SettingsBank.GetBankStateJson">
-            <summary>
-            Returns the current bank state as JSON for the web UI.
-            </summary>
+            <summary>Returns the current bank state as JSON for the web UI.</summary>
         </member>
-        <member name="M:VL.OCIO.SettingsBank.SaveToDisk">
-            <summary>Explicit save to disk (for bankSave message or when autoSave=false).</summary>
+        <member name="M:VL.OCIO.SettingsBank.Dispose">
+            <inheritdoc/>
         </member>
         <member name="T:VL.OCIO.SettingsBankEntry">
             <summary>
@@ -668,6 +676,9 @@
         </member>
         <member name="P:VL.OCIO.SettingsBankEntry.Snapshots">
             <summary>Named snapshots (save points) for this key.</summary>
+        </member>
+        <member name="P:VL.OCIO.SettingsBankEntry.Thumbnail">
+            <summary>Base64 JPEG data URL thumbnail for this key. Persisted in the bank file.</summary>
         </member>
         <member name="T:VL.OCIO.SettingsBankFile">
             <summary>
@@ -726,6 +737,23 @@
             <param name="cropSize">Final crop size (equals targetSize)</param>
             <param name="sourceSize">Source texture size in pixels</param>
             <param name="targetSize">Desired thumbnail size (default 256x144)</param>
+        </member>
+        <member name="M:VL.OCIO.SettingsJsonUtils.SetThumbnail(VL.OCIO.SettingsBank,System.String,System.String,System.Boolean)">
+            <summary>
+            Set the thumbnail image for a key in the bank.
+            Null-safe — does nothing if bank is null.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.SettingsJsonUtils.GetSettings(System.String@,System.Boolean@,VL.OCIO.SettingsBank,System.String)">
+            <summary>
+            Null-safe settings retrieval from a SettingsBank.
+            Returns empty JSON and found=false if the bank is null or the key is empty.
+            Safe to call every frame even before the bank is initialized.
+            </summary>
+            <param name="settingsJson">Settings JSON for the key, or empty string</param>
+            <param name="found">True if the key existed (false if just created or bank is null)</param>
+            <param name="bank">The SettingsBank instance (nullable — returns defaults when null)</param>
+            <param name="key">The key to look up</param>
         </member>
         <member name="T:VL.OCIO.TonemapSettings">
             <summary>

@@ -164,6 +164,8 @@ export function ControlsPanel({ settings, onSettingsChange, onReset }: ControlsP
         {/* ========== COLOR GRADING ========== */}
         <div className="bg-surface-900 rounded-lg p-3" title="Creative color correction applied in the working color space">
           <Section title="Color Grading" defaultOpen={false}>
+            <Toggle label="Enabled" value={settings.colorGradeEnabled} onChange={(v) => set({ colorGradeEnabled: v })} title="Enable/disable color grading (bypass to neutral)" />
+            <div className={`${!settings.colorGradeEnabled ? 'opacity-40 pointer-events-none' : ''}`}>
             <div className="mb-4 space-y-3">
               <div title="Log (ACEScct) for colorist workflow, Linear (ACEScg) for VFX compositing">
                 <Select<GradingSpaceString> mobile label="Grading Space" value={indexToGradingSpace(settings.gradingSpace)} options={gradingSpaceOptions} onChange={(v) => set({ gradingSpace: gradingSpaceToIndex(v) })} />
@@ -235,6 +237,7 @@ export function ControlsPanel({ settings, onSettingsChange, onReset }: ControlsP
               <div title="Controls the transition curve for shadow soft clipping">
                 <Slider mobile label="SH Knee" value={settings.gradeShadowKnee} min={0} max={1} step={0.01} defaultValue={0.1} decimals={2} onChange={(v) => set({ gradeShadowKnee: v })} />
               </div>
+            </div>
             </div>
           </Section>
         </div>

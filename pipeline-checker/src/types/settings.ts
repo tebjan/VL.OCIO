@@ -80,6 +80,7 @@ export interface PipelineSettings {
   bcDeltaAmplification: number;
 
   // Color Grading (Stage 5)
+  colorGradeEnabled: boolean;
   gradingSpace: number;
   gradeExposure: number;
   gradeContrast: number;
@@ -222,6 +223,7 @@ export function createDefaultSettings(): PipelineSettings {
     bcQuality: 2,              // high
     bcShowDelta: false,
     bcDeltaAmplification: 1,  // 1x default
+    colorGradeEnabled: true,
     gradingSpace: 0,
     gradeExposure: 0,
     gradeContrast: 1,

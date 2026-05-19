@@ -19,6 +19,41 @@ public class TonemapSettings
     [JsonInclude] internal float WhiteLevel { get; set; } = 1f;
 
     /// <summary>
+    /// Split settings into a single GPU struct plus the output/view texture formats.
+    /// </summary>
+    public void SplitForShader(
+        out TonemapGpuParams tonemap,
+        out PixelFormat viewFormat,
+        out PixelFormat renderFormat,
+        PixelFormat formatOverride = PixelFormat.None)
+    {
+        tonemap = new TonemapGpuParams
+        {
+            OutputSpace = OutputSpace,
+            Tonemap = Tonemap,
+            Exposure = Exposure,
+            WhitePoint = WhitePoint,
+            PaperWhite = PaperWhite,
+            PeakBrightness = PeakBrightness,
+            BlackLevel = BlackLevel,
+            WhiteLevel = WhiteLevel
+        };
+
+        if (formatOverride != PixelFormat.None)
+        {
+            renderFormat = formatOverride;
+            viewFormat = formatOverride;
+
+            if (formatOverride.IsSRgb() && OutputSpace == HDRColorSpace.sRGB)
+                renderFormat = formatOverride.ToNonSRgb();
+        }
+        else
+        {
+            (renderFormat, viewFormat) = DeduceFormats(OutputSpace);
+        }
+    }
+
+    /// <summary>
     /// Split settings into individual out parameters matching shader input order.
     /// Outputs render format (RTV — how GPU writes) and view format (SRV — how downstream shaders sample).
     /// For sRGB output: render = UNorm (raw write), view = UNorm_SRgb (sampler decodes to linear).

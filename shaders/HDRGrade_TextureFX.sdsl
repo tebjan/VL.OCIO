@@ -45,13 +45,14 @@ shader HDRGrade_TextureFX : FilterBase, HDRGrade
 
     float4 Filter(float4 tex0col)
     {
+        ColorCorrectionGpuParams colorCorrection = ColorCorrection[0];
         float3 color = tex0col.rgb;
 
         // Step 1: Decode input to Linear AP1
         float3 linearAP1 = DecodeInput(color);
 
         // Step 2: Apply grading in chosen space
-        if (GradingSpace == 0)
+        if (colorCorrection.GradingSpace == 0)
             linearAP1 = ApplyGradingLog(linearAP1);
         else
             linearAP1 = ApplyGradingLinear(linearAP1);
@@ -60,12 +61,14 @@ shader HDRGrade_TextureFX : FilterBase, HDRGrade
         float3 result = EncodeOutput(linearAP1);
 
         // Step 4: Vignette (screen-space, applied to encoded output)
-        if (VignetteStrength > 0.001)
+        if (colorCorrection.VignetteStrength > 0.001)
         {
             float2 centered = streams.TexCoord - 0.5;
             float vigDist = length(centered);
-            float vigMask = smoothstep(VignetteRadius, VignetteRadius - VignetteSoftness, vigDist);
-            result *= lerp(1.0, vigMask, VignetteStrength);
+            float vigMask = smoothstep(colorCorrection.VignetteRadius,
+                                       colorCorrection.VignetteRadius - colorCorrection.VignetteSoftness,
+                                       vigDist);
+            result *= lerp(1.0, vigMask, colorCorrection.VignetteStrength);
         }
 
         return float4(result, tex0col.a);

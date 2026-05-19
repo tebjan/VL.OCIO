@@ -1,146 +1,116 @@
-# Implementation Plan — Pipeline Checker
+# Implementation Plan — BC Compression Maximum Quality
 
-Reference: `.ralph/specs/spec.md` (source of truth), phase files in `.ralph/specs/phase-*.md` (per-phase detail)
+Reference: `.ralph/specs/spec.md` (project overview), `.ralph/specs/phase-12-bc-all-modes.md` (this milestone's detail)
 
-Each phase file references a detailed section file in `specs-pipeline-checker/sections/` — read it when the phase file lacks implementation details.
+Goal: Implement ALL BC6H (14 modes) and BC7 (8 modes) compression modes for maximum quality encoding. The existing shaders implement Mode 11 + Mode 10 (BC6H) and Mode 6 + Mode 1 (BC7). This milestone adds every remaining mode with proper quality tiering.
 
----
-
-## Wave 1: Foundation (no dependencies)
-
-### Phase 1: Project Scaffolding
-- [x] 1.1 Initialize Vite + React 19 + TypeScript + Tailwind 4 project in `pipeline-checker/`
-- [x] 1.2 Create `src/gpu/WebGPUContext.ts` — adapter, device, BC feature request, canvas config
-- [x] 1.3 Create `src/components/DropZone.tsx` — drag-drop EXR + "Try sample" button
-- [x] 1.4 Dark theme setup — backgrounds #0d0d0d/#1a1a1a, no saturated accents
-- [x] 1.5 Verify: `npm install && npm run build && npx tsc --noEmit` all pass
+Reference HLSL shaders: `docs/ref_bc6h_encode.hlsl`, `docs/ref_bc7_encode.hlsl`
 
 ---
 
-## Wave 2: Core Infrastructure (requires Wave 1)
+## Wave 1: BC6H Transformed Mode Infrastructure
 
-> Phases 3 and 5 can be done in any order within this wave.
+> BC6H Modes 0-9 use delta-encoded (transformed) endpoints. This wave builds the
+> infrastructure and implements the highest-impact transformed modes.
 
-### Phase 3: WebGPU Render Pipeline
-- [x] 3.1 `PipelineStage` interface (initialize/resize/encode/destroy)
-- [x] 3.2 `FragmentStage` — GPURenderPipeline from WGSL, fullscreen triangle, rgba32float target
-- [x] 3.3 `PipelineRenderer` — chains stages, disabled stages passthrough
-- [x] 3.4 Render target management — rgba32float, RENDER_ATTACHMENT | TEXTURE_BINDING | COPY_SRC
-- [x] 3.5 `PipelineUniforms` — shared uniform buffer (~240 bytes), all stage params
-- [x] 3.6 `PixelReadback` — single pixel read from any stage texture, 30Hz throttle
-- [x] 3.7 Verify: `npm run build` passes
+### Phase 12A: BC6H Delta Encoding Infrastructure + Mode 1
+- [ ] 12A.1 Add `finish_unquantize()` and `start_unquantize()` functions matching DirectX reference
+- [ ] 12A.2 Add `signExtend()` helper for transformed mode delta decoding
+- [ ] 12A.3 Implement Mode 1 encoder: 2-subset, transformed, (7,6,6) bits, 3-bit indices, 32 partitions
+- [ ] 12A.4 Wire Mode 1 into quality dispatch: quality >= 1 tries Mode 1 alongside Mode 10
+- [ ] 12A.5 Verify: `cd pipeline-checker && npm run build` passes
 
-### Phase 5: BC Encoder Package
-- [x] 5.1 Scaffold `packages/webgpu-bc-encoder/` with TypeScript
-- [x] 5.2 Port WGSL compute shaders from block_compression repo (BC1-7)
-- [x] 5.3 BCEncoder class — encode(texture, format, quality) → BCEncodeResult
-- [x] 5.4 BC metrics compute shader — PSNR per channel + max error
-- [x] 5.5 Verify: package builds, BC6H encodes test texture
+### Phase 12B: BC6H Remaining Transformed Modes (0, 2-9)
+- [ ] 12B.1 Implement Mode 0: 2-subset, transformed, (10,5,5) bits — highest single-channel precision
+- [ ] 12B.2 Implement Modes 2-4: asymmetric R-heavy (11,5,4), (11,4,5), (11,4,4) — for bright red/green/blue content
+- [ ] 12B.3 Implement Mode 5: 2-subset, transformed, (9,5,5) bits
+- [ ] 12B.4 Implement Modes 6-8: balanced (8,6,5), (8,5,6), (8,5,5) bits
+- [ ] 12B.5 Implement Mode 9: 2-subset, untransformed, (6,6,6) bits — like Mode 10 but lower precision
+- [ ] 12B.6 Wire all modes into quality dispatch: quality >= 2 tries all 14 modes
+- [ ] 12B.7 Verify: `cd pipeline-checker && npm run build` passes
 
----
-
-## Wave 3: Pipeline Content (requires Wave 2)
-
-> **DEPENDENCY**: Phase 4 requires Phase 3 (renderer). Phase 6 requires Phases 3 + 5. Phase 7 requires Phase 3.
-> Do NOT start Phase 4 until Phase 3 is complete.
-> Phases 4, 6, and 7 can be done in any order within this wave (after their dependencies).
-
-### Phase 4: Color Pipeline WGSL Shaders (manual port from SDSL)
-- [x] 4.1 `input-convert.wgsl` — Stage 4: ToLinearRec709(), 6 gamut matrices (TRANSPOSED), 10 transfer functions
-- [x] 4.2 `color-grade.wgsl` — Stage 5: DecodeInput, ApplyGradingLog, ApplyGradingLinear, 22 uniforms
-- [x] 4.3 `rrt.wgsl` — Stage 6: all 12 tonemap operators, ACES 1.3/2.0 RRT, spline arrays
-- [x] 4.4 `odt.wgsl` — Stage 7: ACES 1.3/2.0 ODT, gamut conversion
-- [x] 4.5 `output-encode.wgsl` — Stage 8: FromLinearRec709, PQ, HLG, scRGB encoding
-- [x] 4.6 `display-remap.wgsl` — Stage 9: black/white level remap (trivial)
-- [x] 4.7 `fullscreen-quad.wgsl` — shared vertex shader
-- [x] 4.8 Wire all stages into PipelineRenderer
-- [x] 4.9 Verify: `npm run build` + visual test with sample EXR
-
-### Phase 6: BC Pipeline Stages
-- [x] 6.1 `BCCompressStage` — compute stage dispatching encoder
-- [x] 6.2 `BCDecompressStage` — upload BC blocks, hardware decode via texture-compression-bc
-- [x] 6.3 BC metrics display in stage card
-- [x] 6.4 Delta overlay (abs difference × 10 as heat map)
-- [x] 6.5 Graceful fallback when texture-compression-bc unavailable
-- [x] 6.6 Verify: `npm run build` passes
-
-### Phase 7: UI — Filmstrip + Controls
-- [x] 7.1 `Filmstrip.tsx` — horizontal scrollable, arrow connectors, stage cards
-- [x] 7.2 `StageCard.tsx` — 160x90 thumbnail, name, enable/disable checkbox
-- [x] 7.3 `ControlsPanel.tsx` — collapsible sections: Input, Grading, Tonemap, Output
-- [x] 7.4 Reusable `Slider.tsx`, `Select.tsx`, `Section.tsx` (match VL.OCIO web UI style)
-- [x] 7.5 `types/settings.ts` — all enums, labels, defaults (mirror C# exactly)
-- [x] 7.6 Reset button, `usePipeline` hook
-- [x] 7.7 Verify: `npm run build` passes, all controls render
+### Phase 12C: BC6H Modes 12-13 + Bit Packing
+- [ ] 12C.1 Implement Mode 12: 2-subset, transformed, (11,11,10) bits — maximum precision 2-subset mode
+- [ ] 12C.2 Implement Mode 13: 2-subset, transformed, (11,10,11) bits — maximum precision variant
+- [ ] 12C.3 Each mode's `block_package` bit layout must match DirectX reference exactly (scattered bits)
+- [ ] 12C.4 Verify: `cd pipeline-checker && npm run build` passes
 
 ---
 
-## Wave 4: Integration (requires Wave 3)
+## Wave 2: BC7 Multi-Subset Modes
 
-> **DEPENDENCY**: Phase 8 requires Phases 4 + 6 + 7.
+> BC7 has 3 multi-subset RGB-only modes (0, 2, 3) and Mode 7. These give better quality
+> for opaque content with color variation across the block.
 
-### Phase 8: Preview + Readout
-- [x] 8.1 `Preview2D.tsx` — zoom (wheel), pan (drag), fit (double-click), view exposure
-- [x] 8.2 `PixelReadout.tsx` — floating tooltip RGBA 5-decimal, 30Hz throttle
-- [x] 8.3 `MetadataPanel.tsx` — resolution, channels, min/max per channel
-- [x] 8.4 "View (non-destructive)" section clearly separated from pipeline controls
-- [x] 8.5 Verify: `npm run build` passes
+### Phase 12D: BC7 Mode 3 (2-subset, 7-bit RGB + shared P-bit)
+- [ ] 12D.1 Implement Mode 3 encoder: 2-subset, 7-bit RGB + shared P-bit = effective 8-bit, 2-bit indices, 64 partitions
+- [ ] 12D.2 Mode 3 bit layout: mode(4) + partition(6) + R0-R3(28) + G0-G3(28) + B0-B3(28) + P0-P1(2) + indices(30)
+- [ ] 12D.3 Wire into quality dispatch: quality >= 1 tries Mode 3 alongside Mode 1
+- [ ] 12D.4 Verify: `cd pipeline-checker && npm run build` passes
 
----
+### Phase 12E: BC7 Modes 0 + 2 (3-subset modes)
+- [ ] 12E.1 Add 3-subset partition tables: `candidateSectionBit3[64]` with 3-valued partition (2 bits per pixel = 32 bits per pattern) and `candidateFixUpIndex1DOrdered3[64][2]` (two fix-up indices per partition)
+- [ ] 12E.2 Add 2-bit interpolation weights: `aWeight2 = [0, 21, 43, 64]` and `aStep0[64]` lookup
+- [ ] 12E.3 Implement Mode 0 encoder: 3-subset, 4-bit RGB + per-endpoint P-bit = effective 5-bit, 3-bit indices, 16 partitions
+- [ ] 12E.4 Implement Mode 2 encoder: 3-subset, 5-bit RGB, no P-bit, 2-bit indices, 64 partitions
+- [ ] 12E.5 Wire into quality dispatch: quality >= 2 tries Modes 0, 2
+- [ ] 12E.6 Verify: `cd pipeline-checker && npm run build` passes
 
-## Wave 5: 3D Visualization (requires Wave 3)
-
-> **DEPENDENCY**: Phase 9 requires Phase 4 (needs stage output textures).
-
-### Phase 9: 3D Heightmap
-- [x] 9.1 Three.js WebGPU renderer + OrbitControls in `HeightmapView.tsx`
-- [x] 9.2 TSL compute shader — reads stage texture, writes instancedArray buffers (no CPU readback)
-- [x] 9.3 SpriteNodeMaterial billboards — positionNode + colorNode from storage buffers
-- [x] 9.4 7 height modes (luminance, R, G, B, max, RGB length, AP1 luma) all GPU-side
-- [x] 9.5 Height scale, exponent, range, downsample controls
-- [x] 9.6 Wireframe bounding box + camera shortcuts (F = frame, dblclick = reset)
-- [x] 9.7 `MainPreview.tsx` — [2D] / [3D] tab toggle
-- [x] 9.8 Verify: `npm run build` passes
+### Phase 12F: BC7 Mode 7 (2-subset, 5-bit RGBA + P-bit)
+- [ ] 12F.1 Implement Mode 7 encoder: 2-subset, 5-bit RGBA + shared P-bit = effective 6-bit, 2-bit indices, 64 partitions
+- [ ] 12F.2 Mode 7 bit layout: mode(8) + partition(6) + R0-R3(20) + G0-G3(20) + B0-B3(20) + A0-A3(20) + P0-P1(2) + indices(30)
+- [ ] 12F.3 Wire into quality dispatch: quality >= 2 tries Mode 7
+- [ ] 12F.4 Verify: `cd pipeline-checker && npm run build` passes
 
 ---
 
-## Wave 6: Final (requires all)
+## Wave 3: BC7 Alpha-Specialized Modes
 
-### Phase 10: Build & Distribution
-- [x] 10.1 vite-plugin-singlefile config, WGSL ?raw imports, inlineDynamicImports
-- [x] 10.2 Verify: `dist/index.html` opens via file://, WebGPU inits, sample EXR loads
-- [x] 10.3 Verify: file size < 10 MB
+> Modes 4 and 5 are unique: they handle alpha separately with rotation bits
+> and index selector bits for flexible RGB/A quality tradeoff.
 
-### Phase 11: Test Verification
-- [x] 11.1 Create `test/fixtures/reference-values.json` with known pixel test points
-- [x] 11.2 Create `test/verify.py` — per-stage math verification, exit code 0/1
-- [x] 11.3 Verify: `python test/verify.py` passes for all implemented stages
-
----
-
-## Completed
-- [x] Project planning and spec creation
+### Phase 12G: BC7 Modes 4 + 5 (rotation + index selector)
+- [ ] 12G.1 Implement 2-bit rotation logic: swap channels (none, R↔A, G↔A, B↔A) before encoding
+- [ ] 12G.2 Implement Mode 5 encoder: 1-subset, 7-bit RGB + 8-bit alpha, 2-bit indices for both, rotation
+- [ ] 12G.3 Implement Mode 4 encoder: 1-subset, 5-bit RGB + 6-bit alpha, 2/3-bit split indices, rotation + index selector bit
+- [ ] 12G.4 For each mode, try all 4 rotation values and pick lowest error
+- [ ] 12G.5 Wire into quality dispatch: quality >= 1 tries Mode 5, quality >= 2 adds Mode 4
+- [ ] 12G.6 Verify: `cd pipeline-checker && npm run build` passes
 
 ---
 
-## Dependency Rules
+## Wave 4: Quality Tiering + Endpoint Refinement
 
-- **Phase 4 requires Phase 3.** Do NOT start WGSL shader porting until the WebGPU renderer infrastructure is working.
-- **Phase 6 requires Phases 3 + 5.** BC pipeline stages need both the renderer and the encoder package.
-- **Phase 7 only requires Phase 3.** Filmstrip UI can use placeholder thumbnails before color stages exist.
-- **Phase 8 requires Phases 4 + 6 + 7.** Preview needs real stage textures, BC outputs, and filmstrip selection state.
-- **Phase 9 requires Phase 4.** 3D heightmap needs working stage output textures.
-- **Phases 10-11 require all.** Final build + verification is the last step.
-- **BC stages (5, 6) are optional.** If `texture-compression-bc` feature is unavailable, skip BC stages — the pipeline works without them by passing EXR data directly to Stage 4. Don't block progress on BC.
+> Final polish: proper quality tiers and endpoint refinement for maximum PSNR.
+
+### Phase 12H: Quality Tier Restructure
+- [ ] 12H.1 Restructure quality levels in both shaders:
+  - fast (0): BC6H Mode 11 only / BC7 Mode 6 only
+  - normal (1): BC6H Modes 11, 10, 1 / BC7 Modes 6, 1, 3, 5
+  - high (2): BC6H all 14 modes / BC7 all 8 modes
+- [ ] 12H.2 Add early-exit heuristic: skip remaining modes if current error < threshold (e.g., < 1.0 per pixel)
+- [ ] 12H.3 Verify: `cd pipeline-checker && npm run build` passes
+- [ ] 12H.4 Verify: switching quality in UI produces visible improvement at each tier
+
+### Phase 12I: Endpoint Refinement
+- [ ] 12I.1 Add endpoint refinement loop for BC6H: after best mode found, try adjusting each endpoint component by 1 quant step in both directions, keep if error decreases
+- [ ] 12I.2 Add endpoint refinement loop for BC7: same approach for the winning mode
+- [ ] 12I.3 Add bad quantization detection for BC6H transformed modes: if delta overflows precision, penalize that mode
+- [ ] 12I.4 Verify: `cd pipeline-checker && npm run build` passes
+
+### Phase 12J: Final Build + Verification
+- [ ] 12J.1 Build production: `cd pipeline-checker && npm run build`
+- [ ] 12J.2 Verify: all three quality levels (fast/normal/high) produce visibly different results
+- [ ] 12J.3 Verify: no regressions in existing pipeline stages
+
+---
 
 ## Notes
 
-- ONE task per loop iteration. Focus on the first unchecked item in the earliest incomplete wave.
-- Before implementing any WGSL shader: read the MUST READ reference in `phase-04-color-shaders.md` — it points to the section file with exact algorithm constants.
-- Read the SDSL source shaders at `shaders/` for reference when porting to WGSL.
-- ALL matrices must be transposed (SDSL row-major -> WGSL column-major).
-- vec3 uniforms need `_pad: f32` for 16-byte alignment.
-- Never use `fetch()` for shaders — use `?raw` imports.
-- After EVERY implementation: run `npm run build` to catch regressions.
-- Do NOT change the public API of a completed phase without re-verifying all dependent phases.
-- Each section file in `specs-pipeline-checker/sections/` has formal acceptance criteria — verify them when finishing a phase.
+- ONE task per loop iteration. Focus on the first unchecked `[ ]` item.
+- Reference HLSL: `docs/ref_bc6h_encode.hlsl` and `docs/ref_bc7_encode.hlsl` contain the bit packing for every mode.
+- The phase detail file `.ralph/specs/phase-12-bc-all-modes.md` has mode tables, bit layouts, and implementation guidance.
+- ALL bit packing must match the BC6H/BC7 spec exactly — hardware decoders expect specific bit positions.
+- Transformed modes (BC6H 0-9, 12-13) use delta encoding: endpoint[1] stored as signed delta from endpoint[0].
+- After EVERY task: run `cd pipeline-checker && npm run build` to catch regressions.
+- Do NOT change the BCEncoder class API or format handler interface — only modify WGSL shaders and handler `createPipeline()` if needed.

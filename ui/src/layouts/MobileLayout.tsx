@@ -118,15 +118,15 @@ function GradeTab(props: MobileLayoutProps) {
       <Select mobile label="Grading Space" value={cc.gradingSpace} options={gradingSpaceOptions} onChange={(v) => updateColorCorrection({ gradingSpace: v })} />
 
       <Slider mobile label="Exposure" value={cc.exposure} min={-4} max={4} step={0.01} defaultValue={0} decimals={2} onChange={(v) => updateColorCorrection({ exposure: v })} />
-      <Slider mobile label="Contrast" value={cc.contrast} min={0.75} max={1.5} step={0.01} defaultValue={1} decimals={2} onChange={(v) => updateColorCorrection({ contrast: v })} />
-      <Slider mobile label="Saturation" value={cc.saturation} min={0.5} max={1.5} step={0.01} defaultValue={1} decimals={2} onChange={(v) => updateColorCorrection({ saturation: v })} />
-      <Slider mobile label="Temperature" value={cc.temperature} min={-0.5} max={0.5} step={0.01} defaultValue={0} decimals={2} gradient="linear-gradient(to right, #4488ff, #ff8844)" onChange={(v) => updateColorCorrection({ temperature: v })} />
-      <Slider mobile label="Tint" value={cc.tint} min={-0.5} max={0.5} step={0.01} defaultValue={0} decimals={2} gradient="linear-gradient(to right, #ff44ff, #44ff44)" onChange={(v) => updateColorCorrection({ tint: v })} />
+      <Slider mobile label="Contrast" value={cc.contrast} min={0.5} max={1.75} step={0.01} defaultValue={1} decimals={2} onChange={(v) => updateColorCorrection({ contrast: v })} />
+      <Slider mobile label="Saturation" value={cc.saturation} min={0} max={2} step={0.01} defaultValue={1} decimals={2} onChange={(v) => updateColorCorrection({ saturation: v })} />
+      <Slider mobile label="Temperature" value={cc.temperature} min={-0.75} max={0.75} step={0.01} defaultValue={0} decimals={2} gradient="linear-gradient(to right, #4488ff, #ff8844)" onChange={(v) => updateColorCorrection({ temperature: v })} />
+      <Slider mobile label="Tint" value={cc.tint} min={-0.75} max={0.75} step={0.01} defaultValue={0} decimals={2} gradient="linear-gradient(to right, #ff44ff, #44ff44)" onChange={(v) => updateColorCorrection({ tint: v })} />
 
       <div className="border-t border-surface-700 my-2" />
 
-      <Slider mobile label="Highlights" value={cc.highlights} min={-1} max={1} step={0.01} defaultValue={0} decimals={2} onChange={(v) => updateColorCorrection({ highlights: v })} />
-      <Slider mobile label="Shadows" value={cc.shadows} min={-1} max={1} step={0.01} defaultValue={0} decimals={2} onChange={(v) => updateColorCorrection({ shadows: v })} />
+      <Slider mobile label="Highlights" value={cc.highlights} min={-1.5} max={1.5} step={0.01} defaultValue={0} decimals={2} onChange={(v) => updateColorCorrection({ highlights: v })} />
+      <Slider mobile label="Shadows" value={cc.shadows} min={-1.5} max={1.5} step={0.01} defaultValue={0} decimals={2} onChange={(v) => updateColorCorrection({ shadows: v })} />
       <Slider mobile label="Vibrance" value={cc.vibrance} min={-1} max={2} step={0.01} defaultValue={0} decimals={2} onChange={(v) => updateColorCorrection({ vibrance: v })} />
 
       <div className="border-t border-surface-700 my-2" />
@@ -200,7 +200,7 @@ function OutputTab(props: MobileLayoutProps) {
       <div className="border-t border-surface-700 my-2" />
 
       <Slider mobile label="Black Level" value={tm.blackLevel} min={-0.25} max={0.25} step={0.001} defaultValue={0} decimals={3} onChange={(v) => updateTonemap({ blackLevel: v })} />
-      <Slider mobile label="White Level" value={tm.whiteLevel} min={0.5} max={2} step={0.01} defaultValue={1} decimals={2} onChange={(v) => updateTonemap({ whiteLevel: v })} />
+      <Slider mobile label="White Level" value={tm.whiteLevel} min={0.25} max={2.5} step={0.01} defaultValue={1} decimals={2} onChange={(v) => updateTonemap({ whiteLevel: v })} />
     </>
   )
 }

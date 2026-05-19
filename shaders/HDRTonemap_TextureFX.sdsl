@@ -22,58 +22,17 @@ shader HDRTonemap_TextureFX : FilterBase, HDRTonemap
     int InputSpace = 0;
 
     // ========================================================================
-    // OUTPUT CONFIGURATION
-    // ========================================================================
-
-    // Output color space (see HDRColorSpace enum)
-    [EnumType("VL.OCIO.HDRColorSpace, VL.OCIO")]
-    int OutputSpace = 0;  // Default to Linear Rec.709 for linear pipeline
-
-    // Tonemapping operator (see TonemapOperator enum)
-    [EnumType("VL.OCIO.TonemapOperator, VL.OCIO")]
-    int Tonemap = 0;  // Default None
-
-    // ========================================================================
-    // TONEMAP PARAMETERS
-    // ========================================================================
-
-    // Pre-tonemap exposure adjustment (in stops)
-    float Exposure = 0.0;
-
-    // Shoulder strength for Reinhard Extended (affects highlight rolloff)
-    float WhitePoint = 4.0;
-
-    // ========================================================================
-    // HDR OUTPUT PARAMETERS
-    // ========================================================================
-
-    // Paper white level in nits (cd/m²)
-    float PaperWhite = 200.0;
-
-    // Peak brightness in nits for HDR output
-    float PeakBrightness = 1000.0;
-
-    // ========================================================================
-    // OUTPUT RANGE REMAP
-    // ========================================================================
-
-    // Black level for display hardware compensation (projectors, LED walls)
-    float BlackLevel = 0.0;
-
-    // White level for display hardware compensation
-    float WhiteLevel = 1.0;
-
-    // ========================================================================
     // MAIN FILTER
     // ========================================================================
 
     float4 Filter(float4 tex0col)
     {
-        float3 result = ApplyTonemapOutput(tex0col.rgb, InputSpace, OutputSpace,
-                                           Tonemap, Exposure, WhitePoint,
-                                           PaperWhite, PeakBrightness);
+        TonemapGpuParams tonemap = Tonemap[0];
+        float3 result = ApplyTonemapOutput(tex0col.rgb, InputSpace, tonemap.OutputSpace,
+                                           tonemap.Tonemap, tonemap.Exposure, tonemap.WhitePoint,
+                                           tonemap.PaperWhite, tonemap.PeakBrightness);
 
-        result = RemapDisplayRange(result, BlackLevel, WhiteLevel);
+        result = RemapDisplayRange(result, tonemap.BlackLevel, tonemap.WhiteLevel);
 
         return float4(result, tex0col.a);
     }

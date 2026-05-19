@@ -11,6 +11,11 @@
             Use Split() to extract individual values for vvvv shader pins.
             </summary>
         </member>
+        <member name="M:VL.OCIO.ColorCorrectionSettings.SplitForShader(VL.OCIO.ColorCorrectionGpuParams@)">
+            <summary>
+            Split settings into a single GPU struct matching the shader uniform layout.
+            </summary>
+        </member>
         <member name="M:VL.OCIO.ColorCorrectionSettings.Split(VL.OCIO.HDRColorSpace@,VL.OCIO.GradingSpace@,System.Single@,System.Single@,System.Single@,System.Single@,System.Single@,System.Single@,System.Single@,System.Single@,Stride.Core.Mathematics.Vector3@,Stride.Core.Mathematics.Vector3@,Stride.Core.Mathematics.Vector3@,Stride.Core.Mathematics.Vector3@,Stride.Core.Mathematics.Vector3@,Stride.Core.Mathematics.Vector3@,Stride.Core.Mathematics.Vector3@,System.Single@,System.Single@,System.Single@,System.Single@,System.Single@,System.Single@,System.Single@)">
             <summary>
             Split settings into individual out parameters matching shader input order.
@@ -759,6 +764,11 @@
             <summary>
             Settings for HDR tonemapping shader.
             Use Split() to extract individual values for vvvv shader pins.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.TonemapSettings.SplitForShader(VL.OCIO.TonemapGpuParams@,Stride.Graphics.PixelFormat@,Stride.Graphics.PixelFormat@,Stride.Graphics.PixelFormat)">
+            <summary>
+            Split settings into a single GPU struct plus the output/view texture formats.
             </summary>
         </member>
         <member name="M:VL.OCIO.TonemapSettings.Split(VL.OCIO.HDRColorSpace@,VL.OCIO.TonemapOperator@,System.Single@,System.Single@,System.Single@,System.Single@,System.Single@,System.Single@,Stride.Graphics.PixelFormat@,Stride.Graphics.PixelFormat@,Stride.Graphics.PixelFormat)">

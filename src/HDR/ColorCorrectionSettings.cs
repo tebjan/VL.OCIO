@@ -53,6 +53,40 @@ public class ColorCorrectionSettings
     [JsonInclude] internal float VignetteSoftness { get; set; } = 0.3f;
 
     /// <summary>
+    /// Split settings into a single GPU struct matching the shader uniform layout.
+    /// </summary>
+    public void SplitForShader(out ColorCorrectionGpuParams colorCorrection)
+    {
+        colorCorrection = new ColorCorrectionGpuParams
+        {
+            InputSpace = InputSpace,
+            GradingSpace = GradingSpace,
+            Exposure = Exposure,
+            Contrast = Contrast,
+            Saturation = Saturation,
+            Temperature = Temperature,
+            Tint = Tint,
+            Highlights = Highlights,
+            Shadows = Shadows,
+            Vibrance = Vibrance,
+            Lift = Lift.ToVector3(),
+            Gamma = Gamma.ToVector3(),
+            Gain = Gain.ToVector3(),
+            Offset = Offset.ToVector3(),
+            ShadowColor = ShadowColor.ToVector3(),
+            MidtoneColor = MidtoneColor.ToVector3(),
+            HighlightColor = HighlightColor.ToVector3(),
+            HighlightSoftClip = HighlightSoftClip,
+            ShadowSoftClip = ShadowSoftClip,
+            HighlightKnee = HighlightKnee,
+            ShadowKnee = ShadowKnee,
+            VignetteStrength = VignetteStrength,
+            VignetteRadius = VignetteRadius,
+            VignetteSoftness = VignetteSoftness
+        };
+    }
+
+    /// <summary>
     /// Split settings into individual out parameters matching shader input order.
     /// Use directly with vvvv nodes for HDRGrade_TextureFX or HDRGrade_Tonemap_TextureFX.
     /// </summary>

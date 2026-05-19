@@ -157,18 +157,18 @@ export function GradingPanel({ cc, tm, onUpdateCC, onUpdateTM, visible }: Gradin
 
             <div className="space-y-2 mb-4">
               <Slider label="Exposure" value={cc.exposure} min={-4} max={4} step={0.01} defaultValue={0} decimals={2} onChange={(v) => onUpdateCC({ exposure: v })} />
-              <Slider label="Contrast" value={cc.contrast} min={0.75} max={1.5} step={0.01} defaultValue={1} decimals={2} onChange={(v) => onUpdateCC({ contrast: v })} />
-              <Slider label="Saturation" value={cc.saturation} min={0.5} max={1.5} step={0.01} defaultValue={1} decimals={2} onChange={(v) => onUpdateCC({ saturation: v })} />
+              <Slider label="Contrast" value={cc.contrast} min={0.5} max={1.75} step={0.01} defaultValue={1} decimals={2} onChange={(v) => onUpdateCC({ contrast: v })} />
+              <Slider label="Saturation" value={cc.saturation} min={0} max={2} step={0.01} defaultValue={1} decimals={2} onChange={(v) => onUpdateCC({ saturation: v })} />
             </div>
 
             <div className="space-y-2 mb-4">
-              <Slider label="Temperature" value={cc.temperature} min={-0.5} max={0.5} step={0.01} defaultValue={0} decimals={2} gradient="linear-gradient(to right, #4488ff, #ff8844)" onChange={(v) => onUpdateCC({ temperature: v })} />
-              <Slider label="Tint" value={cc.tint} min={-0.5} max={0.5} step={0.01} defaultValue={0} decimals={2} gradient="linear-gradient(to right, #ff44ff, #44ff44)" onChange={(v) => onUpdateCC({ tint: v })} />
+              <Slider label="Temperature" value={cc.temperature} min={-0.75} max={0.75} step={0.01} defaultValue={0} decimals={2} gradient="linear-gradient(to right, #4488ff, #ff8844)" onChange={(v) => onUpdateCC({ temperature: v })} />
+              <Slider label="Tint" value={cc.tint} min={-0.75} max={0.75} step={0.01} defaultValue={0} decimals={2} gradient="linear-gradient(to right, #ff44ff, #44ff44)" onChange={(v) => onUpdateCC({ tint: v })} />
             </div>
 
             <div className="space-y-2 mb-4">
-              <Slider label="Highlights" value={cc.highlights} min={-1} max={1} step={0.01} defaultValue={0} decimals={2} onChange={(v) => onUpdateCC({ highlights: v })} />
-              <Slider label="Shadows" value={cc.shadows} min={-1} max={1} step={0.01} defaultValue={0} decimals={2} onChange={(v) => onUpdateCC({ shadows: v })} />
+              <Slider label="Highlights" value={cc.highlights} min={-1.5} max={1.5} step={0.01} defaultValue={0} decimals={2} onChange={(v) => onUpdateCC({ highlights: v })} />
+              <Slider label="Shadows" value={cc.shadows} min={-1.5} max={1.5} step={0.01} defaultValue={0} decimals={2} onChange={(v) => onUpdateCC({ shadows: v })} />
               <Slider label="Vibrance" value={cc.vibrance} min={-1} max={2} step={0.01} defaultValue={0} decimals={2} onChange={(v) => onUpdateCC({ vibrance: v })} />
             </div>
 
@@ -208,7 +208,7 @@ export function GradingPanel({ cc, tm, onUpdateCC, onUpdateTM, visible }: Gradin
               <div className="border-t border-surface-700 my-3" />
 
               <Slider label="Black Level" value={tm.blackLevel} min={-0.25} max={0.25} step={0.001} defaultValue={0} decimals={3} onChange={(v) => onUpdateTM({ blackLevel: v })} />
-              <Slider label="White Level" value={tm.whiteLevel} min={0.5} max={2} step={0.01} defaultValue={1} decimals={2} onChange={(v) => onUpdateTM({ whiteLevel: v })} />
+              <Slider label="White Level" value={tm.whiteLevel} min={0.25} max={2.5} step={0.01} defaultValue={1} decimals={2} onChange={(v) => onUpdateTM({ whiteLevel: v })} />
             </div>
           </Section>
         </div>

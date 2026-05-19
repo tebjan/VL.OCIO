@@ -7,8 +7,8 @@
 // - HDRTonemap_TextureFX (standalone tonemap)
 // - HDRGrade_Tonemap_TextureFX (combined grade + tonemap)
 //
-// No pin declarations — all parameters are passed to the utility method.
-// Each consumer declares its own pins (avoiding name conflicts).
+// Standalone input space stays outside this struct because it is not part of
+// TonemapSettings. Everything else comes from the Tonemap settings struct.
 //
 // Operators:
 //  0 - None (passthrough)
@@ -29,6 +29,24 @@
 shader HDRTonemap : TonemapOperators
 {
     // ========================================================================
+    // SHADER INPUTS
+    // ========================================================================
+
+    struct TonemapGpuParams
+    {
+        int OutputSpace;
+        int Tonemap;
+        float Exposure;
+        float WhitePoint;
+        float PaperWhite;
+        float PeakBrightness;
+        float BlackLevel;
+        float WhiteLevel;
+    };
+
+    stage StructuredBuffer<TonemapGpuParams> Tonemap;
+
+    // ========================================================================
     // UTILITY METHOD
     // ========================================================================
 
@@ -36,14 +54,14 @@ shader HDRTonemap : TonemapOperators
     // Takes any input color space, applies tonemap, converts to output space.
     // Does NOT apply display range remap — caller applies RemapDisplayRange() at the end.
     float3 ApplyTonemapOutput(float3 color, int inputSpace, int outputSpace,
-                              int tonemap, float exposure, float whitePoint,
+                              int tonemapOperator, float exposure, float whitePoint,
                               float paperWhite, float peakBrightness)
     {
         // ----------------------------------------------------------------
         // ACES 1.3 / 2.0: full RRT+ODT with output-space-dependent ODT
         // These need ACEScg input and choose ODT variant based on output target.
         // ----------------------------------------------------------------
-        if (tonemap == 2 || tonemap == 3)
+        if (tonemapOperator == 2 || tonemapOperator == 3)
         {
             // Convert input to ACEScg (AP1) with direct paths for common cases
             float3 acescg;
@@ -70,7 +88,7 @@ shader HDRTonemap : TonemapOperators
             float3 displayLinear;
             float peakNits;
 
-            if (tonemap == 2) // ACES 1.3
+            if (tonemapOperator == 2) // ACES 1.3
             {
                 float3 rrt = ACES13_RRT(acescg);
                 if (isRec2020Target)
@@ -110,7 +128,7 @@ shader HDRTonemap : TonemapOperators
         // ----------------------------------------------------------------
         // All other operators (0, 1, 4-11): existing path via ApplyTonemap
         // ----------------------------------------------------------------
-        float3 linear709 = ApplyTonemap(color, inputSpace, tonemap, exposure, whitePoint);
+        float3 linear709 = ApplyTonemap(color, inputSpace, tonemapOperator, exposure, whitePoint);
 
         // Convert to output color space
         // HDR outputs handle gamut + PaperWhite + transfer function directly

@@ -62,6 +62,15 @@ public class SettingsBank : IDisposable
     // Cached for access from service thread (set in Update)
     private volatile bool _autoSave = true;
 
+    // Fallback/new-key behavior (set in Update, read on vvvv + service threads)
+    private volatile string _fallbackKeyPin = DefaultKey;
+    private volatile NewKeyMode _newKeyMode = NewKeyMode.Virtual;
+
+    // Keys requested this session that are NOT materialized on disk.
+    // They transparently serve the fallback key's settings until cloned/edited.
+    // Guarded by _lock (same as _data.Entries).
+    private readonly HashSet<string> _virtualKeys = new();
+
     private readonly IResourceHandle<ColorGradingService> _serviceHandle;
     private ColorGradingService? _service;
     private readonly ServiceUiHelper _uiHelper;
@@ -86,9 +95,41 @@ public class SettingsBank : IDisposable
     // ─── Update (called every frame by vvvv) ───────────────────────────────
 
     /// <summary>
-    /// Main frame update. Manages file loading, active key tracking, and UI connectivity.
-    /// Use GetSettings() to retrieve settings for each channel/key.
+    /// File-backed bank of color-grade settings, one entry per key (e.g. per clip).
+    /// Channels call GetSettings(key) per frame; the web UI edits the selected key.
+    /// The fallback key is a template: never-graded keys show its settings instead
+    /// of filling the file with blank entries.
     /// </summary>
+    /// <param name="allKeys">Keys that physically exist in the bank file (excludes virtual keys).</param>
+    /// <param name="uiUrl">Address to open the web UI. Reflects UrlHost and IncludeMachineNameInPath.</param>
+    /// <param name="clientCount">Web UI browsers currently connected.</param>
+    /// <param name="error">Last error, empty when healthy.</param>
+    /// <param name="filePath">JSON file the bank is stored in. Changing it reloads from disk. A "Default" entry is always ensured.</param>
+    /// <param name="autoSave">True writes every change to FilePath immediately. False keeps changes session-only until saved from the UI.</param>
+    /// <param name="autoOpenBrowser">Open the web UI in the default browser once the server is up.</param>
+    /// <param name="publishToNetwork">False: localhost only. True: reachable from other LAN devices (may prompt once for firewall access).</param>
+    /// <param name="fallbackKey">
+    /// The template key. Keys that were never graded show this key's settings instead
+    /// of a blank grade, so configure it once (e.g. ACEScg, ACES 1.3) and new clips
+    /// inherit it. Empty, "Default" (any case), or an unknown name resolve to the
+    /// always-present "Default" entry. Cannot be deleted from the UI.
+    /// </param>
+    /// <param name="newKeyMode">
+    /// First time a clip's key appears:
+    /// Virtual (default): not written; shows FallbackKey settings, marked virtual in
+    /// the UI until cloned (first edit also adopts the fallback). Avoids file bloat.
+    /// AutoClone: create a real entry by copying FallbackKey.
+    /// AutoBlank: legacy, create a real entry with neutral defaults.
+    /// </param>
+    /// <param name="urlHost">
+    /// Override the host/IP in UiUrl, e.g. "10.23.16.56". Empty uses the auto
+    /// detected LAN IP or localhost.
+    /// </param>
+    /// <param name="includeMachineNameInPath">
+    /// False (default): clean URL http://HOST/grade/{app}/. True: legacy
+    /// http://HOST/grade/{machine}/{app}/. Toggling at runtime rebinds the server
+    /// and redirects open tabs.
+    /// </param>
     public void Update(
         out IReadOnlyList<string> allKeys,
         out string uiUrl,
@@ -97,8 +138,19 @@ public class SettingsBank : IDisposable
         Path filePath = default,
         bool autoSave = true,
         bool autoOpenBrowser = true,
-        bool publishToNetwork = false)
+        bool publishToNetwork = false,
+        string fallbackKey = DefaultKey,
+        NewKeyMode newKeyMode = NewKeyMode.Virtual,
+        string urlHost = "",
+        bool includeMachineNameInPath = false)
     {
+        // Cache fallback/new-key config for the GetSettings + service threads.
+        // Robust resolution (null/empty/"default") happens in ResolveFallbackKeyLocked.
+        _fallbackKeyPin = string.IsNullOrWhiteSpace(fallbackKey) ? DefaultKey : fallbackKey.Trim();
+        _newKeyMode = newKeyMode;
+
+        // Push URL config to the shared service (host override + drop machine segment).
+        _service?.ConfigureUrl(string.IsNullOrWhiteSpace(urlHost) ? null : urlHost.Trim(), includeMachineNameInPath);
         // --- Swap active keys and snapshot for WebSocket thread ---
         var prevSnapshot = _activeKeysSnapshot;
         _activeKeysSnapshot = _activeKeys.Count > 0 ? _activeKeys.ToArray() : Array.Empty<string>();
@@ -189,21 +241,50 @@ public class SettingsBank : IDisposable
 
         lock (_lock)
         {
-            if (!_data.Entries.TryGetValue(key, out var entry))
+            if (_data.Entries.TryGetValue(key, out var entry))
             {
-                entry = new SettingsBankEntry();
-                _data.Entries[key] = entry;
-                _cachedAllKeys = null;
-                if (_autoSave) SaveToDiskLocked();
-                _ = _service?.BroadcastBankStateAsync();
-                found = false;
+                // Real entry — drop any stale virtual marker.
+                _virtualKeys.Remove(key);
+                found = true;
+                settingsJson = entry.Settings.ToJson();
             }
             else
             {
-                found = true;
-            }
+                found = false;
+                switch (_newKeyMode)
+                {
+                    case NewKeyMode.AutoBlank:
+                        entry = new SettingsBankEntry();
+                        _data.Entries[key] = entry;
+                        _cachedAllKeys = null;
+                        if (_autoSave) SaveToDiskLocked();
+                        _ = _service?.BroadcastBankStateAsync();
+                        settingsJson = entry.Settings.ToJson();
+                        break;
 
-            settingsJson = entry.Settings.ToJson();
+                    case NewKeyMode.AutoClone:
+                    {
+                        var fbSettings = GetFallbackSettingsLocked();
+                        entry = new SettingsBankEntry { Settings = fbSettings.Clone() };
+                        _data.Entries[key] = entry;
+                        _cachedAllKeys = null;
+                        if (_autoSave) SaveToDiskLocked();
+                        _ = _service?.BroadcastBankStateAsync();
+                        settingsJson = entry.Settings.ToJson();
+                        break;
+                    }
+
+                    default: // NewKeyMode.Virtual
+                    {
+                        var fbSettings = GetFallbackSettingsLocked();
+                        // Not written to disk — serves fallback settings until cloned/edited.
+                        if (_virtualKeys.Add(key))
+                            _ = _service?.BroadcastBankStateAsync();
+                        settingsJson = fbSettings.ToJson();
+                        break;
+                    }
+                }
+            }
         }
 
         // First GetSettings call sets the default editing key
@@ -247,6 +328,42 @@ public class SettingsBank : IDisposable
 
     private string EffectiveEditingKey => _editingKey ?? "";
 
+    /// <summary>
+    /// Resolve the effective fallback key. Robust: null / empty / whitespace /
+    /// "default" (any case), or a name that doesn't exist, all resolve to the
+    /// guaranteed-present "Default" key. Must be called under _lock.
+    /// </summary>
+    private string ResolveFallbackKeyLocked()
+    {
+        var fk = _fallbackKeyPin;
+        if (string.IsNullOrWhiteSpace(fk) ||
+            string.Equals(fk, DefaultKey, StringComparison.OrdinalIgnoreCase))
+            return DefaultKey;
+        return _data.Entries.ContainsKey(fk) ? fk : DefaultKey;
+    }
+
+    /// <summary>Settings of the resolved fallback key (never null). Must be called under _lock.</summary>
+    private ProjectSettings GetFallbackSettingsLocked()
+    {
+        var fb = ResolveFallbackKeyLocked();
+        return _data.Entries.TryGetValue(fb, out var fe) ? fe.Settings : new ProjectSettings();
+    }
+
+    /// <summary>
+    /// If the key is virtual (requested but not on disk), materialize it now by
+    /// deep-cloning the fallback key's settings so an edit can stick. No-op for
+    /// already-real keys. Must be called under _lock.
+    /// </summary>
+    private void MaterializeIfVirtualLocked(string key)
+    {
+        if (string.IsNullOrEmpty(key)) return;
+        if (_data.Entries.ContainsKey(key)) { _virtualKeys.Remove(key); return; }
+        if (!_virtualKeys.Contains(key)) return;
+        _data.Entries[key] = new SettingsBankEntry { Settings = GetFallbackSettingsLocked().Clone() };
+        _virtualKeys.Remove(key);
+        _cachedAllKeys = null;
+    }
+
     // ─── Methods called by ColorGradingService (WebSocket/service thread) ──
 
     /// <summary>
@@ -261,6 +378,8 @@ public class SettingsBank : IDisposable
 
         lock (_lock)
         {
+            // Virtual key + first edit → adopt fallback as the starting point.
+            MaterializeIfVirtualLocked(key);
             if (!_data.Entries.TryGetValue(key, out var entry)) return;
 
             // Undo: snapshot before first edit in a session
@@ -295,6 +414,8 @@ public class SettingsBank : IDisposable
 
         lock (_lock)
         {
+            // Virtual key + first edit → adopt fallback as the starting point.
+            MaterializeIfVirtualLocked(key);
             if (!_data.Entries.TryGetValue(key, out var entry)) return;
 
             if (section == "colorCorrection")
@@ -414,13 +535,62 @@ public class SettingsBank : IDisposable
                     case "bankSelectEditingKey":
                     {
                         var key = data.GetProperty("key").GetString() ?? "";
-                        if (!string.IsNullOrEmpty(key) && _data.Entries.TryGetValue(key, out var selEntry))
+                        if (string.IsNullOrEmpty(key)) break;
+                        if (_data.Entries.TryGetValue(key, out var selEntry))
                         {
                             _editingKey = key;
                             // Push key's settings through the instance path (same as instance switch)
                             // so all UI components update via the proven state→instanceStates flow
                             _service?.ApplyBankKeyToInstance(selEntry.Settings);
                         }
+                        else if (_virtualKeys.Contains(key))
+                        {
+                            // Virtual key: selectable, shows fallback settings (read-through).
+                            _editingKey = key;
+                            _service?.ApplyBankKeyToInstance(GetFallbackSettingsLocked());
+                        }
+                        break;
+                    }
+                    case "bankCloneFromKey":
+                    {
+                        var sourceKey = data.GetProperty("sourceKey").GetString() ?? "";
+                        var targetKey = data.TryGetProperty("targetKey", out var tk)
+                            ? (tk.GetString() ?? "") : editKey;
+                        if (string.IsNullOrEmpty(sourceKey) || string.IsNullOrEmpty(targetKey)) return;
+                        if (!_data.Entries.TryGetValue(sourceKey, out var cloneSrc)) return;
+                        EnsureEntryLocked(targetKey);
+                        var cloneTarget = _data.Entries[targetKey];
+                        PushUndoLocked(targetKey, cloneTarget.Settings.Clone());
+                        ClearRedoLocked(targetKey);
+                        cloneTarget.Settings = cloneSrc.Settings.Clone();
+                        _virtualKeys.Remove(targetKey);
+                        _editingKey = targetKey;
+                        _settingsChangedFlag = true;
+                        if (_autoSave) SaveToDiskLocked();
+                        _service?.ApplyBankKeyToInstance(cloneTarget.Settings);
+                        break;
+                    }
+                    case "bankDeleteKey":
+                    {
+                        var key = data.GetProperty("key").GetString() ?? "";
+                        if (string.IsNullOrEmpty(key)) return;
+                        // Protect the template: never delete Default or the active fallback.
+                        if (key == DefaultKey || key == ResolveFallbackKeyLocked()) return;
+                        bool removed = _data.Entries.Remove(key);
+                        _virtualKeys.Remove(key);
+                        _undoStacks.Remove(key);
+                        _redoStacks.Remove(key);
+                        _thumbnails.Remove(key);
+                        if (!removed) return;
+                        _cachedAllKeys = null;
+                        if (_editingKey == key)
+                        {
+                            var fb = ResolveFallbackKeyLocked();
+                            _editingKey = fb;
+                            if (_data.Entries.TryGetValue(fb, out var fbEntry))
+                                _service?.ApplyBankKeyToInstance(fbEntry.Settings);
+                        }
+                        if (_autoSave) SaveToDiskLocked();
                         break;
                     }
                     case "bankUndo":
@@ -529,6 +699,20 @@ public class SettingsBank : IDisposable
                 keySettings[kvp.Key] = kvp.Value.Settings;
             }
 
+            // Virtual keys: requested but not on disk. Surface them with the
+            // fallback's settings so the UI can render a read-through panel.
+            var fallbackKey = ResolveFallbackKeyLocked();
+            var fallbackSettings = GetFallbackSettingsLocked();
+            var virtualKeys = new string[_virtualKeys.Count];
+            {
+                var vi = 0;
+                foreach (var vk in _virtualKeys)
+                {
+                    virtualKeys[vi++] = vk;
+                    if (!keySettings.ContainsKey(vk)) keySettings[vk] = fallbackSettings;
+                }
+            }
+
             var undoCount = 0;
             var redoCount = 0;
             if (!string.IsNullOrEmpty(editKey))
@@ -544,6 +728,8 @@ public class SettingsBank : IDisposable
                 editingKey = editKey,
                 activeKeys = activeSnapshot,
                 allKeys = GetAllKeysLocked(),
+                virtualKeys,
+                fallbackKey,
                 friendlyNames,
                 thumbnails,
                 keySettings,

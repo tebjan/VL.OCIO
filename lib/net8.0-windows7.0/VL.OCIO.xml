@@ -199,6 +199,25 @@
             Path: /grade/{machine}/{app}/ — auto-suffixes with -2, -3... if prefix is already taken.
             </summary>
         </member>
+        <member name="M:VL.OCIO.ColorGradingService.ConfigureUrl(System.String,System.Boolean)">
+            <summary>
+            Apply URL customization from the SettingsBank node. <paramref name="hostOverride"/>
+            replaces the host/IP shown in the UI URL (null = auto-detected LAN IP).
+            <paramref name="includeMachineName"/> controls whether the machine-name
+            segment is part of the path (false ⇒ /grade/{app}/ instead of
+            /grade/{machine}/{app}/). The machine-name change only takes effect at
+            server start; if toggled afterwards a restart is required.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.ColorGradingService.RebindForPathChange">
+            <summary>
+            Re-bind the HTTP listener after the URL path changed at runtime
+            (machine-name segment toggled). Recomputes the sub-path, swaps the
+            listener prefix in-place, and redirects any connected browsers so the
+            open tab follows the new URL. Works in both localhost and network mode
+            (the network URL ACL covers all of /grade/, so no new UAC prompt).
+            </summary>
+        </member>
         <member name="M:VL.OCIO.ColorGradingService.TrySetUrlAcl">
             <summary>
             Try to set a URL ACL and firewall rule via a single UAC-elevated command.
@@ -444,6 +463,31 @@
         <member name="F:VL.OCIO.GradingSpace.Linear">
             <summary>Linear (ACEScg) - VFX workflow, physically accurate (Nuke style)</summary>
         </member>
+        <member name="T:VL.OCIO.NewKeyMode">
+            <summary>
+            How the SettingsBank treats a key that is requested (e.g. a clip plays) but
+            does not yet exist on disk.
+            </summary>
+        </member>
+        <member name="F:VL.OCIO.NewKeyMode.Virtual">
+            <summary>
+            Default. The unknown key is NOT written to the bank file. It transparently
+            serves the fallback key's settings until the user explicitly clones it
+            (or edits it, which auto-materializes from the fallback). Prevents bank bloat.
+            </summary>
+        </member>
+        <member name="F:VL.OCIO.NewKeyMode.AutoClone">
+            <summary>
+            The unknown key is immediately materialized by deep-cloning the fallback
+            key's settings (inherits the configured Default look).
+            </summary>
+        </member>
+        <member name="F:VL.OCIO.NewKeyMode.AutoBlank">
+            <summary>
+            Legacy behavior: the unknown key is immediately materialized with blank
+            neutral settings (Linear Rec.709 / no tonemap).
+            </summary>
+        </member>
         <member name="T:VL.OCIO.GradeLogLevel">
             <summary>
             Simple log levels for the color grading subsystem.
@@ -627,11 +671,43 @@
              share access to the entries dictionary.
              </summary>
         </member>
-        <member name="M:VL.OCIO.SettingsBank.Update(System.Collections.Generic.IReadOnlyList{System.String}@,System.String@,System.Int32@,System.String@,VL.Lib.IO.Path,System.Boolean,System.Boolean,System.Boolean)">
+        <member name="M:VL.OCIO.SettingsBank.Update(System.Collections.Generic.IReadOnlyList{System.String}@,System.String@,System.Int32@,System.String@,VL.Lib.IO.Path,System.Boolean,System.Boolean,System.Boolean,System.String,VL.OCIO.NewKeyMode,System.String,System.Boolean)">
             <summary>
-            Main frame update. Manages file loading, active key tracking, and UI connectivity.
-            Use GetSettings() to retrieve settings for each channel/key.
+            File-backed bank of color-grade settings, one entry per key (e.g. per clip).
+            Channels call GetSettings(key) per frame; the web UI edits the selected key.
+            The fallback key is a template: never-graded keys show its settings instead
+            of filling the file with blank entries.
             </summary>
+            <param name="allKeys">Keys that physically exist in the bank file (excludes virtual keys).</param>
+            <param name="uiUrl">Address to open the web UI. Reflects UrlHost and IncludeMachineNameInPath.</param>
+            <param name="clientCount">Web UI browsers currently connected.</param>
+            <param name="error">Last error, empty when healthy.</param>
+            <param name="filePath">JSON file the bank is stored in. Changing it reloads from disk. A "Default" entry is always ensured.</param>
+            <param name="autoSave">True writes every change to FilePath immediately. False keeps changes session-only until saved from the UI.</param>
+            <param name="autoOpenBrowser">Open the web UI in the default browser once the server is up.</param>
+            <param name="publishToNetwork">False: localhost only. True: reachable from other LAN devices (may prompt once for firewall access).</param>
+            <param name="fallbackKey">
+            The template key. Keys that were never graded show this key's settings instead
+            of a blank grade, so configure it once (e.g. ACEScg, ACES 1.3) and new clips
+            inherit it. Empty, "Default" (any case), or an unknown name resolve to the
+            always-present "Default" entry. Cannot be deleted from the UI.
+            </param>
+            <param name="newKeyMode">
+            First time a clip's key appears:
+            Virtual (default): not written; shows FallbackKey settings, marked virtual in
+            the UI until cloned (first edit also adopts the fallback). Avoids file bloat.
+            AutoClone: create a real entry by copying FallbackKey.
+            AutoBlank: legacy, create a real entry with neutral defaults.
+            </param>
+            <param name="urlHost">
+            Override the host/IP in UiUrl, e.g. "10.23.16.56". Empty uses the auto
+            detected LAN IP or localhost.
+            </param>
+            <param name="includeMachineNameInPath">
+            False (default): clean URL http://HOST/grade/{app}/. True: legacy
+            http://HOST/grade/{machine}/{app}/. Toggling at runtime rebinds the server
+            and redirects open tabs.
+            </param>
         </member>
         <member name="M:VL.OCIO.SettingsBank.GetSettings(System.String@,System.Boolean@,System.String)">
             <summary>
@@ -641,6 +717,23 @@
         </member>
         <member name="M:VL.OCIO.SettingsBank.SetThumbnail(System.String,System.String)">
             <summary>Set the thumbnail for a specific key. Called via static util.</summary>
+        </member>
+        <member name="M:VL.OCIO.SettingsBank.ResolveFallbackKeyLocked">
+            <summary>
+            Resolve the effective fallback key. Robust: null / empty / whitespace /
+            "default" (any case), or a name that doesn't exist, all resolve to the
+            guaranteed-present "Default" key. Must be called under _lock.
+            </summary>
+        </member>
+        <member name="M:VL.OCIO.SettingsBank.GetFallbackSettingsLocked">
+            <summary>Settings of the resolved fallback key (never null). Must be called under _lock.</summary>
+        </member>
+        <member name="M:VL.OCIO.SettingsBank.MaterializeIfVirtualLocked(System.String)">
+            <summary>
+            If the key is virtual (requested but not on disk), materialize it now by
+            deep-cloning the fallback key's settings so an edit can stick. No-op for
+            already-real keys. Must be called under _lock.
+            </summary>
         </member>
         <member name="M:VL.OCIO.SettingsBank.OnSettingsUpdated(VL.OCIO.ColorCorrectionSettings,VL.OCIO.TonemapSettings)">
             <summary>

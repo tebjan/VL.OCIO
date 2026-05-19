@@ -6,6 +6,8 @@ import { displayName } from '../types/settings'
 interface BankPanelProps {
   bankState: BankState
   onCopyFrom: (sourceKey: string) => void
+  onCloneFromKey: (sourceKey: string, targetKey?: string) => void
+  onDeleteKey: (key: string) => void
   onSaveSnapshot: (name: string) => void
   onLoadSnapshot: (name: string) => void
   onDeleteSnapshot: (name: string) => void
@@ -20,6 +22,8 @@ interface BankPanelProps {
 export function BankPanel({
   bankState,
   onCopyFrom,
+  onCloneFromKey,
+  onDeleteKey,
   onSaveSnapshot,
   onLoadSnapshot,
   onDeleteSnapshot,
@@ -35,8 +39,13 @@ export function BankPanel({
   const [snapshotName, setSnapshotName] = useState('')
   const [copyConfirming, setCopyConfirming] = useState<string | null>(null)
   const [deleteConfirming, setDeleteConfirming] = useState<string | null>(null)
+  const [deleteKeyConfirming, setDeleteKeyConfirming] = useState<string | null>(null)
 
   const { editingKey, activeKeys, allKeys, friendlyNames, thumbnails, currentSnapshots, undoCount, redoCount } = bankState
+  const virtualKeys = bankState.virtualKeys ?? []
+  const fallbackKey = bankState.fallbackKey || 'Default'
+  const virtualSet = new Set(virtualKeys.filter(k => !allKeys.includes(k)))
+  const keyList = [...allKeys, ...virtualKeys.filter(k => !allKeys.includes(k))]
   const editingLabel2 = displayName(editingKey, friendlyNames)
   const activeSet = new Set(activeKeys)
 
@@ -125,12 +134,15 @@ export function BankPanel({
 
       {/* Key list — vertical, compact */}
       <div className="px-3 pb-2 space-y-1">
-        {allKeys.map(key => {
+        {keyList.map(key => {
           const label = displayName(key, friendlyNames)
           const thumb = thumbnails?.[key]
           const isEditing = key === editingKey
           const isActive = activeSet.has(key)
           const isCopySource = copyConfirming === key
+          const isVirtual = virtualSet.has(key)
+          const isProtected = key === fallbackKey || key === 'Default'
+          const isDeleteConfirming = deleteKeyConfirming === key
           return (
             <div
               key={key}
@@ -140,7 +152,9 @@ export function BankPanel({
                   ? 'bg-surface-700/80 border-surface-500/60'
                   : isCopySource
                     ? 'bg-blue-900/30 border-blue-600/40'
-                    : 'bg-surface-800/40 border-surface-700/40 hover:border-surface-600/60'
+                    : isVirtual
+                      ? 'bg-surface-800/20 border-dashed border-amber-700/30 hover:border-amber-600/50'
+                      : 'bg-surface-800/40 border-surface-700/40 hover:border-surface-600/60'
               )}
               onClick={() => !isEditing && !isCopySource && onSelectEditingKey(key)}
             >
@@ -163,21 +177,36 @@ export function BankPanel({
                 <div className="flex-1 min-w-0">
                   <div className={cn(
                     'text-[11px] truncate',
-                    isEditing ? 'text-surface-100 font-medium' : 'text-surface-400'
+                    isVirtual ? 'text-amber-300/70 italic' : isEditing ? 'text-surface-100 font-medium' : 'text-surface-400'
                   )}>
                     {label}
                   </div>
                 </div>
-                {isEditing && (
+                {isVirtual && (
+                  <span className="text-[8px] uppercase tracking-wide text-amber-500/70 flex-shrink-0">virtual</span>
+                )}
+                {isProtected && !isVirtual && (
+                  <span className="text-[8px] uppercase tracking-wide text-surface-600 flex-shrink-0">template</span>
+                )}
+                {isEditing && !isVirtual && (
                   <span className="text-[9px] text-surface-500 flex-shrink-0">editing</span>
                 )}
-                {!isEditing && !isCopySource && (
+                {!isEditing && !isCopySource && !isVirtual && !isDeleteConfirming && (
                   <button
                     className="text-[9px] text-surface-600 hover:text-surface-300 cursor-pointer bg-transparent border-none p-0 flex-shrink-0 transition-colors"
                     onClick={(e) => { e.stopPropagation(); setCopyConfirming(key) }}
                     title={`Copy settings from "${label}"`}
                   >
                     copy
+                  </button>
+                )}
+                {isVirtual && (
+                  <button
+                    className="text-[9px] text-amber-400 hover:text-amber-300 cursor-pointer bg-transparent border-none p-0 flex-shrink-0 transition-colors"
+                    onClick={(e) => { e.stopPropagation(); onCloneFromKey(fallbackKey, key) }}
+                    title={`Clone from "${fallbackKey}" to create this key`}
+                  >
+                    clone
                   </button>
                 )}
                 {isCopySource && (
@@ -195,6 +224,32 @@ export function BankPanel({
                       {'\u2715'}
                     </button>
                   </div>
+                )}
+                {!isVirtual && !isProtected && !isCopySource && (
+                  isDeleteConfirming ? (
+                    <div className="flex gap-1 flex-shrink-0">
+                      <button
+                        className="text-[9px] text-red-400 hover:text-red-300 cursor-pointer bg-transparent border-none p-0 transition-colors"
+                        onClick={(e) => { e.stopPropagation(); onDeleteKey(key); setDeleteKeyConfirming(null) }}
+                      >
+                        delete?
+                      </button>
+                      <button
+                        className="text-[9px] text-surface-500 hover:text-surface-300 cursor-pointer bg-transparent border-none p-0 transition-colors"
+                        onClick={(e) => { e.stopPropagation(); setDeleteKeyConfirming(null) }}
+                      >
+                        {'\u2715'}
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      className="text-[9px] text-surface-700 hover:text-red-400 cursor-pointer bg-transparent border-none p-0 flex-shrink-0 transition-colors"
+                      onClick={(e) => { e.stopPropagation(); setDeleteKeyConfirming(key) }}
+                      title={`Delete key "${label}"`}
+                    >
+                      {'\u2715'}
+                    </button>
+                  )
                 )}
               </div>
             </div>

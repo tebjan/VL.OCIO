@@ -28,6 +28,8 @@ interface WebSocketActions {
   selectInstance: (instanceId: string) => void
   // SettingsBank actions (bank-level, no instanceId)
   bankCopyFrom: (sourceKey: string) => void
+  bankCloneFromKey: (sourceKey: string, targetKey?: string) => void
+  bankDeleteKey: (key: string) => void
   bankSaveSnapshot: (name: string) => void
   bankLoadSnapshot: (name: string) => void
   bankDeleteSnapshot: (name: string) => void
@@ -471,6 +473,15 @@ export function useWebSocket(): WebSocketState & WebSocketActions {
     sendBank({ type: 'bankCopyFrom', sourceKey })
   }, [sendBank])
 
+  // Materialize a (virtual or new) key by cloning another key's settings.
+  const bankCloneFromKey = useCallback((sourceKey: string, targetKey?: string) => {
+    sendBank({ type: 'bankCloneFromKey', sourceKey, targetKey })
+  }, [sendBank])
+
+  const bankDeleteKey = useCallback((key: string) => {
+    sendBank({ type: 'bankDeleteKey', key })
+  }, [sendBank])
+
   const bankSaveSnapshot = useCallback((name: string) => {
     sendBank({ type: 'bankSaveSnapshot', name })
   }, [sendBank])
@@ -530,6 +541,8 @@ export function useWebSocket(): WebSocketState & WebSocketActions {
     reset,
     selectInstance,
     bankCopyFrom,
+    bankCloneFromKey,
+    bankDeleteKey,
     bankSaveSnapshot,
     bankLoadSnapshot,
     bankDeleteSnapshot,

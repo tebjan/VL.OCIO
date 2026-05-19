@@ -92,6 +92,10 @@ export interface BankState {
   editingKey: string
   activeKeys: string[]
   allKeys: string[]
+  /** Keys requested this session that are NOT materialized on disk (serve fallback settings). */
+  virtualKeys: string[]
+  /** The resolved fallback/template key new+virtual keys inherit from. */
+  fallbackKey: string
   friendlyNames: Record<string, string | null>
   thumbnails: Record<string, string | null>
   keySettings: Record<string, ProjectSettings>

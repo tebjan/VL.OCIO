@@ -39,9 +39,27 @@ interface GradingPanelProps {
   onUpdateCC: (params: Partial<ColorCorrectionSettings>) => void
   onUpdateTM: (params: Partial<TonemapSettings>) => void
   visible: boolean
+  /** This key has no saved grade yet — it's showing the fallback key's settings. */
+  isVirtual?: boolean
+  /** The fallback/template key whose settings are shown while virtual. */
+  fallbackKey?: string
+  /** Materialized keys that can be used as a clone source. */
+  cloneSources?: string[]
+  /** Clone the given key's settings into this key (materializes it). */
+  onCloneFrom?: (sourceKey: string) => void
 }
 
-export function GradingPanel({ cc, tm, onUpdateCC, onUpdateTM, visible }: GradingPanelProps) {
+export function GradingPanel({
+  cc,
+  tm,
+  onUpdateCC,
+  onUpdateTM,
+  visible,
+  isVirtual,
+  fallbackKey,
+  cloneSources,
+  onCloneFrom,
+}: GradingPanelProps) {
   // LGG handlers
   const handleLiftChange = useCallback(
     (value: Vector3) => onUpdateCC({ lift: value }),
@@ -110,6 +128,44 @@ export function GradingPanel({ cc, tm, onUpdateCC, onUpdateTM, visible }: Gradin
   return (
     <div style={{ display: visible ? 'block' : 'none' }}>
       <div className="space-y-4">
+        {isVirtual && (
+          <div className="bg-amber-900/20 border border-amber-700/40 rounded-lg p-3 text-xs text-amber-200/90">
+            <div className="mb-2">
+              This key has <span className="font-semibold">no saved grade</span> yet — showing{' '}
+              <span className="font-mono text-amber-100">{fallbackKey || 'Default'}</span> settings.
+              Edit any control to adopt it, or:
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                className="px-2 py-1 rounded-md bg-amber-800/40 hover:bg-amber-700/50 text-amber-100 transition-colors"
+                onClick={() => onCloneFrom?.(fallbackKey || 'Default')}
+              >
+                Clone from {fallbackKey || 'Default'}
+              </button>
+              {cloneSources && cloneSources.length > 0 && (
+                <select
+                  className="px-2 py-1 rounded-md bg-surface-800 border border-surface-600 text-surface-200 focus:outline-none focus:border-surface-400"
+                  defaultValue=""
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      onCloneFrom?.(e.target.value)
+                      e.target.value = ''
+                    }
+                  }}
+                >
+                  <option value="" disabled>
+                    Clone from…
+                  </option>
+                  {cloneSources.map((k) => (
+                    <option key={k} value={k}>
+                      {k}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          </div>
+        )}
         {/* ========== COLOR GRADING ========== */}
         <div className="bg-surface-900 rounded-lg p-4">
           <Section title="Color Grading">

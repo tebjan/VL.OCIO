@@ -55,6 +55,11 @@ public class ColorGradingService : IDisposable
     private string _appSlug = "";
     private string _appSubPath = "";
 
+    // URL customization (set via SettingsBank.ConfigureUrl). Defaults preserve
+    // legacy behavior: auto-detected LAN IP, machine name kept in the path.
+    private string? _urlHostOverride;
+    private bool _includeMachineNameInPath = false;
+
     // Directory page at /grade/ (first app to start claims this)
     private bool _ownsDirectory;
     private HttpListener? _directoryListener;
@@ -506,7 +511,9 @@ public class ColorGradingService : IDisposable
             while (suffix <= 20)
             {
                 _appSlug = suffix == 1 ? baseSlug : $"{baseSlug}-{suffix}";
-                _appSubPath = $"{BaseUrlPath}/{_machineName}/{_appSlug}";
+                _appSubPath = _includeMachineNameInPath
+                    ? $"{BaseUrlPath}/{_machineName}/{_appSlug}"
+                    : $"{BaseUrlPath}/{_appSlug}";
                 var prefix = $"http://localhost:{port}/{_appSubPath}/";
 
                 var listener = new HttpListener();
@@ -535,14 +542,100 @@ public class ColorGradingService : IDisposable
         throw new InvalidOperationException($"Could not bind localhost prefix for /{BaseUrlPath}/{_machineName}/{baseSlug}/");
     }
 
+    /// <summary>
+    /// Apply URL customization from the SettingsBank node. <paramref name="hostOverride"/>
+    /// replaces the host/IP shown in the UI URL (null = auto-detected LAN IP).
+    /// <paramref name="includeMachineName"/> controls whether the machine-name
+    /// segment is part of the path (false ⇒ /grade/{app}/ instead of
+    /// /grade/{machine}/{app}/). The machine-name change only takes effect at
+    /// server start; if toggled afterwards a restart is required.
+    /// </summary>
+    internal void ConfigureUrl(string? hostOverride, bool includeMachineName)
+    {
+        var host = string.IsNullOrWhiteSpace(hostOverride) ? null : hostOverride.Trim();
+        bool machineChanged = _includeMachineNameInPath != includeMachineName;
+        bool hostChanged = _urlHostOverride != host;
+        _urlHostOverride = host;
+        _includeMachineNameInPath = includeMachineName;
+
+        if (_serverStarted && machineChanged)
+            RebindForPathChange();
+        else if (_serverStarted && hostChanged)
+            UpdateCachedUrl();
+    }
+
+    /// <summary>
+    /// Re-bind the HTTP listener after the URL path changed at runtime
+    /// (machine-name segment toggled). Recomputes the sub-path, swaps the
+    /// listener prefix in-place, and redirects any connected browsers so the
+    /// open tab follows the new URL. Works in both localhost and network mode
+    /// (the network URL ACL covers all of /grade/, so no new UAC prompt).
+    /// </summary>
+    private void RebindForPathChange()
+    {
+        if (!_serverStarted || _cts == null) return;
+        var oldSubPath = _appSubPath;
+        _appSubPath = _includeMachineNameInPath
+            ? $"{BaseUrlPath}/{_machineName}/{_appSlug}"
+            : $"{BaseUrlPath}/{_appSlug}";
+        if (_appSubPath == oldSubPath) return;
+
+        var newPrefix = _networkEnabled
+            ? $"http://+:{Port}/{_appSubPath}/"
+            : $"http://localhost:{_localhostPort}/{_appSubPath}/";
+
+        try { _listener?.Stop(); } catch { }
+        try { _listener?.Close(); } catch { }
+        _listener = null;
+
+        try
+        {
+            _listener = new HttpListener();
+            _listener.Prefixes.Add(newPrefix);
+            _listener.Start();
+            _serverTask = Task.Run(() => AcceptConnectionsAsync(_listener!, _cts.Token));
+            UpdateCachedUrl();
+            BroadcastRedirect(_uiUrl);
+            GradeLog.Info(Tag, $"URL path changed → {_uiUrl}");
+        }
+        catch (Exception ex)
+        {
+            // Revert to the previous path so the server keeps serving.
+            GradeLog.Error(Tag, $"Failed to rebind for path change: {ex.Message}. Reverting.");
+            _appSubPath = oldSubPath;
+            var revertPrefix = _networkEnabled
+                ? $"http://+:{Port}/{_appSubPath}/"
+                : $"http://localhost:{_localhostPort}/{_appSubPath}/";
+            try
+            {
+                _listener = new HttpListener();
+                _listener.Prefixes.Add(revertPrefix);
+                _listener.Start();
+                _serverTask = Task.Run(() => AcceptConnectionsAsync(_listener!, _cts.Token));
+                UpdateCachedUrl();
+            }
+            catch (Exception rex)
+            {
+                _lastError = $"Failed to rebind server: {rex.Message}";
+                GradeLog.Error(Tag, _lastError);
+            }
+        }
+    }
+
     private void UpdateCachedUrl()
     {
         if (_actualPort == 0) { _uiUrl = ""; return; }
 
         if (_networkEnabled && _lanIp != null)
         {
-            // Network mode: LAN-accessible URL on port 80
-            _uiUrl = $"http://{_lanIp}/{_appSubPath}/";
+            // Network mode: LAN-accessible URL on port 80 (host override optional)
+            var host = _urlHostOverride ?? _lanIp;
+            _uiUrl = $"http://{host}/{_appSubPath}/";
+        }
+        else if (_urlHostOverride != null)
+        {
+            // Explicit host override even in localhost-bind mode (user-specified URL).
+            _uiUrl = $"http://{_urlHostOverride}/{_appSubPath}/";
         }
         else
         {
@@ -1793,6 +1886,8 @@ h2{font-size:.625rem;font-weight:600;text-transform:uppercase;letter-spacing:.1e
                     break;
 
                 case "bankCopyFrom":
+                case "bankCloneFromKey":
+                case "bankDeleteKey":
                 case "bankSaveSnapshot":
                 case "bankLoadSnapshot":
                 case "bankDeleteSnapshot":

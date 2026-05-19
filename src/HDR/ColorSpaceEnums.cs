@@ -69,3 +69,27 @@ public enum GradingSpace
     /// <summary>Linear (ACEScg) - VFX workflow, physically accurate (Nuke style)</summary>
     Linear = 1
 }
+
+/// <summary>
+/// How the SettingsBank treats a key that is requested (e.g. a clip plays) but
+/// does not yet exist on disk.
+/// </summary>
+public enum NewKeyMode
+{
+    /// <summary>
+    /// Default. The unknown key is NOT written to the bank file. It transparently
+    /// serves the fallback key's settings until the user explicitly clones it
+    /// (or edits it, which auto-materializes from the fallback). Prevents bank bloat.
+    /// </summary>
+    Virtual = 0,
+    /// <summary>
+    /// The unknown key is immediately materialized by deep-cloning the fallback
+    /// key's settings (inherits the configured Default look).
+    /// </summary>
+    AutoClone = 1,
+    /// <summary>
+    /// Legacy behavior: the unknown key is immediately materialized with blank
+    /// neutral settings (Linear Rec.709 / no tonemap).
+    /// </summary>
+    AutoBlank = 2
+}

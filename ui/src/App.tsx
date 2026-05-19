@@ -27,6 +27,8 @@ function App() {
     selectInstance,
     bankState,
     bankCopyFrom,
+    bankCloneFromKey,
+    bankDeleteKey,
     bankSaveSnapshot,
     bankLoadSnapshot,
     bankDeleteSnapshot,
@@ -196,6 +198,8 @@ function App() {
               <BankPanel
                 bankState={bankState}
                 onCopyFrom={bankCopyFrom}
+                onCloneFromKey={bankCloneFromKey}
+                onDeleteKey={bankDeleteKey}
                 onSaveSnapshot={bankSaveSnapshot}
                 onLoadSnapshot={bankLoadSnapshot}
                 onDeleteSnapshot={bankDeleteSnapshot}
@@ -230,20 +234,30 @@ function App() {
 
         {/* Main Content — one GradingPanel per bank key (or per instance when no bank) */}
         {bankState?.hasBank ? (
-          // Bank active: render one panel per key, show/hide by editing key
-          bankState.allKeys.map(key => {
-            const ks = bankState.keySettings?.[key]
-            return (
-              <GradingPanel
-                key={key}
-                cc={ks?.colorCorrection ?? defaultProject.colorCorrection}
-                tm={ks?.tonemap ?? defaultProject.tonemap}
-                onUpdateCC={updateColorCorrection}
-                onUpdateTM={updateTonemap}
-                visible={key === bankState.editingKey}
-              />
-            )
-          })
+          // Bank active: render one panel per key (real + virtual), show/hide by editing key
+          (() => {
+            const allKeys = bankState.allKeys
+            const virtualKeys = bankState.virtualKeys ?? []
+            const renderKeys = [...allKeys, ...virtualKeys.filter(k => !allKeys.includes(k))]
+            return renderKeys.map(key => {
+              const ks = bankState.keySettings?.[key]
+              const isVirtual = virtualKeys.includes(key) && !allKeys.includes(key)
+              return (
+                <GradingPanel
+                  key={key}
+                  cc={ks?.colorCorrection ?? defaultProject.colorCorrection}
+                  tm={ks?.tonemap ?? defaultProject.tonemap}
+                  onUpdateCC={updateColorCorrection}
+                  onUpdateTM={updateTonemap}
+                  visible={key === bankState.editingKey}
+                  isVirtual={isVirtual}
+                  fallbackKey={bankState.fallbackKey}
+                  cloneSources={allKeys}
+                  onCloneFrom={(src) => bankCloneFromKey(src, key)}
+                />
+              )
+            })
+          })()
         ) : (
           // No bank: single panel from instance state
           <GradingPanel

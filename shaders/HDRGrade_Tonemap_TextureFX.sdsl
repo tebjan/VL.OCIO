@@ -24,14 +24,44 @@ shader HDRGrade_Tonemap_TextureFX : FilterBase, HDRGrade, HDRTonemap
     {
         TonemapGpuParams tonemap = Tonemap[0];
 
+        // Apply the tonemap-stage Exposure even when no tone curve is selected,
+        // so the Exposure control stays live in "None" mode and matches the
+        // tone-mapped path (default 0 => exp2(0) = 1, no change).
+        linearAP1 *= exp2(tonemap.Exposure);
+
+        // AP1-native output spaces: encode directly, no Rec.709 round-trip.
         if (tonemap.OutputSpace == 2)       // ACEScg - already AP1 linear
             return linearAP1;
         else if (tonemap.OutputSpace == 3)  // ACEScc - log AP1
             return LinearToACEScc(linearAP1);
         else if (tonemap.OutputSpace == 4)  // ACEScct - log AP1
             return LinearToACEScct(linearAP1);
-        else                                // AP1 → Linear709 → target space
-            return FromLinearRec709(mul(AP1_to_Rec709, linearAP1), tonemap.OutputSpace);
+
+        // Display-referred output: convert to Linear Rec.709, then apply the
+        // SAME gamut + PaperWhite/PeakBrightness + OETF handling as the
+        // tone-mapped path. FromLinearRec709 hardcodes paper white (PQ=200,
+        // HLG=/12) and divides for scRGB, so HDR "None" levels were wrong.
+        float3 linear709 = mul(AP1_to_Rec709, linearAP1);
+
+        if (tonemap.OutputSpace == 6)       // PQ Rec.2020
+        {
+            float3 rec2020 = mul(Rec709_to_Rec2020, linear709);
+            return LinearToPQ(rec2020 * tonemap.PaperWhite / PQ_MAX_NITS);
+        }
+        else if (tonemap.OutputSpace == 7)  // HLG Rec.2020
+        {
+            float3 rec2020 = mul(Rec709_to_Rec2020, linear709);
+            float peak = max(tonemap.PeakBrightness, 1.0);
+            return LinearToHLG(clamp(rec2020 * tonemap.PaperWhite / peak, 0.0, 1.0));
+        }
+        else if (tonemap.OutputSpace == 8)  // scRGB
+        {
+            return linear709 * (tonemap.PaperWhite / 80.0);
+        }
+        else                                // Linear Rec.709 (0), Rec.2020 (1), sRGB (5)
+        {
+            return FromLinearRec709(linear709, tonemap.OutputSpace);
+        }
     }
 
     // ========================================================================

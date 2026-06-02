@@ -373,6 +373,15 @@ shader TonemapOperators : ColorSpaceConversion, ACES13_RRT_ODT, ACES20_RRT_ODT
 
             linColor *= exp2(exposure);
 
+            // Clamp the working domain to non-negative. These per-channel
+            // display curves (Reinhard, Reinhard Extended, GT, Uncharted2,
+            // Hejl-Burgess) are only defined for >= 0. A negative working-gamut
+            // channel (e.g. an out-of-gamut AP1 value after grading) drives
+            // Reinhard Extended's (1 + color) denominator toward zero, blows up,
+            // and the AP1 -> Rec.709 matrix flips that large negative into
+            // positive red — the "red in the lowest blacks" artifact.
+            linColor = max(linColor, 0.0);
+
             // Apply per-channel curve in current linear space
             float3 tonemapped = linColor;
             if (op == 5)

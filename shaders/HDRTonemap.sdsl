@@ -104,11 +104,20 @@ shader HDRTonemap : TonemapOperators
             }
             else // ACES 2.0
             {
+                // Peak luminance is the DISPLAY peak, independent of gamut.
+                // SDR targets (Linear Rec.709, sRGB) render at the 100 nit
+                // reference; HDR targets (Linear Rec.2020, PQ, HLG, scRGB) use
+                // the configured peak. Driving the Daniele tonescale at the
+                // wrong peak (e.g. 1000 nits on an SDR display) is what made
+                // ACES 2.0 look far too bright.
+                bool isHDRTarget = (outputSpace == 1 || outputSpace == 6 ||
+                                    outputSpace == 7 || outputSpace == 8);
+                float aces20Peak = isHDRTarget ? peakBrightness : 100.0;
                 if (isRec2020Target)
-                    displayLinear = ACES20_OutputTransform_Rec2020_Nits(acescg, peakBrightness);
+                    displayLinear = ACES20_OutputTransform_Rec2020_Nits(acescg, aces20Peak);
                 else
-                    displayLinear = ACES20_OutputTransform_Rec709_Nits(acescg, peakBrightness);
-                peakNits = peakBrightness;
+                    displayLinear = ACES20_OutputTransform_Rec709_Nits(acescg, aces20Peak);
+                peakNits = aces20Peak;
             }
 
             // Apply OETF / output encoding

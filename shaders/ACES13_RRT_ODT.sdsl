@@ -85,6 +85,35 @@ shader ACES13_RRT_ODT : ColorSpaceConversion
         return h;
     }
 
+    // aces-dev cubic_basis_shaper: the RRT red-modifier hue weight (cubic B-spline
+    // over [-w/2, w/2], peaks at 1.0 at center). This is the exact reference; the
+    // previous smoothstep^2 was an approximation that made reds non-OCIO-faithful.
+    float cubic_basis_shaper(float x, float w)
+    {
+        float k0 = -w / 2.0;
+        float k4 =  w / 2.0;
+        float y = 0.0;
+        if (x > k0 && x < k4)
+        {
+            float knot_coord = (x - k0) * 4.0 / w;
+            int j = (int)knot_coord;
+            float t = knot_coord - (float)j;
+            float m0 = t * t * t;
+            float m1 = t * t;
+            float m2 = t;
+            float m3 = 1.0;
+            if (j <= 0)
+                y = m0 * (1.0 / 6.0);
+            else if (j == 1)
+                y = m0 * (-3.0 / 6.0) + m1 * (3.0 / 6.0) + m2 * (3.0 / 6.0) + m3 * (1.0 / 6.0);
+            else if (j == 2)
+                y = m0 * (3.0 / 6.0) + m1 * (-6.0 / 6.0) + m3 * (4.0 / 6.0);
+            else if (j == 3)
+                y = m0 * (-1.0 / 6.0) + m1 * (3.0 / 6.0) + m2 * (-3.0 / 6.0) + m3 * (1.0 / 6.0);
+        }
+        return y * 3.0 / 2.0;
+    }
+
     float aces_sigmoid_shaper(float x)
     {
         float t = max(1.0 - abs(x / 2.0), 0.0);
@@ -273,8 +302,7 @@ shader ACES13_RRT_ODT : ColorSpaceConversion
         // Red modifier: reduce over-saturated reds
         float hue = aces_rgb_2_hue(aces);
         float centeredHue = aces_center_hue(hue, RRT_RED_HUE);
-        float hueWeight = smoothstep(0.0, 1.0, 1.0 - abs(2.0 * centeredHue / RRT_RED_WIDTH));
-        hueWeight *= hueWeight;
+        float hueWeight = cubic_basis_shaper(centeredHue, RRT_RED_WIDTH);
         aces.r += hueWeight * saturation * (RRT_RED_PIVOT - aces.r) * (1.0 - RRT_RED_SCALE);
 
         // Convert AP0 → AP1, clamp negatives

@@ -1,1 +1,2 @@
 numpy>=1.24
+opencolorio>=2.5   # PyOpenColorIO: ground-truth ACES 2.0 parity (test/parity_ocio.py)

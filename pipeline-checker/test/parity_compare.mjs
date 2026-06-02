@@ -1,0 +1,33 @@
+import { readFileSync } from 'fs';
+const D = JSON.parse(readFileSync(new URL('./_aces20_data.json', import.meta.url)));
+const ref = JSON.parse(readFileSync(new URL('./parity_ref.json', import.meta.url)));
+const mul=(M,v)=>[M[0]*v[0]+M[1]*v[1]+M[2]*v[2],M[3]*v[0]+M[4]*v[1]+M[5]*v[2],M[6]*v[0]+M[7]*v[1]+M[8]*v[2]];
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x)), mix=(a,b,t)=>a+(b-a)*t;
+const pf=v=>{const a=Math.abs(v),t=Math.pow(a,0.42),r=t/(27.13+t);return v<0?-r:r;};
+const pi=v=>{const a=Math.min(Math.abs(v),0.99),t=27.13*a/(1-a),r=Math.pow(t,1/0.42);return v<0?-r:r;};
+const sReach=h=>{const hh=h-Math.floor(h/360)*360,i0=Math.floor(hh)%360,i1=(i0+1)%360;return mix(D.reachM[i0],D.reachM[i1],hh-Math.floor(hh));};
+const sCusp=h=>{const hh=h-Math.floor(h/360)*360,i0=Math.floor(hh)%360,i1=(i0+1)%360,t=hh-Math.floor(hh);return [mix(D.cuspJ[i0],D.cuspJ[i1],t),mix(D.cuspM[i0],D.cuspM[i1],t),mix(D.gammaTopInv[i0],D.gammaTopInv[i1],t)];};
+const A2Y=A=>pi(D.in_A_w_J*A)/D.in_F_L_n;
+const Y2J=Y=>{const a=Math.abs(Y),Ra=pf(a*D.in_F_L_n),j=100*Math.pow(Ra*D.in_inv_A_w_J,D.in_cz);return Y<0?-j:j;};
+const tsAJ=A=>{const Yin=A2Y(A),f=D.ts_m_2*Math.pow(Yin/(Yin+D.ts_s_2),D.ts_g),Yts=Math.max(0,f*f/(f+D.ts_t_1))*D.ts_n_r,j=Y2J(Yts);return A<0?-j:j;};
+const cNorm=(c,s)=>{const c2=2*c*c-1,s2=2*c*s,c3=4*c*c*c-3*c,s3=3*s-4*s*s*s;return (11.34072*c+16.46899*c2+7.88380*c3+14.66441*s-6.37224*s2+9.19364*s3+77.12896)*D.cc_scale;};
+const toe=(x,l,k1i,k2i)=>{if(x>l)return x;const k2=Math.max(k2i,0.001),k1=Math.sqrt(k1i*k1i+k2*k2),k3=(l+k1)/(l+k2),mb=k3*x-k1;return 0.5*(mb+Math.sqrt(mb*mb+4*k2*k3*x));};
+const cc=(J,M,Jts,Mn,rM)=>{if(M==0)return 0;const nJ=Jts/D.limit_J_max,snJ=Math.max(0,1-nJ),lim=Math.pow(nJ,D.model_gamma_inv)*rM/Mn;let m=M*Math.pow(Jts/J,D.model_gamma_inv)/Mn;m=lim-toe(lim-m,lim-0.001,snJ*D.cc_sat,Math.sqrt(nJ*nJ+D.cc_sat_thr));m=toe(m,lim,nJ*D.cc_compr,snJ);return m*Mn;};
+const fg=(J,thr)=>{let g=D.limit_J_max*D.g_focus_dist;if(J>thr){const ga=Math.log10((D.limit_J_max-thr)/Math.max(1e-4,D.limit_J_max-J));g*=(ga*ga+1);}return g;};
+const sJ=(J,M,fJ,sg)=>{const Ms=M/sg,a=Ms/fJ;if(J<fJ){const b=1-Ms,c=-J;return -2*c/(b+Math.sqrt(b*b-4*a*c));}const b=-(1+Ms+D.limit_J_max*a),c=D.limit_J_max*Ms+J;return -2*c/(b-Math.sqrt(b*b-4*a*c));};
+const slp=(iJ,fJ,sg)=>{const d=iJ<fJ?iJ:(D.limit_J_max-iJ);return d*(iJ-fJ)/(fJ*sg);};
+const eb=(Ja,sl,iG,Jx,Mx,Jr)=>{const nJ=Ja/Jr,sh=Jr*Math.pow(nJ,iG);return sh*Mx/(Jx-sl*Mx);};
+const smin=(a,b,r)=>{const s=0.12*r,h=Math.max(s-Math.abs(a-b),0)/s;return Math.min(a,b)-h*h*h*s/6;};
+const fGB=(cJ,cM,gT,gB,iJs,sl,iJc)=>{const Mlo=eb(iJs,sl,gB,cJ,cM,iJc),Mhi=eb(D.limit_J_max-iJs,-sl,gT,D.limit_J_max-cJ,cM,D.limit_J_max-iJc);return smin(Mlo,Mhi,cM);};
+const fJfn=cJ=>mix(cJ,D.g_mid_J,Math.min(1,1.3-cJ/D.limit_J_max));
+const rm=(M,gB,rB)=>{const ra=gB/rB,p=Math.max(ra,0.75),thr=p*gB;if(M<=thr||p>=1)return M;const mo=M-thr,go=gB-thr,ro=rB-thr,sc=ro/((ro/go)-1),nd=mo/sc;return thr+sc*nd/(1+nd);};
+const gc=(J,M,h,rM)=>{if(J<=0)return[0,0];if(M<=0||J>D.limit_J_max)return[J,0];const cu=sCusp(h),cJ=cu[0],cM=cu[1],gT=cu[2],fJ=fJfn(cJ),thr=mix(cJ,D.limit_J_max,0.3),sg=fg(J,thr),iJs=sJ(J,M,fJ,sg),sl=slp(iJs,fJ,sg),iJc=sJ(cJ,cM,fJ,sg),gB=fGB(cJ,cM,gT,D.g_lower_hull_gamma_inv,iJs,sl,iJc);if(gB<=0)return[J,0];const rB=eb(iJs,sl,D.model_gamma_inv,D.limit_J_max,rM,D.limit_J_max),Mr=rm(M,gB,rB);return[iJs+Mr*sl,Mr];};
+const drt=acescg=>{const cam=mul(D.RGB_to_CAM16_c,acescg),ra=cam.map(pf),Aab=mul(D.cone_to_Aab_in,ra);let J,M,h;if(Aab[0]<=0){J=0;M=0;h=0;}else{J=100*Math.pow(Aab[0],D.in_cz);M=Math.hypot(Aab[1],Aab[2]);h=Math.atan2(Aab[2],Aab[1])*180/Math.PI;h=h-Math.floor(h/360)*360;}const hr=h*Math.PI/180,c1=Math.cos(hr),s1=Math.sin(hr),rM=sReach(h),Mn=cNorm(c1,s1),Jts=tsAJ(Aab[0]),Mcc=cc(J,M,Jts,Mn,rM),g=gc(Jts,Mcc,h,rM),Ao=Math.pow(g[0]*0.01,D.out_inv_cz),AabO=[Ao,g[1]*c1,g[1]*s1],rgb=mul(D.CAM16_c_to_RGB_out,mul(D.Aab_to_cone_out,AabO).map(pi));return rgb.map(x=>clamp(x,0,1));};
+let maxd=0;
+for(const [n,v] of Object.entries(ref.ocio)){
+  const mine=drt(v.in).map(x=>+x.toFixed(5));
+  const d=Math.max(...mine.map((x,i)=>Math.abs(x-v.ocio_lin[i])));
+  maxd=Math.max(maxd,d);
+  console.log(`${n.padEnd(11)} OCIO=${JSON.stringify(v.ocio_lin).padEnd(26)} MINE=${JSON.stringify(mine).padEnd(26)} d=${d.toFixed(4)}${d>0.02?'  <-- DIVERGES':''}`);
+}
+console.log('MAX DELTA', maxd.toFixed(5));

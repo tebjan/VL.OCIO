@@ -1,0 +1,14 @@
+import { readFileSync, writeFileSync } from 'fs';
+const g = new URL('../src/shaders/generated/', import.meta.url);
+const odtP = new URL('odt.wgsl', g);
+let odt = readFileSync(odtP, 'utf8');
+const data = readFileSync(new URL('_aces20_data.wgsl', g), 'utf8');
+const helpers = readFileSync(new URL('_aces20_drt_helpers.wgsl', g), 'utf8');
+const B = '// __ACES2_BEGIN__', E = '// __ACES2_END__';
+const bi = odt.indexOf(B), ei = odt.indexOf(E);
+if (bi < 0 || ei < 0) throw new Error('markers not found in odt.wgsl');
+const before = odt.slice(0, bi + B.length);
+const after = odt.slice(ei);
+odt = before + '\n' + data + '\n' + helpers + '\n' + after;
+writeFileSync(odtP, odt);
+console.log(`injected ${data.length + helpers.length} chars; odt.wgsl now ${odt.length} chars`);

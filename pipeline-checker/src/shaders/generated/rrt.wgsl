@@ -210,6 +210,24 @@ fn aces_center_hue(hue: f32, centerH: f32) -> f32 {
     return h;
 }
 
+// aces-dev cubic_basis_shaper: exact RRT red-modifier hue weight (replaces smoothstep^2).
+fn cubic_basis_shaper(x: f32, w: f32) -> f32 {
+    let k0 = -w / 2.0;
+    let k4 = w / 2.0;
+    var y = 0.0;
+    if (x > k0 && x < k4) {
+        let knot_coord = (x - k0) * 4.0 / w;
+        let j = i32(knot_coord);
+        let t = knot_coord - f32(j);
+        let m0 = t * t * t; let m1 = t * t; let m2 = t; let m3 = 1.0;
+        if (j <= 0) { y = m0 * (1.0 / 6.0); }
+        else if (j == 1) { y = m0 * (-3.0 / 6.0) + m1 * (3.0 / 6.0) + m2 * (3.0 / 6.0) + m3 * (1.0 / 6.0); }
+        else if (j == 2) { y = m0 * (3.0 / 6.0) + m1 * (-6.0 / 6.0) + m3 * (4.0 / 6.0); }
+        else if (j == 3) { y = m0 * (-1.0 / 6.0) + m1 * (3.0 / 6.0) + m2 * (-3.0 / 6.0) + m3 * (1.0 / 6.0); }
+    }
+    return y * 3.0 / 2.0;
+}
+
 fn aces_sigmoid_shaper(x: f32) -> f32 {
     let t = max(1.0 - abs(x / 2.0), 0.0);
     return (1.0 + sign(x) * (1.0 - t * t)) / 2.0;
@@ -284,8 +302,7 @@ fn ACES13_RRT(acescg: vec3<f32>) -> vec3<f32> {
     // Red modifier: reduce over-saturated reds
     let hue = aces_rgb_2_hue(aces);
     let centeredHue = aces_center_hue(hue, RRT_RED_HUE);
-    var hueWeight = smoothstep(0.0, 1.0, 1.0 - abs(2.0 * centeredHue / RRT_RED_WIDTH));
-    hueWeight *= hueWeight;
+    let hueWeight = cubic_basis_shaper(centeredHue, RRT_RED_WIDTH);
     aces.r += hueWeight * sat * (RRT_RED_PIVOT - aces.r) * (1.0 - RRT_RED_SCALE);
 
     // Convert AP0 → AP1, clamp negatives
@@ -553,17 +570,20 @@ fn AgXTonemap(color_in: vec3<f32>) -> vec3<f32> {
 
 fn ApplyTonemap(color: vec3<f32>, op: i32, exposure: f32, wp: f32) -> vec3<f32> {
     let c = color * exp2(exposure);
+    // Per-channel display curves are only defined for >= 0; a negative input drives
+    // Reinhard Extended's (1+c) denominator toward zero and flips to red. Clamp them.
+    let cp = max(c, vec3<f32>(0.0));
 
     if (op == 0)  { return c; }                                  // None
     if (op == 1)  { return ACESTonemap(c, 0); }                  // ACES Fit (BT.709)
     if (op == 4)  { return AgXTonemap(c); }                      // AgX
-    if (op == 5)  { return GranTurismoTonemap(c); }              // Gran Turismo
-    if (op == 6)  { return Uncharted2Tonemap(c); }               // Uncharted 2
+    if (op == 5)  { return GranTurismoTonemap(cp); }             // Gran Turismo
+    if (op == 6)  { return Uncharted2Tonemap(cp); }              // Uncharted 2
     if (op == 7)  { return KhronosPBRTonemap(c); }               // Khronos PBR
     if (op == 8)  { return LottesTonemap(c); }                   // Lottes
-    if (op == 9)  { return ReinhardTonemap(c); }                 // Reinhard
-    if (op == 10) { return ReinhardExtendedTonemap(c, wp); }     // Reinhard Extended
-    if (op == 11) { return HejlBurgessTonemap(c); }              // Hejl-Burgess
+    if (op == 9)  { return ReinhardTonemap(cp); }                // Reinhard
+    if (op == 10) { return ReinhardExtendedTonemap(cp, wp); }    // Reinhard Extended
+    if (op == 11) { return HejlBurgessTonemap(cp); }             // Hejl-Burgess
     return c;                                                     // Fallback
 }
 
@@ -587,8 +607,12 @@ fn fs(in: VertexOutput) -> @location(0) vec4<f32> {
         var result: vec3<f32>;
         if (u.tonemapOp == 2) {
             result = ACES13_RRT(acescg);
-        } else {
+        } else if (u.outputSpace == 1 || u.outputSpace == 6 || u.outputSpace == 7) {
+            // ACES 2.0 HDR Rec.2020: per-channel Daniele fallback (-> normalized AP1)
             result = ACES20_RRT(acescg, u.peakBrightness);
+        } else {
+            // ACES 2.0 SDR Rec.709: pass raw exposed AP1 to the ODT-stage Hellwig CAM DRT
+            result = acescg;
         }
         return vec4<f32>(result, tex0col.a);
     }

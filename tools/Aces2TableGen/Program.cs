@@ -102,6 +102,7 @@ namespace Aces2TableGen
         // {Rx,Ry, Gx,Gy, Bx,By, Wx,Wy}
         static readonly double[] AP1 = { 0.713, 0.293, 0.165, 0.830, 0.128, 0.044, 0.32168, 0.33767 };
         static readonly double[] REC709 = { 0.64, 0.33, 0.30, 0.60, 0.15, 0.06, 0.3127, 0.3290 };
+        static readonly double[] REC2020 = { 0.708, 0.292, 0.170, 0.797, 0.131, 0.046, 0.3127, 0.3290 };
         static readonly double[] CAM16 = { 0.8336, 0.1735, 2.3854, -1.4659, 0.087, -0.125, 0.333, 0.333 };
 
         // RGB->XYZ (Lindbloom) using the primaries' own white, no chromatic adaptation.
@@ -764,8 +765,55 @@ namespace Aces2TableGen
             sb.AppendLine("};");
         }
 
+        // Analyze how the per-hue tables vary with peak luminance, and whether
+        // interpolating between log-spaced baked anchors reproduces intermediate
+        // peaks. Answers: what changes per LUT, and can we pre-bake common nits.
+        static void AnalyzePeaks()
+        {
+            Console.WriteLine("=== PER-NITS LUT ANALYSIS (limit = Rec.2020 HDR) ===");
+            double[] peaks = { 100, 600, 1000, 2000, 4000, 10000 };
+            Console.WriteLine("peak   limit_J_max  cuspM@0  cuspM@120  cuspM@240  reachM@0  reachM@120");
+            var drts = new System.Collections.Generic.Dictionary<double, Drt>();
+            foreach (double pk in peaks)
+            {
+                var dd = BuildDrt(AP1, REC2020, pk);
+                drts[pk] = dd;
+                Console.WriteLine($"{pk,6:F0} {dd.s.limit_J_max,10:F3}  {dd.g.cuspM[0],7:F2}  {dd.g.cuspM[120],8:F2}  {dd.g.cuspM[240],8:F2}  {dd.s.reach_m_table[0],8:F2}  {dd.s.reach_m_table[120],8:F2}");
+            }
+
+            // Interpolation test: anchors {100,1000,10000} (log2 spaced-ish), reconstruct 600/2000/4000.
+            double[] anchors = { 100, 1000, 10000 };
+            var aDrt = new System.Collections.Generic.Dictionary<double, Drt>();
+            foreach (double a in anchors) aDrt[a] = BuildDrt(AP1, REC2020, a);
+            Console.WriteLine("\nLog-peak interpolation error (anchors 100/1000/10000 -> target):");
+            foreach (double tgt in new double[] { 600, 2000, 4000 })
+            {
+                var exact = drts[tgt];
+                // find bracketing anchors in log space
+                double lt = Math.Log2(tgt);
+                double aLo = anchors[0], aHi = anchors[anchors.Length - 1];
+                for (int i = 0; i < anchors.Length - 1; i++)
+                    if (tgt >= anchors[i] && tgt <= anchors[i + 1]) { aLo = anchors[i]; aHi = anchors[i + 1]; }
+                double f = (lt - Math.Log2(aLo)) / (Math.Log2(aHi) - Math.Log2(aLo));
+                var lo = aDrt[aLo]; var hi = aDrt[aHi];
+                double maxCuspM = 0, maxReachM = 0, maxGamma = 0;
+                for (int h = 0; h < NHUE; h++)
+                {
+                    double iCuspM = lo.g.cuspM[h] + (hi.g.cuspM[h] - lo.g.cuspM[h]) * f;
+                    double iReachM = lo.s.reach_m_table[h] + (hi.s.reach_m_table[h] - lo.s.reach_m_table[h]) * f;
+                    double iGamma = lo.g.gammaTopInv[h] + (hi.g.gammaTopInv[h] - lo.g.gammaTopInv[h]) * f;
+                    maxCuspM = Math.Max(maxCuspM, Math.Abs(iCuspM - exact.g.cuspM[h]) / Math.Max(1e-3, exact.g.cuspM[h]));
+                    maxReachM = Math.Max(maxReachM, Math.Abs(iReachM - exact.s.reach_m_table[h]) / Math.Max(1e-3, exact.s.reach_m_table[h]));
+                    maxGamma = Math.Max(maxGamma, Math.Abs(iGamma - exact.g.gammaTopInv[h]) / Math.Max(1e-3, exact.g.gammaTopInv[h]));
+                }
+                Console.WriteLine($"  target {tgt,5:F0}: max rel err  cuspM={maxCuspM * 100,6:F2}%  reachM={maxReachM * 100,6:F2}%  gammaTopInv={maxGamma * 100,6:F2}%");
+            }
+            Console.WriteLine($"Per-peak baked data: 4 tables x 360 = 1440 floats = {1440 * 4 / 1024.0:F1} KB/peak\n");
+        }
+
         static void Main(string[] args)
         {
+            AnalyzePeaks();
             Aces13Check.Run();
             Console.WriteLine();
             Console.WriteLine("Building ACES 2.0 DRT (input=AP1, limit=Rec.709, peak=100)...");

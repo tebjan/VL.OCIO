@@ -198,3 +198,28 @@ All `init_*` scalars/matrices are baked floats; tables are the 3 textures + hue 
   C# harness; cross-check a few values by hand from the formulas above.
 - pipeline-checker WGSL stages mirror the SDSL; compare against reference-values.json.
 - Designer test: export PNG vs live vvvv on same display; check mid-gray + saturated colors.
+
+## Per-nits / HDR baking plan (measured 2026-06-02)
+
+What changes per peak luminance (from tools/Aces2TableGen AnalyzePeaks, limit=Rec.2020):
+- ANALYTIC (compute live from peak, NO table): the Daniele tonescale params,
+  limit_J_max (= Y_to_J(peak)), chroma params (compr/sat/sat_thr/chroma_compress_scale),
+  gamut scalars (mid_J/focus_dist/lower_hull_gamma_inv). All closed-form in peak/log_peak.
+- TABLES (per-hue, vary with peak): reachM, cuspJ, cuspM scale strongly with peak
+  (e.g. cuspM@0deg: 111 -> 615 over 100 -> 10000 nits). gammaTopInv is nearly
+  peak-invariant (0.1% across the whole range -> can share one table).
+
+Can we simulate from base LUTs? Log-peak interpolation between WIDE anchors
+(100/1000/10000) gives ~6-8% error on cuspM/reachM (too much for "faithful").
+
+PLAN (pre-bake common nits, confirmed cheap at 5.6 KB/peak):
+1. Bake table sets for the standard targets: SDR Rec.709 @ 100; HDR Rec.2020 @
+   {600, 1000, 2000, 4000, 10000}. ~6 sets, ~34 KB total.
+2. At runtime: select the set by (limit gamut + nearest peak); for in-between peaks,
+   interpolate between ADJACENT baked anchors (small error due to close spacing).
+   gammaTopInv can be a single shared table.
+3. Compute ALL analytic scalars live from the ACTUAL peak in the shader (port
+   init_ToneScaleParams / Y_to_J / init_Chroma / init_Gamut scalars to SDSL+WGSL) so
+   the tonescale is exact for any peak; only the gamut/reach boundary tables snap/interp.
+4. Generator (tools/Aces2TableGen) already builds DRTs for any (limitPrimaries, peak);
+   extend EmitSdsl to emit N sets + a selector. Verify each set in C# (mid-gray, etc.).

@@ -1,0 +1,4 @@
+# >>> generated from .mcp.json by sync_agent_setup.py
+[mcp_servers.forge_extension]
+url = "http://localhost:56025/mcp"
+# <<< generated from .mcp.json
